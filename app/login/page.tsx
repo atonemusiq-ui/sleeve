@@ -3,11 +3,15 @@ import { login } from "@/app/actions/auth";
 export default function LoginPage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: { error?: string; message?: string };
 }) {
   return (
     <main className="max-w-md mx-auto px-6 py-16">
       <h1 className="font-display text-3xl text-gold mb-8">Log in</h1>
+
+      {searchParams.message && (
+        <p className="font-mono text-sm text-forest mb-6">{searchParams.message}</p>
+      )}
 
       {searchParams.error && (
         <p className="font-mono text-sm text-rust mb-6">{searchParams.error}</p>

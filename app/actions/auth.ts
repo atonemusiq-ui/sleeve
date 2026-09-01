@@ -11,35 +11,37 @@ export async function signup(formData: FormData) {
 
   const supabase = createClient();
 
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      // A Postgres trigger on auth.users reads `role` and `display_name`
+      // from raw_user_meta_data (populated from this `options.data`) to
+      // create the matching `profiles` (and, for artists, `artists`) rows.
+      // Note the key is `display_name` (snake_case), matching what the
+      // trigger reads — not `displayName`.
+      data: {
+        role,
+        display_name: displayName,
+      },
+    },
+  });
 
   if (error || !data.user) {
     return redirect(`/signup?error=${encodeURIComponent(error?.message ?? "Sign up failed")}`);
   }
 
-  // create the profile row
-  const { error: profileError } = await supabase.from("profiles").insert({
-    id: data.user.id,
-    role,
-    display_name: displayName,
-  });
+  // `profiles`/`artists` rows are created by the database trigger above, so
+  // there's nothing left to insert here.
 
-  if (profileError) {
-    return redirect(`/signup?error=${encodeURIComponent(profileError.message)}`);
-  }
-
-  // if signing up as an artist, also create the artists row
-  if (role === "artist") {
-    const { error: artistError } = await supabase.from("artists").insert({
-      user_id: data.user.id,
-    });
-
-    if (artistError) {
-      return redirect(`/signup?error=${encodeURIComponent(artistError.message)}`);
-    }
-  }
-
-  redirect(role === "artist" ? "/dashboard" : "/");
+  // Email confirmation is required, so signUp() doesn't return an active
+  // session yet — send them to log in once they've confirmed their email
+  // instead of straight to the dashboard.
+  redirect(
+    `/login?message=${encodeURIComponent(
+      "Check your email to confirm your account, then log in."
+    )}`
+  );
 }
 
 export async function login(formData: FormData) {
