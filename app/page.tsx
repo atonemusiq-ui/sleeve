@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { startCheckout } from "@/app/actions/checkout";
 import Link from "next/link";
 
 export default async function StorefrontPage() {
@@ -81,13 +82,15 @@ export default async function StorefrontPage() {
               <span className="font-mono text-forest text-lg">
                 ${(track.price_cents / 100).toFixed(2)}
               </span>
-              <button
-                disabled
-                title="Payments arrive in Phase 3"
-                className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold/50 cursor-not-allowed"
-              >
-                Buy
-              </button>
+              <form action={startCheckout}>
+                <input type="hidden" name="trackId" value={track.id} />
+                <button
+                  type="submit"
+                  className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
+                >
+                  Buy
+                </button>
+              </form>
             </div>
           </div>
         ))}

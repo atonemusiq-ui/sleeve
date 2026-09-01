@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/actions/auth";
+import { connectStripeAccount } from "@/app/actions/stripe-connect";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import UploadForm from "./UploadForm";
@@ -22,13 +23,12 @@ export default async function DashboardPage() {
     .single();
 
   if (profile?.role !== "artist") {
-    // fans don't have a dashboard yet — send them to the storefront
     redirect("/");
   }
 
   const { data: artist } = await supabase
     .from("artists")
-    .select("id")
+    .select("id, stripe_account_id")
     .eq("user_id", user.id)
     .single();
 
@@ -56,6 +56,25 @@ export default async function DashboardPage() {
       </header>
 
       <div className="ticket-divider mb-10" />
+
+      <div className="border border-paper/15 rounded-lg px-5 py-4 bg-paper/5 mb-10 flex items-center justify-between">
+        <div>
+          <h2 className="font-display text-lg">Payouts</h2>
+          <p className="font-mono text-xs text-paper/60 mt-1">
+            {artist?.stripe_account_id
+              ? "Bank account connected via Stripe."
+              : "Connect a bank account to get paid when your tracks sell."}
+          </p>
+        </div>
+        <form action={connectStripeAccount}>
+          <button
+            type="submit"
+            className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
+          >
+            {artist?.stripe_account_id ? "Update payout info" : "Connect bank account"}
+          </button>
+        </form>
+      </div>
 
       {artist?.id && <UploadForm artistId={artist.id} />}
 
