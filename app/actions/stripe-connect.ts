@@ -9,8 +9,17 @@ import { redirect } from "next/navigation";
 // used both when creating a new account and when re-applying the
 // configuration on an existing one, so account creation and account link
 // creation always agree on which configurations are active.
+//
+// Note: there's no settable `applied` field here. That field exists only
+// under the "configuration deactivation" preview feature (Stripe-Version
+// 2025-08-27.preview and later previews) — the account's actual API version
+// ("2026-08-26.dahlia", a GA release) doesn't recognize it and rejects it
+// with "Unknown field". On GA, whether a configuration is applied is
+// reported back as a top-level, read-only `applied_configurations: string[]`
+// array on the Account object — it isn't set directly. Simply including
+// `recipient` here (with its capabilities) is what applies it, on both
+// create and update.
 const RECIPIENT_CONFIGURATION = {
-  applied: true,
   capabilities: {
     stripe_balance: {
       stripe_transfers: { requested: true },
@@ -111,6 +120,7 @@ export async function connectStripeAccount() {
       {
         id: debugAccount.id,
         dashboard: debugAccount.dashboard,
+        applied_configurations: debugAccount.applied_configurations,
         configuration: debugAccount.configuration,
         identity: debugAccount.identity,
         requirements: debugAccount.requirements,
