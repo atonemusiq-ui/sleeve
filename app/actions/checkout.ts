@@ -9,6 +9,23 @@ export async function startCheckout(formData: FormData) {
 
   const supabase = createClient();
 
+  // Buying requires an account now — that's what lets a completed purchase
+  // show up in the buyer's own "My Music" library (app/library/page.tsx)
+  // instead of only being reachable via the one-time /success link. Bounce
+  // to login with a `next` back to the storefront so they land somewhere
+  // with a working Buy button once they're signed in.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect(
+      `/login?message=${encodeURIComponent(
+        "Log in or sign up to buy this track."
+      )}&next=${encodeURIComponent("/")}`
+    );
+  }
+
   const { data: track, error } = await supabase
     .from("tracks")
     .select("id, title, price_cents, artists ( profiles ( display_name ) )")
@@ -51,6 +68,7 @@ export async function startCheckout(formData: FormData) {
     cancel_url: `${siteUrl}/`,
     metadata: {
       track_id: track.id,
+      fan_id: user.id,
       amount_cents: String(amountCents),
       platform_fee_cents: String(platformFeeCents),
       artist_payout_cents: String(artistPayoutCents),

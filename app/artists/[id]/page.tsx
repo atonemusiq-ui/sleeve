@@ -22,13 +22,30 @@ export default async function ArtistPage({ params }: { params: { id: string } })
     .eq("artist_id", artist.id)
     .order("created_at", { ascending: false });
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const artistName = (artist as any).profiles?.display_name ?? "Unknown artist";
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
-      <Link href="/" className="font-mono text-xs text-paper/50 hover:text-gold">
-        &larr; Back to Sleeve
-      </Link>
+      <div className="flex items-center justify-between mb-6">
+        <Link href="/" className="font-mono text-xs text-paper/50 hover:text-gold">
+          &larr; Back to Sleeve
+        </Link>
+        <nav className="font-mono text-xs">
+          {user ? (
+            <Link href="/library" className="hover:text-gold">
+              My Music
+            </Link>
+          ) : (
+            <Link href="/login" className="hover:text-gold">
+              Log in
+            </Link>
+          )}
+        </nav>
+      </div>
 
       <header className="mt-6 mb-10">
         <h1 className="font-display text-3xl text-gold">{artistName}</h1>
@@ -71,7 +88,7 @@ export default async function ArtistPage({ params }: { params: { id: string } })
                     type="submit"
                     className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
                   >
-                    Buy
+                    {user ? "Buy" : "Log in to buy"}
                   </button>
                 </form>
               </div>

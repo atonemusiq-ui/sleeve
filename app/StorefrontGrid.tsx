@@ -17,9 +17,11 @@ type Track = {
 export default function StorefrontGrid({
   tracks,
   startCheckout,
+  isLoggedIn,
 }: {
   tracks: Track[];
   startCheckout: (formData: FormData) => void;
+  isLoggedIn: boolean;
 }) {
   const [query, setQuery] = useState("");
 
@@ -88,7 +90,7 @@ export default function StorefrontGrid({
                     type="submit"
                     className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
                   >
-                    Buy
+                    {isLoggedIn ? "Buy" : "Log in to buy"}
                   </button>
                 </form>
               </div>

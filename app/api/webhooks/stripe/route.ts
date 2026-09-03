@@ -33,6 +33,7 @@ export async function POST(req: Request) {
     const session = event.data.object as Stripe.Checkout.Session;
 
     const trackId = session.metadata?.track_id;
+    const fanId = session.metadata?.fan_id ?? null;
     const amountCents = session.metadata?.amount_cents;
     const platformFeeCents = session.metadata?.platform_fee_cents;
     const artistPayoutCents = session.metadata?.artist_payout_cents;
@@ -68,6 +69,10 @@ export async function POST(req: Request) {
 
     const { error } = await supabase.from("purchases").insert({
       track_id: trackId,
+      // Checkout requires login now (see app/actions/checkout.ts), so this
+      // should always be present — but stay tolerant of null in case an
+      // older/anonymous session's checkout completes after this deploy.
+      fan_id: fanId,
       buyer_email: buyerEmail,
       buyer_phone: buyerPhone,
       amount_cents: Number(amountCents),

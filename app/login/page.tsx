@@ -3,7 +3,7 @@ import { login } from "@/app/actions/auth";
 export default function LoginPage({
   searchParams,
 }: {
-  searchParams: { error?: string; message?: string };
+  searchParams: { error?: string; message?: string; next?: string };
 }) {
   return (
     <main className="max-w-md mx-auto px-6 py-16">
@@ -18,6 +18,9 @@ export default function LoginPage({
       )}
 
       <form action={login} className="flex flex-col gap-4">
+        {searchParams.next && (
+          <input type="hidden" name="next" value={searchParams.next} />
+        )}
         <div>
           <label className="block font-mono text-xs text-paper/60 mb-1">Email</label>
           <input
@@ -48,7 +51,10 @@ export default function LoginPage({
 
       <p className="font-mono text-xs text-paper/50 mt-6">
         Don&apos;t have an account?{" "}
-        <a href="/signup" className="text-gold">
+        <a
+          href={searchParams.next ? `/signup?next=${encodeURIComponent(searchParams.next)}` : "/signup"}
+          className="text-gold"
+        >
           Sign up
         </a>
       </p>

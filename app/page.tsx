@@ -17,15 +17,32 @@ export default async function StorefrontPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  let role: string | null = null;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    role = profile?.role ?? null;
+  }
+
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
       <header className="flex items-center justify-between mb-12">
         <h1 className="font-display text-3xl text-gold">Sleeve</h1>
         <nav className="font-mono text-sm">
           {user ? (
-            <Link href="/dashboard" className="hover:text-gold">
-              Dashboard
-            </Link>
+            <div className="flex gap-4">
+              <Link href="/library" className="hover:text-gold">
+                My Music
+              </Link>
+              {role === "artist" && (
+                <Link href="/dashboard" className="hover:text-gold">
+                  Dashboard
+                </Link>
+              )}
+            </div>
           ) : (
             <div className="flex gap-4">
               <Link href="/login" className="hover:text-gold">
@@ -55,7 +72,7 @@ export default async function StorefrontPage() {
       )}
 
       {!error && tracks && tracks.length > 0 && (
-        <StorefrontGrid tracks={tracks} startCheckout={startCheckout} />
+        <StorefrontGrid tracks={tracks} startCheckout={startCheckout} isLoggedIn={Boolean(user)} />
       )}
     </main>
   );

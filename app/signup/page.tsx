@@ -3,8 +3,13 @@ import { signup } from "@/app/actions/auth";
 export default function SignupPage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: { error?: string; next?: string };
 }) {
+  // Arriving here via a "log in to buy this track" bounce (see
+  // app/actions/checkout.ts) means they're here to buy, not to sell —
+  // default the role picker to Fan in that case instead of Artist.
+  const cameFromBuying = Boolean(searchParams.next);
+
   return (
     <main className="max-w-md mx-auto px-6 py-16">
       <h1 className="font-display text-3xl text-gold mb-8">Create your account</h1>
@@ -14,6 +19,9 @@ export default function SignupPage({
       )}
 
       <form action={signup} className="flex flex-col gap-4">
+        {searchParams.next && (
+          <input type="hidden" name="next" value={searchParams.next} />
+        )}
         <div>
           <label className="block font-mono text-xs text-paper/60 mb-1">Display name</label>
           <input
@@ -48,11 +56,16 @@ export default function SignupPage({
           <legend className="block font-mono text-xs text-paper/60 mb-2">I am a...</legend>
           <div className="flex gap-4">
             <label className="flex items-center gap-2 font-body">
-              <input type="radio" name="role" value="artist" defaultChecked />
+              <input
+                type="radio"
+                name="role"
+                value="artist"
+                defaultChecked={!cameFromBuying}
+              />
               Artist
             </label>
             <label className="flex items-center gap-2 font-body">
-              <input type="radio" name="role" value="fan" />
+              <input type="radio" name="role" value="fan" defaultChecked={cameFromBuying} />
               Fan
             </label>
           </div>
@@ -68,7 +81,10 @@ export default function SignupPage({
 
       <p className="font-mono text-xs text-paper/50 mt-6">
         Already have an account?{" "}
-        <a href="/login" className="text-gold">
+        <a
+          href={searchParams.next ? `/login?next=${encodeURIComponent(searchParams.next)}` : "/login"}
+          className="text-gold"
+        >
           Log in
         </a>
       </p>

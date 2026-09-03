@@ -14,11 +14,18 @@ fraction of a cent per stream.
   playback, connect a bank account via Stripe Connect (v2 Core Accounts, Express dashboard)
 - Public storefront: search/filter across all published tracks, artist name links to a
   public artist profile page, Buy button starts a real Stripe Checkout session
+- Buying requires an account (as of the fan-library change) — a fan who isn't logged in
+  gets bounced to log in/sign up first, then back to buying, so every purchase is tied to
+  a `fan_id`
 - Post-purchase delivery: after a successful Checkout, `/success` verifies the payment
-  with Stripe directly and hands back a signed stream/download link for the track — no
-  account required to buy or to redownload (the page is bookmarkable)
-- Stripe webhook (`app/api/webhooks/stripe/route.ts`) records the purchase and transfers
-  the artist's cut to their connected account; guarded against duplicate delivery
+  with Stripe directly and hands back a signed stream/download link for the track — that
+  page is bookmarkable, and the same track is also permanently available in...
+- `/library` ("My Music"): every track a logged-in fan has bought, each with its own
+  in-app player (signed URL, minted server-side, ownership checked via RLS on
+  `purchases.fan_id`) — no downloading-and-figuring-out-playback required
+- Stripe webhook (`app/api/webhooks/stripe/route.ts`) records the purchase (including
+  which fan bought it) and transfers the artist's cut to their connected account; guarded
+  against duplicate delivery
 - Track audio lives in a **private** storage bucket — nobody can stream/download the full
   track without a signed URL minted after a verified purchase (or, for the artist, their
   own dashboard). Cover art lives in a separate public bucket.
@@ -66,12 +73,16 @@ reach you).
 - Go to `/signup`, create an Artist account, confirm the email, log in.
 - On `/dashboard`, connect a Stripe test bank account, then publish a track (any audio
   file + a price).
-- Go to `/` — your track shows up on the storefront. Buy it with a
+- Go to `/` — your track shows up on the storefront. Click Buy — since buying requires an
+  account, you'll be bounced to log in/sign up (as a Fan, in a different browser/incognito
+  window so you're not still logged in as the artist) and land back on the storefront.
+  Click Buy again and pay with a
   [Stripe test card](https://docs.stripe.com/testing) (`4242 4242 4242 4242`, any future
   expiry/CVC).
-- You land on `/success` with a working player and download link. Check the Stripe
-  dashboard: a transfer to the artist's connected account should show up alongside the
-  original payment.
+- You land on `/success` with a working player and download link, and the track now shows
+  up permanently on `/library` for that fan account. Check the Stripe dashboard: a
+  transfer to the artist's connected account should show up alongside the original
+  payment.
 
 ## Cost note
 
@@ -83,11 +94,14 @@ revisiting the plan tier once real tracks (not test uploads) are live.
 
 - No password reset flow
 - No artist bio editing UI (column exists, no form)
-- No way for a fan to re-find a past purchase beyond the `/success` link itself (it has no
-  expiry and is bookmarkable, but if it's lost there's currently no lookup-by-email flow —
-  that would need an email-sending provider, which isn't wired up)
+- Purchases made before the fan-library change (or by an anonymous/guest checkout, if one
+  slips through) have no `fan_id` and won't show up in `/library` — only reachable via
+  their original `/success` link
 - No track editing/deletion from the dashboard once published
 - No genre/tag metadata — storefront search only matches title and artist name
 - Legacy rows from before audio was made private (`audio_url` set, `audio_path` null)
   still resolve to their old public URL — not retroactively secured. Re-upload to move a
   track onto the private path.
+- Email confirmation is required before first login, which adds a real speed bump to the
+  "log in mid-checkout to buy" flow — worth revisiting if drop-off there turns out to be a
+  problem.
