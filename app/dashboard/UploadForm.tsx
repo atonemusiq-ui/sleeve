@@ -32,29 +32,32 @@ export default function UploadForm({ artistId }: { artistId: string }) {
     const supabase = createClient();
 
     try {
-      // Upload audio — path convention: <artist_id>/<timestamp>-<filename>
+      // Upload audio into the private "track-audio" bucket — we store the
+      // storage *path*, not a URL, since there's no public URL to have. The
+      // track only becomes playable via a signed URL minted after a
+      // verified purchase (see app/success/page.tsx) or for the owning
+      // artist (see app/dashboard/page.tsx). Path convention:
+      // <artist_id>/<timestamp>-<filename>, matched by the storage RLS
+      // policies in supabase/schema.sql.
       const audioPath = `${artistId}/${Date.now()}-${audioFile.name}`;
       const { error: audioError } = await supabase.storage
-        .from("track-files")
+        .from("track-audio")
         .upload(audioPath, audioFile);
 
       if (audioError) throw new Error(`Audio upload failed: ${audioError.message}`);
 
-      const {
-        data: { publicUrl: audioUrl },
-      } = supabase.storage.from("track-files").getPublicUrl(audioPath);
-
-      // Upload cover if provided
+      // Cover art goes in the separate *public* "track-covers" bucket — fine
+      // to serve directly, unlike the paid audio.
       let coverUrl: string | null = null;
       if (coverFile) {
         const coverPath = `${artistId}/${Date.now()}-${coverFile.name}`;
         const { error: coverError } = await supabase.storage
-          .from("track-files")
+          .from("track-covers")
           .upload(coverPath, coverFile);
 
         if (coverError) throw new Error(`Cover upload failed: ${coverError.message}`);
 
-        coverUrl = supabase.storage.from("track-files").getPublicUrl(coverPath).data.publicUrl;
+        coverUrl = supabase.storage.from("track-covers").getPublicUrl(coverPath).data.publicUrl;
       }
 
       // Insert the track row
@@ -62,7 +65,7 @@ export default function UploadForm({ artistId }: { artistId: string }) {
         artist_id: artistId,
         title,
         price_cents: priceCents,
-        audio_url: audioUrl,
+        audio_path: audioPath,
         cover_url: coverUrl,
       });
 

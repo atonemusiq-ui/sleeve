@@ -1,9 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { logout } from "@/app/actions/auth";
 import { connectStripeAccount } from "@/app/actions/stripe-connect";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import UploadForm from "./UploadForm";
+
+const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 export default async function DashboardPage() {
   const supabase = createClient();
@@ -34,9 +37,27 @@ export default async function DashboardPage() {
 
   const { data: tracks, error } = await supabase
     .from("tracks")
-    .select("id, title, price_cents, created_at, audio_url, cover_url")
+    .select("id, title, price_cents, created_at, audio_path, audio_url, cover_url")
     .eq("artist_id", artist?.id)
     .order("created_at", { ascending: false });
+
+  // Audio lives in the private "track-audio" bucket now, so the artist's own
+  // dashboard needs a signed URL to play it back — ownership was already
+  // verified above (tracks scoped to this artist's own artist_id), so it's
+  // safe to mint these with the service-role client rather than relying on
+  // a separate storage RLS round trip.
+  const supabaseAdmin = createServiceRoleClient();
+  const tracksWithPlayUrls = await Promise.all(
+    (tracks ?? []).map(async (track) => {
+      if (track.audio_path) {
+        const { data: signed } = await supabaseAdmin.storage
+          .from("track-audio")
+          .createSignedUrl(track.audio_path, SIGNED_URL_TTL_SECONDS);
+        return { ...track, playUrl: signed?.signedUrl ?? null };
+      }
+      return { ...track, playUrl: track.audio_url ?? null };
+    })
+  );
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
@@ -46,6 +67,11 @@ export default async function DashboardPage() {
           <p className="font-mono text-sm text-paper/60 mt-1">{profile.display_name}</p>
         </div>
         <div className="flex items-center gap-4 font-mono text-sm">
+          {artist?.id && (
+            <Link href={`/artists/${artist.id}`} className="hover:text-gold">
+              View public profile
+            </Link>
+          )}
           <Link href="/" className="hover:text-gold">
             View storefront
           </Link>
@@ -89,7 +115,7 @@ export default async function DashboardPage() {
       )}
 
       <div className="flex flex-col gap-4">
-        {tracks?.map((track) => (
+        {tracksWithPlayUrls.map((track) => (
           <div
             key={track.id}
             className="border border-paper/15 rounded-lg px-5 py-4 bg-paper/5 flex flex-col gap-3"
@@ -108,9 +134,7 @@ export default async function DashboardPage() {
               <span className="font-display text-lg flex-1">{track.title}</span>
               <span className="font-mono text-forest">${(track.price_cents / 100).toFixed(2)}</span>
             </div>
-            {track.audio_url && (
-              <audio controls src={track.audio_url} className="w-full h-10" />
-            )}
+            {track.playUrl && <audio controls src={track.playUrl} className="w-full h-10" />}
           </div>
         ))}
       </div>

@@ -63,6 +63,16 @@ export async function connectStripeAccount() {
     const account = await stripe.v2.core.accounts.create({
       contact_email: user.email,
       dashboard: "express",
+      // Stripe now requires `identity.country` to be set on the account
+      // before any configuration (including "recipient") can be applied —
+      // creating an account with a configuration but no identity.country
+      // fails with "identity_country_required". This app doesn't currently
+      // collect the artist's country anywhere, so this is hardcoded to the
+      // US for now. If you start onboarding artists outside the US, this
+      // needs to come from user input instead.
+      identity: {
+        country: "US",
+      },
       configuration: {
         recipient: RECIPIENT_CONFIGURATION,
       },
@@ -101,34 +111,22 @@ export async function connectStripeAccount() {
     });
   }
 
-  // Diagnostic: fetch the account's actual configuration state right before
-  // generating the link, so if Stripe still rejects the link below, we can
-  // see exactly what it thinks is applied instead of guessing. Safe to
-  // remove once the account_links call below is confirmed working.
-  const debugAccount = await stripe.v2.core.accounts.retrieve(accountId, {
-    include: [
-      "configuration.customer",
-      "configuration.merchant",
-      "configuration.recipient",
-      "identity",
-      "requirements",
-    ],
+  // Account Links v2 requires the link's `configurations` list to match the
+  // account's `applied_configurations` *exactly*. It's tempting to hardcode
+  // `["recipient"]` here since that's the only configuration this file ever
+  // requests — but `dashboard: "express"` causes Stripe to also apply a bare
+  // `merchant` configuration alongside it (no capabilities requested on it,
+  // it just comes along for the ride with the Express dashboard), so the
+  // account ends up with `applied_configurations: ["recipient", "merchant"]`
+  // even though this file never asked for "merchant" directly. Sending only
+  // `["recipient"]` to account_links against an account like that fails with
+  // "configs_must_match_to_use_account_links". So: fetch what's actually
+  // applied right before creating the link, and use that list verbatim
+  // instead of assuming it's just "recipient".
+  const account = await stripe.v2.core.accounts.retrieve(accountId, {
+    include: ["configuration.recipient"],
   });
-  console.log(
-    "[stripe-connect] account before account_link:",
-    JSON.stringify(
-      {
-        id: debugAccount.id,
-        dashboard: debugAccount.dashboard,
-        applied_configurations: debugAccount.applied_configurations,
-        configuration: debugAccount.configuration,
-        identity: debugAccount.identity,
-        requirements: debugAccount.requirements,
-      },
-      null,
-      2
-    )
-  );
+  const configurations = account.applied_configurations;
 
   // Stripe requires HTTPS for `return_url`/`refresh_url` on Account Links v2
   // — including for local testing against localhost — and fails account
@@ -147,13 +145,14 @@ export async function connectStripeAccount() {
   // Account Links v2 replaces `stripe.accountLinks.create` for accounts
   // created via the v2 Accounts API. It still returns a single-use hosted
   // onboarding URL, and the redirect below is unchanged. `configurations`
-  // must match what's applied on the account above ("recipient").
+  // is the account's actual applied list fetched above, not a hardcoded
+  // guess — see the comment there for why that distinction matters.
   const accountLink = await stripe.v2.core.accountLinks.create({
     account: accountId,
     use_case: {
       type: "account_onboarding",
       account_onboarding: {
-        configurations: ["recipient"],
+        configurations,
         refresh_url: `${siteUrl}/dashboard`,
         return_url: `${siteUrl}/dashboard`,
       },

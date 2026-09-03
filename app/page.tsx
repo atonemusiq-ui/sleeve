@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { startCheckout } from "@/app/actions/checkout";
 import Link from "next/link";
+import StorefrontGrid from "./StorefrontGrid";
 
 export default async function StorefrontPage() {
   const supabase = createClient();
@@ -8,7 +9,7 @@ export default async function StorefrontPage() {
   const { data: tracks, error } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, created_at, audio_url, cover_url, artists ( id, bio, user_id, profiles ( display_name ) )"
+      "id, title, price_cents, created_at, cover_url, artists ( id, bio, user_id, profiles ( display_name ) )"
     )
     .order("created_at", { ascending: false });
 
@@ -53,48 +54,9 @@ export default async function StorefrontPage() {
         <p className="text-paper/50 font-mono text-sm">No tracks published yet.</p>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-        {tracks?.map((track: any) => (
-          <div
-            key={track.id}
-            className="border border-paper/15 rounded-lg p-5 bg-paper/5 flex flex-col justify-between"
-          >
-            <div>
-              <div className="w-full aspect-square rounded bg-paper/10 overflow-hidden mb-4">
-                {track.cover_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-paper/30 text-3xl">
-                    ♪
-                  </div>
-                )}
-              </div>
-              <h2 className="font-display text-xl">{track.title}</h2>
-              <p className="text-paper/60 text-sm mt-1">
-                {track.artists?.profiles?.display_name ?? "Unknown artist"}
-              </p>
-              {track.audio_url && (
-                <audio controls src={track.audio_url} className="w-full h-10 mt-3" />
-              )}
-            </div>
-            <div className="flex items-center justify-between mt-6">
-              <span className="font-mono text-forest text-lg">
-                ${(track.price_cents / 100).toFixed(2)}
-              </span>
-              <form action={startCheckout}>
-                <input type="hidden" name="trackId" value={track.id} />
-                <button
-                  type="submit"
-                  className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
-                >
-                  Buy
-                </button>
-              </form>
-            </div>
-          </div>
-        ))}
-      </div>
+      {!error && tracks && tracks.length > 0 && (
+        <StorefrontGrid tracks={tracks} startCheckout={startCheckout} />
+      )}
     </main>
   );
 }
