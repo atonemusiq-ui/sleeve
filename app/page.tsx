@@ -9,7 +9,7 @@ export default async function StorefrontPage() {
   const { data: tracks, error } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, created_at, cover_url, artists ( id, bio, user_id, profiles ( display_name ) )"
+      "id, title, price_cents, created_at, cover_url, preview_url, artists ( id, bio, user_id, profiles ( display_name ) )"
     )
     .order("created_at", { ascending: false });
 

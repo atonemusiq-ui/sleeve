@@ -8,6 +8,7 @@ type Track = {
   title: string;
   price_cents: number;
   cover_url: string | null;
+  preview_url: string | null;
   artists: {
     id: string;
     profiles: { display_name: string } | null;
@@ -78,6 +79,14 @@ export default function StorefrontGrid({
                   </Link>
                 ) : (
                   <p className="text-paper/60 text-sm mt-1">Unknown artist</p>
+                )}
+                {track.preview_url && (
+                  <audio
+                    controls
+                    src={track.preview_url}
+                    className="w-full h-9 mt-3"
+                    preload="none"
+                  />
                 )}
               </div>
               <div className="flex items-center justify-between mt-6">
