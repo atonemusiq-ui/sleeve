@@ -16,9 +16,12 @@ export const GENRES = [
   "Rock",
   "Country",
   "Electronic/Dance",
+  "House",
   "Latin",
   "Afrobeat",
+  "Afrobeat Instrumentals",
   "Classical",
+  "Covers",
   "Other",
 ] as const;
 
