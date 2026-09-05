@@ -1,9 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-
-const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 export default async function LibraryPage() {
   const supabase = createClient();
@@ -22,33 +19,18 @@ export default async function LibraryPage() {
   const { data: purchases, error } = await supabase
     .from("purchases")
     .select(
-      "id, created_at, tracks ( id, title, audio_path, audio_url, cover_url, artists ( id, profiles ( display_name ) ) )"
+      "id, track_id, created_at, tracks ( id, title, cover_url, artists ( id, profiles ( display_name ) ) )"
     )
     .eq("status", "complete")
     .order("created_at", { ascending: false });
 
-  // Ownership above is already verified by RLS, so it's safe to mint signed
-  // URLs with the service-role client here rather than needing a separate
-  // storage policy for buyers (who aren't the artist and shouldn't get a
-  // blanket read policy on "track-audio").
-  const supabaseAdmin = createServiceRoleClient();
-  const tracks = await Promise.all(
-    (purchases ?? [])
-      .filter((p) => p.tracks)
-      .map(async (purchase) => {
-        const track = purchase.tracks as any;
-        let playUrl: string | null = null;
-        if (track.audio_path) {
-          const { data: signed } = await supabaseAdmin.storage
-            .from("track-audio")
-            .createSignedUrl(track.audio_path, SIGNED_URL_TTL_SECONDS, { download: true });
-          playUrl = signed?.signedUrl ?? null;
-        } else if (track.audio_url) {
-          playUrl = track.audio_url;
-        }
-        return { purchaseId: purchase.id, track, playUrl };
-      })
-  );
+  const tracks = (purchases ?? [])
+    .filter((p) => p.tracks)
+    .map((purchase) => ({
+      purchaseId: purchase.id,
+      trackId: purchase.track_id,
+      track: purchase.tracks as any,
+    }));
 
   return (
     <main className="max-w-3xl mx-auto px-6 py-12">
@@ -74,7 +56,7 @@ export default async function LibraryPage() {
       )}
 
       <div className="flex flex-col gap-4">
-        {tracks.map(({ purchaseId, track, playUrl }) => (
+        {tracks.map(({ purchaseId, trackId, track }) => (
           <div
             key={purchaseId}
             className="border border-paper/15 rounded-lg px-5 py-4 bg-paper/5 flex flex-col gap-3"
@@ -102,13 +84,11 @@ export default async function LibraryPage() {
                 )}
               </div>
             </div>
-            {playUrl ? (
-              <audio controls src={playUrl} className="w-full h-10" />
-            ) : (
-              <p className="font-mono text-xs text-rust">
-                No audio file found for this track — contact the artist.
-              </p>
-            )}
+            {/* Points at the protected stream route rather than a signed URL
+                minted here — /api/stream/[trackId] re-checks ownership on
+                every request and mints its own short-lived URL, so the
+                player never holds a raw or long-lived file link. */}
+            <audio controls src={`/api/stream/${trackId}`} className="w-full h-10" />
           </div>
         ))}
       </div>

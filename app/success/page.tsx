@@ -1,4 +1,5 @@
 import { stripe } from "@/lib/stripe/server";
+import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import Link from "next/link";
 
@@ -86,6 +87,20 @@ export default async function SuccessPage({
     downloadUrl = track.audio_url;
   }
 
+  // Checkout requires login now (see app/actions/checkout.ts), so this is
+  // normally already someone's own account — but a bookmarked /success link
+  // from before that change (or a guest checkout that slipped through)
+  // might land here logged out. Prompt them to create a free account so
+  // this purchase (and any others under the same email) shows up
+  // permanently in /library instead of only being reachable via this
+  // one-time link — see app/actions/auth.ts for the matching-by-email claim
+  // that runs on signup.
+  const sessionSupabase = createClient();
+  const {
+    data: { user },
+  } = await sessionSupabase.auth.getUser();
+  const buyerEmail = session.customer_details?.email ?? null;
+
   return (
     <main className="max-w-xl mx-auto px-6 py-24 text-center">
       <h1 className="font-display text-3xl text-gold mb-4">Thank you!</h1>
@@ -118,6 +133,23 @@ export default async function SuccessPage({
           We couldn&apos;t find an audio file for this track. Contact the artist — your purchase
           is recorded.
         </p>
+      )}
+
+      {!user && (
+        <div className="border border-gold/30 rounded-lg p-6 mb-10 bg-gold/5">
+          <p className="text-paper/80 mb-4">
+            Create a free account and this track (plus anything else you've bought) is always
+            waiting in your library — no more hunting for this link.
+          </p>
+          <Link
+            href={`/signup?email=${encodeURIComponent(buyerEmail ?? "")}&next=${encodeURIComponent(
+              "/library"
+            )}`}
+            className="font-mono text-sm px-4 py-2.5 rounded bg-gold text-ink font-medium hover:opacity-90 inline-block"
+          >
+            Create free account
+          </Link>
+        </div>
       )}
 
       <Link

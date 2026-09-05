@@ -40,6 +40,31 @@ export async function signup(formData: FormData) {
   // `profiles`/`artists` rows are created by the database trigger above, so
   // there's nothing left to insert here.
 
+  const admin = createServiceRoleClient();
+
+  // Claim any purchases already sitting under this email with no fan_id —
+  // a guest/anonymous checkout from before buying required an account, or
+  // someone completing the "create a free account" prompt on /success
+  // right after paying (see app/success/page.tsx). Uses the service-role
+  // client since there's no purchases UPDATE policy for RLS to allow this
+  // for a brand-new account. Same trust model this app already accepts for
+  // fan signups generally (auto-confirmed with no inbox round trip) — this
+  // doesn't verify the signer actually owns that inbox, it just reunites a
+  // purchase with an account claiming the email that paid for it.
+  const { error: claimError } = await admin
+    .from("purchases")
+    .update({ fan_id: data.user.id })
+    .eq("buyer_email", email)
+    .is("fan_id", null);
+
+  if (claimError) {
+    console.error("[signup] failed to claim past purchases by email", {
+      userId: data.user.id,
+      email,
+      message: claimError.message,
+    });
+  }
+
   // Artists still confirm their email before they can log in — they handle
   // real money via Stripe Connect, so that's worth the friction. Fans
   // don't: email confirmation was exactly the extra step in "get bounced to
@@ -49,7 +74,6 @@ export async function signup(formData: FormData) {
   // server-only operation — rather than touching the project-wide "confirm
   // email" setting, which would also turn off confirmation for artists.
   if (role === "fan") {
-    const admin = createServiceRoleClient();
     const { error: confirmError } = await admin.auth.admin.updateUserById(data.user.id, {
       email_confirm: true,
     });

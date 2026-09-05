@@ -3,12 +3,14 @@ import { signup } from "@/app/actions/auth";
 export default function SignupPage({
   searchParams,
 }: {
-  searchParams: { error?: string; next?: string };
+  searchParams: { error?: string; next?: string; email?: string };
 }) {
   // Arriving here via a "log in to buy this track" bounce (see
-  // app/actions/checkout.ts) means they're here to buy, not to sell —
-  // default the role picker to Fan in that case instead of Artist.
-  const cameFromBuying = Boolean(searchParams.next);
+  // app/actions/checkout.ts), or via the "create a free account" prompt on
+  // /success after a purchase (see app/success/page.tsx), means they're
+  // here to buy/claim a purchase, not to sell — default the role picker to
+  // Fan in either case instead of Artist.
+  const cameFromBuying = Boolean(searchParams.next) || Boolean(searchParams.email);
 
   return (
     <main className="max-w-md mx-auto px-6 py-16">
@@ -37,6 +39,7 @@ export default function SignupPage({
             name="email"
             type="email"
             required
+            defaultValue={searchParams.email ?? ""}
             className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper"
           />
         </div>
