@@ -10,6 +10,7 @@ type Track = {
   price_cents: number;
   cover_url: string | null;
   audio_path: string | null;
+  preview_url: string | null;
   playUrl: string | null;
 };
 
