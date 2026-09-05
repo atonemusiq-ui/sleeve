@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { isAllowedTrackPrice, trackPriceError } from "@/lib/trackPricing";
+import { isValidGenre, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
 
 export type TrackActionResult = { error?: string };
 
@@ -17,10 +18,19 @@ export async function updateTrack(formData: FormData): Promise<TrackActionResult
   const title = (formData.get("title") as string)?.trim();
   const priceCents = Math.round(parseFloat(formData.get("price") as string) * 100);
   const coverUrl = (formData.get("coverUrl") as string) || null;
+  const genre = (formData.get("genre") as string) || null;
+  const customTag = (formData.get("customTag") as string)?.trim() || null;
+  const aiDisclosure = formData.get("aiDisclosure") === "true";
 
   if (!title) return { error: "Title is required." };
   if (isNaN(priceCents) || !isAllowedTrackPrice(priceCents)) {
     return { error: trackPriceError() };
+  }
+  if (genre && !isValidGenre(genre)) {
+    return { error: "That's not a recognized genre." };
+  }
+  if (customTag && customTag.length > MAX_CUSTOM_TAG_LENGTH) {
+    return { error: `Tag must be ${MAX_CUSTOM_TAG_LENGTH} characters or fewer.` };
   }
 
   const supabase = createClient();
@@ -43,9 +53,19 @@ export async function updateTrack(formData: FormData): Promise<TrackActionResult
     .maybeSingle();
   if (!artist) return { error: "That track doesn't belong to your account." };
 
-  const updatePayload: { title: string; price_cents: number; cover_url?: string } = {
+  const updatePayload: {
+    title: string;
+    price_cents: number;
+    cover_url?: string;
+    genre: string | null;
+    custom_tag: string | null;
+    ai_disclosure: boolean;
+  } = {
     title,
     price_cents: priceCents,
+    genre,
+    custom_tag: customTag,
+    ai_disclosure: aiDisclosure,
   };
   if (coverUrl) updatePayload.cover_url = coverUrl;
 

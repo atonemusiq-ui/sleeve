@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { findDuplicateTrack } from "@/lib/fingerprint/check-duplicate";
 import { isAllowedTrackPrice, trackPriceError } from "@/lib/trackPricing";
+import { isValidGenre, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
 import { revalidatePath } from "next/cache";
 
 export type PublishTrackInput = {
@@ -15,6 +16,9 @@ export type PublishTrackInput = {
   previewUrl: string | null;
   fingerprint: string;
   fingerprintDuration: number;
+  genre: string | null;
+  customTag: string | null;
+  aiDisclosure: boolean;
 };
 
 export type PublishTrackResult =
@@ -61,6 +65,19 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
     return { status: "error", message: trackPriceError() };
   }
 
+  // Genre is optional — an empty/null value is fine, but a non-empty one
+  // must be one of the fixed options (see lib/genres.ts and the <select> in
+  // UploadForm.tsx) so the storefront's genre filter always has a known,
+  // finite set to build pills from.
+  if (input.genre && !isValidGenre(input.genre)) {
+    return { status: "error", message: "That's not a recognized genre." };
+  }
+
+  const customTag = input.customTag?.trim() || null;
+  if (customTag && customTag.length > MAX_CUSTOM_TAG_LENGTH) {
+    return { status: "error", message: `Tag must be ${MAX_CUSTOM_TAG_LENGTH} characters or fewer.` };
+  }
+
   const match = await findDuplicateTrack(admin, input.fingerprint);
   if (match) {
     await admin.from("flagged_uploads").insert({
@@ -81,6 +98,9 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
     preview_url: input.previewUrl,
     audio_fingerprint: input.fingerprint,
     fingerprint_duration: Math.round(input.fingerprintDuration),
+    genre: input.genre || null,
+    custom_tag: customTag,
+    ai_disclosure: input.aiDisclosure,
   });
 
   if (error) {

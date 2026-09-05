@@ -6,6 +6,7 @@ import { publishTrack } from "@/app/actions/upload";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { GENRES, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
 
 // Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
 // app/actions/tracks.ts, which is what actually enforces this server-side.
@@ -14,6 +15,9 @@ const TRACK_PRICE_OPTIONS = ["3.00", "4.00", "5.00"];
 export default function UploadForm({ artistId }: { artistId: string }) {
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("5.00");
+  const [genre, setGenre] = useState("");
+  const [customTag, setCustomTag] = useState("");
+  const [aiDisclosure, setAiDisclosure] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -118,6 +122,9 @@ export default function UploadForm({ artistId }: { artistId: string }) {
         previewUrl,
         fingerprint,
         fingerprintDuration,
+        genre: genre || null,
+        customTag: customTag || null,
+        aiDisclosure,
       });
 
       if (result.status === "error") {
@@ -132,6 +139,9 @@ export default function UploadForm({ artistId }: { artistId: string }) {
 
       setTitle("");
       setPrice("5.00");
+      setGenre("");
+      setCustomTag("");
+      setAiDisclosure(false);
       setAudioFile(null);
       setCoverFile(null);
       router.refresh();
@@ -183,6 +193,50 @@ export default function UploadForm({ artistId }: { artistId: string }) {
           ))}
         </select>
       </div>
+
+      <div>
+        <label className="block font-mono text-xs text-paper/60 mb-1">Genre (optional)</label>
+        <select
+          value={genre}
+          onChange={(e) => setGenre(e.target.value)}
+          className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper font-mono"
+        >
+          <option value="" className="bg-ink text-paper">
+            No genre
+          </option>
+          {GENRES.map((g) => (
+            <option key={g} value={g} className="bg-ink text-paper">
+              {g}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="block font-mono text-xs text-paper/60 mb-1">
+          Your own tag (optional, one word or short phrase)
+        </label>
+        <input
+          value={customTag}
+          onChange={(e) => setCustomTag(e.target.value)}
+          maxLength={MAX_CUSTOM_TAG_LENGTH}
+          placeholder="e.g. lo-fi, worship, boom bap"
+          className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper"
+        />
+      </div>
+
+      <label className="flex items-start gap-2 font-mono text-xs text-paper/70">
+        <input
+          type="checkbox"
+          checked={aiDisclosure}
+          onChange={(e) => setAiDisclosure(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span>
+          This track involved AI-generated vocals, instrumentation, or production. Checking this
+          shows an "AI-assisted" label on the storefront — buyers can see it before purchasing.
+        </span>
+      </label>
 
       <div>
         <label className="block font-mono text-xs text-paper/60 mb-1">Audio file (mp3, wav)</label>

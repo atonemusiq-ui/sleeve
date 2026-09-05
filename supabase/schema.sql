@@ -468,3 +468,15 @@ drop index if exists purchases_stripe_payment_intent_id_key;
 create unique index if not exists purchases_stripe_payment_intent_track_key
   on purchases (stripe_payment_intent_id, track_id)
   where stripe_payment_intent_id is not null;
+
+
+-- ============================================================================
+-- Genre browsing + free-text tag + per-track AI disclosure (all optional).
+-- Validity of `genre` against the fixed list (lib/genres.ts) is enforced at
+-- the application layer (app/actions/upload.ts, app/actions/tracks.ts) —
+-- same pattern as track pricing — rather than a DB check constraint, so the
+-- genre list can grow without a migration.
+-- ============================================================================
+alter table tracks add column if not exists genre text;
+alter table tracks add column if not exists custom_tag text;
+alter table tracks add column if not exists ai_disclosure boolean not null default false;

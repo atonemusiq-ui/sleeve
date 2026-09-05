@@ -18,7 +18,7 @@ export default async function ArtistPage({ params }: { params: { id: string } })
 
   const { data: tracks } = await supabase
     .from("tracks")
-    .select("id, title, price_cents, cover_url, preview_url, created_at")
+    .select("id, title, price_cents, cover_url, preview_url, created_at, genre, custom_tag, ai_disclosure")
     .eq("artist_id", artist.id)
     .order("created_at", { ascending: false });
 
@@ -77,6 +77,25 @@ export default async function ArtistPage({ params }: { params: { id: string } })
                   )}
                 </div>
                 <h2 className="font-display text-xl">{track.title}</h2>
+                {(track.genre || track.custom_tag || track.ai_disclosure) && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {track.genre && (
+                      <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-paper/20 text-paper/50">
+                        {track.genre}
+                      </span>
+                    )}
+                    {track.custom_tag && (
+                      <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-paper/20 text-paper/50">
+                        #{track.custom_tag}
+                      </span>
+                    )}
+                    {track.ai_disclosure && (
+                      <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-gold/40 text-gold">
+                        AI-assisted
+                      </span>
+                    )}
+                  </div>
+                )}
               {track.preview_url && (
                 <audio
                   controls

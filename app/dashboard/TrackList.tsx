@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateTrack } from "@/app/actions/tracks";
+import { GENRES, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
 import ContributorManager, { type Contributor } from "./ContributorManager";
 
 // Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
@@ -18,6 +19,9 @@ type Track = {
   audio_path: string | null;
   preview_url: string | null;
   playUrl: string | null;
+  genre: string | null;
+  custom_tag: string | null;
+  ai_disclosure: boolean;
 };
 
 export default function TrackList({
@@ -57,6 +61,9 @@ function TrackRow({
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(track.title);
   const [price, setPrice] = useState((track.price_cents / 100).toFixed(2));
+  const [genre, setGenre] = useState(track.genre ?? "");
+  const [customTag, setCustomTag] = useState(track.custom_tag ?? "");
+  const [aiDisclosure, setAiDisclosure] = useState(track.ai_disclosure);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +95,9 @@ function TrackRow({
       formData.set("trackId", track.id);
       formData.set("title", title);
       formData.set("price", price);
+      formData.set("genre", genre);
+      formData.set("customTag", customTag);
+      formData.set("aiDisclosure", String(aiDisclosure));
       if (coverUrl) formData.set("coverUrl", coverUrl);
 
       const result = await updateTrack(formData);
@@ -167,6 +177,47 @@ function TrackRow({
         </div>
 
         <div>
+          <label className="block font-mono text-xs text-paper/60 mb-1">Genre (optional)</label>
+          <select
+            value={genre}
+            onChange={(e) => setGenre(e.target.value)}
+            className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper font-mono"
+          >
+            <option value="" className="bg-ink text-paper">
+              No genre
+            </option>
+            {GENRES.map((g) => (
+              <option key={g} value={g} className="bg-ink text-paper">
+                {g}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block font-mono text-xs text-paper/60 mb-1">
+            Your own tag (optional)
+          </label>
+          <input
+            value={customTag}
+            onChange={(e) => setCustomTag(e.target.value)}
+            maxLength={MAX_CUSTOM_TAG_LENGTH}
+            placeholder="e.g. lo-fi, worship, boom bap"
+            className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper"
+          />
+        </div>
+
+        <label className="flex items-start gap-2 font-mono text-xs text-paper/70">
+          <input
+            type="checkbox"
+            checked={aiDisclosure}
+            onChange={(e) => setAiDisclosure(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>This track involved AI-generated vocals, instrumentation, or production.</span>
+        </label>
+
+        <div>
           <label className="block font-mono text-xs text-paper/60 mb-1">
             Replace cover art (optional)
           </label>
@@ -193,6 +244,9 @@ function TrackRow({
               setError(null);
               setTitle(track.title);
               setPrice((track.price_cents / 100).toFixed(2));
+              setGenre(track.genre ?? "");
+              setCustomTag(track.custom_tag ?? "");
+              setAiDisclosure(track.ai_disclosure);
               setCoverFile(null);
             }}
             disabled={busy}
@@ -237,6 +291,25 @@ function TrackRow({
           </button>
         </div>
       </div>
+      {(track.genre || track.custom_tag || track.ai_disclosure) && (
+        <div className="flex flex-wrap gap-1.5">
+          {track.genre && (
+            <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-paper/20 text-paper/60">
+              {track.genre}
+            </span>
+          )}
+          {track.custom_tag && (
+            <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-paper/20 text-paper/60">
+              #{track.custom_tag}
+            </span>
+          )}
+          {track.ai_disclosure && (
+            <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-gold/40 text-gold">
+              AI-assisted
+            </span>
+          )}
+        </div>
+      )}
       {track.playUrl && <audio controls src={track.playUrl} className="w-full h-10" />}
       {!track.preview_url && (
         <p className="font-mono text-xs text-rust mt-1">Preview unavailable, fans won't hear a sample until this is fixed.</p>

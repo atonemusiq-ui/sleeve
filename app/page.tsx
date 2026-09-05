@@ -9,7 +9,7 @@ export default async function StorefrontPage() {
   const { data: tracks, error } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, created_at, cover_url, preview_url, artists ( id, bio, user_id, profiles ( display_name ) )"
+      "id, title, price_cents, created_at, cover_url, preview_url, genre, custom_tag, ai_disclosure, artists ( id, bio, user_id, profiles ( display_name ) )"
     )
     .order("created_at", { ascending: false });
 
@@ -91,9 +91,13 @@ export default async function StorefrontPage() {
         </nav>
       </header>
 
-      <p className="text-paper/70 mb-10 max-w-xl">
+      <p className="text-paper/70 mb-3 max-w-xl">
         Buy tracks directly from independent artists. A fixed price, paid mostly to the artist —
         not a fraction of a cent per stream.
+      </p>
+      <p className="text-paper/40 font-mono text-xs mb-10 max-w-xl">
+        Artists disclose it themselves when a track involves AI-generated vocals, instrumentation,
+        or production — look for the "AI-assisted" label on those tracks.
       </p>
 
       <div className="ticket-divider mb-10" />
