@@ -13,6 +13,18 @@ export default async function StorefrontPage() {
     )
     .order("created_at", { ascending: false });
 
+  const normalizedTracks = (tracks ?? []).map((track: any) => ({
+    ...track,
+    artists: Array.isArray(track.artists)
+      ? {
+          ...track.artists[0],
+          profiles: Array.isArray(track.artists[0]?.profiles)
+            ? track.artists[0].profiles[0] ?? null
+            : track.artists[0]?.profiles ?? null,
+        }
+      : track.artists,
+  }));
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -72,7 +84,7 @@ export default async function StorefrontPage() {
       )}
 
       {!error && tracks && tracks.length > 0 && (
-        <StorefrontGrid tracks={tracks} startCheckout={startCheckout} isLoggedIn={Boolean(user)} />
+        <StorefrontGrid tracks={normalizedTracks} startCheckout={startCheckout} isLoggedIn={Boolean(user)} />
       )}
     </main>
   );
