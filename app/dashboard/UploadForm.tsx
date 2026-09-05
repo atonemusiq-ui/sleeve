@@ -1,4 +1,6 @@
 "use client";
+import { generatePreviewClip } from "@/lib/generatePreviewClip";
+
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -46,6 +48,25 @@ export default function UploadForm({ artistId }: { artistId: string }) {
 
       if (audioError) throw new Error(`Audio upload failed: ${audioError.message}`);
 
+      let previewUrl: string | null = null;
+      try {
+        const previewBlob = await generatePreviewClip(audioFile);
+        const previewPath = `${artistId}/${Date.now()}-preview.wav`;
+        const { error: previewError } = await supabase.storage
+          .from("track-previews")
+          .upload(previewPath, previewBlob);
+
+        if (previewError) {
+          console.error("Preview upload failed:", previewError.message);
+        } else {
+          previewUrl = 
+supabase.storage.from("track-previews").getPublicUrl(previewPath).data.publicUrl;
+        }
+      } catch (previewErr) {
+        console.error("Preview clip generation failed:", previewErr);
+      }
+
+
       // Cover art goes in the separate *public* "track-covers" bucket — fine
       // to serve directly, unlike the paid audio.
       let coverUrl: string | null = null;
@@ -67,6 +88,7 @@ export default function UploadForm({ artistId }: { artistId: string }) {
         price_cents: priceCents,
         audio_path: audioPath,
         cover_url: coverUrl,
+        preview_url: previewUrl,
       });
 
       if (insertError) throw new Error(`Saving track failed: ${insertError.message}`);

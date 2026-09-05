@@ -1,0 +1,222 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+
+type Track = {
+  id: string;
+  title: string;
+  price_cents: number;
+  cover_url: string | null;
+  audio_path: string | null;
+  playUrl: string | null;
+};
+
+export default function TrackList({
+  tracks,
+  artistId,
+}: {
+  tracks: Track[];
+  artistId: string;
+}) {
+  if (tracks.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {tracks.map((track) => (
+        <TrackRow key={track.id} track={track} artistId={artistId} />
+      ))}
+    </div>
+  );
+}
+
+function TrackRow({ track, artistId }: { track: Track; artistId: string }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(track.title);
+  const [price, setPrice] = useState((track.price_cents / 100).toFixed(2));
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    const priceCents = Math.round(parseFloat(price) * 100);
+    if (isNaN(priceCents) || priceCents < 0) {
+      setError("Please enter a valid price.");
+      return;
+    }
+
+    setBusy(true);
+    const supabase = createClient();
+
+    try {
+      let coverUrl = track.cover_url;
+      if (coverFile) {
+        const coverPath = `${artistId}/${Date.now()}-${coverFile.name}`;
+        const { error: coverError } = await supabase.storage
+          .from("track-covers")
+          .upload(coverPath, coverFile);
+        if (coverError) throw new Error(`Cover upload failed: ${coverError.message}`);
+        coverUrl = supabase.storage.from("track-covers").getPublicUrl(coverPath).data.publicUrl;
+      }
+
+      const { error: updateError } = await supabase
+        .from("tracks")
+        .update({ title, price_cents: priceCents, cover_url: coverUrl })
+        .eq("id", track.id);
+
+      if (updateError) throw new Error(`Saving changes failed: ${updateError.message}`);
+
+      setEditing(false);
+      setCoverFile(null);
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message ?? "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm(`Take down "${track.title}"? This can't be undone.`)) {
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    const supabase = createClient();
+
+    try {
+      // Delete the row first — RLS ("artists can delete their own tracks")
+      // scopes this to tracks this artist actually owns.
+      const { error: deleteError } = await supabase.from("tracks").delete().eq("id", track.id);
+      if (deleteError) throw new Error(`Delete failed: ${deleteError.message}`);
+
+      // Best-effort storage cleanup. The track is already gone from the
+      // catalog even if this fails, so don't block on it or surface it as a
+      // hard error — an orphaned file in storage is a much smaller problem
+      // than a delete that appears to fail.
+      if (track.audio_path) {
+        await supabase.storage.from("track-audio").remove([track.audio_path]);
+      }
+
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message ?? "Something went wrong.");
+      setBusy(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <form
+        onSubmit={handleSave}
+        className="border border-paper/15 rounded-lg px-5 py-4 bg-paper/5 flex flex-col gap-3"
+      >
+        {error && <p className="text-rust font-mono text-sm">{error}</p>}
+
+        <div>
+          <label className="block font-mono text-xs text-paper/60 mb-1">Title</label>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+            className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper"
+          />
+        </div>
+
+        <div>
+          <label className="block font-mono text-xs text-paper/60 mb-1">Price (USD)</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            required
+            className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper font-mono"
+          />
+        </div>
+
+        <div>
+          <label className="block font-mono text-xs text-paper/60 mb-1">
+            Replace cover art (optional)
+          </label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)}
+            className="w-full text-paper font-mono text-sm"
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            type="submit"
+            disabled={busy}
+            className="font-mono text-xs px-3 py-1.5 rounded bg-gold text-ink font-medium hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? "Saving..." : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(false);
+              setError(null);
+              setTitle(track.title);
+              setPrice((track.price_cents / 100).toFixed(2));
+              setCoverFile(null);
+            }}
+            disabled={busy}
+            className="font-mono text-xs px-3 py-1.5 rounded border border-paper/20 hover:bg-paper/10"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  return (
+    <div className="border border-paper/15 rounded-lg px-5 py-4 bg-paper/5 flex flex-col gap-3">
+      {error && <p className="text-rust font-mono text-sm">{error}</p>}
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded bg-paper/10 flex-shrink-0 overflow-hidden">
+          {track.cover_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-paper/30 text-xs">
+              ♪
+            </div>
+          )}
+        </div>
+        <span className="font-display text-lg flex-1">{track.title}</span>
+        <span className="font-mono text-forest">${(track.price_cents / 100).toFixed(2)}</span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setEditing(true)}
+            className="font-mono text-xs px-2 py-1 rounded border border-paper/20 hover:bg-paper/10"
+          >
+            Edit
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={busy}
+            className="font-mono text-xs px-2 py-1 rounded border border-rust/40 text-rust hover:bg-rust/10 disabled:opacity-50"
+          >
+            {busy ? "..." : "Delete"}
+          </button>
+        </div>
+      </div>
+      {track.playUrl && <audio controls src={track.playUrl} className="w-full h-10" />}
+      {!track.preview_url && (
+        <p className="font-mono text-xs text-rust mt-1">Preview unavailable, fans won't hear a sample until this is fixed.</p>
+      )}
+    </div>
+  );
+}

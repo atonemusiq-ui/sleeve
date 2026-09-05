@@ -2,9 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { logout } from "@/app/actions/auth";
 import { connectStripeAccount } from "@/app/actions/stripe-connect";
+import { updateBio } from "@/app/actions/artist";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import UploadForm from "./UploadForm";
+import TrackList from "./TrackList";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
@@ -31,13 +33,13 @@ export default async function DashboardPage() {
 
   const { data: artist } = await supabase
     .from("artists")
-    .select("id, stripe_account_id")
+    .select("id, stripe_account_id, bio")
     .eq("user_id", user.id)
     .single();
 
   const { data: tracks, error } = await supabase
     .from("tracks")
-    .select("id, title, price_cents, created_at, audio_path, audio_url, cover_url")
+    .select("id, title, price_cents, created_at, audio_path, audio_url, cover_url, preview_url")
     .eq("artist_id", artist?.id)
     .order("created_at", { ascending: false });
 
@@ -102,6 +104,34 @@ export default async function DashboardPage() {
         </form>
       </div>
 
+      <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-3">
+        <h2 className="font-display text-lg">Bio</h2>
+        <p className="font-mono text-xs text-paper/60">
+          Shown on your public artist page — {artist?.id ? (
+            <Link href={`/artists/${artist.id}`} className="text-gold">
+              preview it
+            </Link>
+          ) : (
+            "preview it once you have a track published"
+          )}.
+        </p>
+        <form action={updateBio} className="flex flex-col gap-3">
+          <textarea
+            name="bio"
+            defaultValue={artist?.bio ?? ""}
+            rows={4}
+            placeholder="Tell fans a bit about yourself..."
+            className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper"
+          />
+          <button
+            type="submit"
+            className="self-start font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
+          >
+            Save bio
+          </button>
+        </form>
+      </div>
+
       {artist?.id && <UploadForm artistId={artist.id} />}
 
       <h2 className="font-display text-xl mb-4">Your catalog</h2>
@@ -114,30 +144,7 @@ export default async function DashboardPage() {
         </p>
       )}
 
-      <div className="flex flex-col gap-4">
-        {tracksWithPlayUrls.map((track) => (
-          <div
-            key={track.id}
-            className="border border-paper/15 rounded-lg px-5 py-4 bg-paper/5 flex flex-col gap-3"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded bg-paper/10 flex-shrink-0 overflow-hidden">
-                {track.cover_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-paper/30 text-xs">
-                    ♪
-                  </div>
-                )}
-              </div>
-              <span className="font-display text-lg flex-1">{track.title}</span>
-              <span className="font-mono text-forest">${(track.price_cents / 100).toFixed(2)}</span>
-            </div>
-            {track.playUrl && <audio controls src={track.playUrl} className="w-full h-10" />}
-          </div>
-        ))}
-      </div>
+      {artist?.id && <TrackList tracks={tracksWithPlayUrls} artistId={artist.id} />}
     </main>
   );
 }
