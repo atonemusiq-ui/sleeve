@@ -42,7 +42,7 @@ export default async function StorefrontPage() {
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
       <header className="flex items-center justify-between mb-12">
-        <h1 className="font-display text-3xl text-gold">Sleeve</h1>
+        <h1 className="font-display text-3xl text-gold">Fyby</h1>
         <nav className="font-mono text-sm">
           {user ? (
             <div className="flex gap-4">

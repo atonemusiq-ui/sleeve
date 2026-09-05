@@ -1,4 +1,4 @@
--- Sleeve schema
+-- Fyby schema
 --
 -- Safe to re-run: every statement is idempotent (create-if-not-exists /
 -- add-column-if-not-exists / drop-then-create for policies), so this same
@@ -80,7 +80,7 @@ create table if not exists purchases (
 );
 
 -- Checkout is anonymous (no login required to buy), so a purchase is not
--- always tied to a Sleeve account.
+-- always tied to a Fyby account.
 alter table purchases alter column fan_id drop not null;
 
 -- Buyer contact + payment-split bookkeeping, written by the Stripe webhook.

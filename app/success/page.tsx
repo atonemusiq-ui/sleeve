@@ -17,7 +17,7 @@ function ErrorState({ message }: { message: string }) {
         href="/"
         className="font-mono text-sm px-4 py-2 rounded border border-gold/40 text-gold hover:bg-gold/10"
       >
-        Back to Sleeve
+        Back to Fyby
       </Link>
     </main>
   );
@@ -124,7 +124,7 @@ export default async function SuccessPage({
         href="/"
         className="font-mono text-sm px-4 py-2 rounded border border-gold/40 text-gold hover:bg-gold/10"
       >
-        Back to Sleeve
+        Back to Fyby
       </Link>
     </main>
   );

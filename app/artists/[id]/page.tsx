@@ -32,7 +32,7 @@ export default async function ArtistPage({ params }: { params: { id: string } })
     <main className="max-w-5xl mx-auto px-6 py-12">
       <div className="flex items-center justify-between mb-6">
         <Link href="/" className="font-mono text-xs text-paper/50 hover:text-gold">
-          &larr; Back to Sleeve
+          &larr; Back to Fyby
         </Link>
         <nav className="font-mono text-xs">
           {user ? (

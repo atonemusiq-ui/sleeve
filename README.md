@@ -1,4 +1,4 @@
-# Sleeve
+# Fyby
 
 Direct-to-fan music sales. Artists upload tracks and connect a bank account via Stripe
 Connect; fans buy at a fixed price through Stripe Checkout; the artist gets paid directly
@@ -9,9 +9,14 @@ fraction of a cent per stream.
 
 - Next.js 14 (App Router) + TypeScript + Tailwind
 - Supabase for Postgres, auth, and storage
-- Auth: sign up as Artist or Fan, log in, log out (email confirmation required)
-- Artist dashboard: upload tracks (audio + optional cover art), see your own catalog with
-  playback, connect a bank account via Stripe Connect (v2 Core Accounts, Express dashboard)
+- Auth: sign up as Artist or Fan, log in, log out, reset a forgotten password. Artists
+  confirm their email before first login (they handle real money via Connect); fans are
+  auto-confirmed and signed in immediately on signup — no inbox round trip in the middle
+  of buying something
+- Artist dashboard: upload tracks (audio + optional cover art), edit a track's title,
+  price, or cover art, or take it down entirely; see your own catalog with playback;
+  write a bio (shown on your public artist page); connect a bank account via Stripe
+  Connect (v2 Core Accounts, Express dashboard)
 - Public storefront: search/filter across all published tracks, artist name links to a
   public artist profile page, Buy button starts a real Stripe Checkout session
 - Buying requires an account (as of the fan-library change) — a fan who isn't logged in
@@ -92,16 +97,13 @@ revisiting the plan tier once real tracks (not test uploads) are live.
 
 ## Known gaps
 
-- No password reset flow
-- No artist bio editing UI (column exists, no form)
 - Purchases made before the fan-library change (or by an anonymous/guest checkout, if one
   slips through) have no `fan_id` and won't show up in `/library` — only reachable via
   their original `/success` link
-- No track editing/deletion from the dashboard once published
 - No genre/tag metadata — storefront search only matches title and artist name
 - Legacy rows from before audio was made private (`audio_url` set, `audio_path` null)
   still resolve to their old public URL — not retroactively secured. Re-upload to move a
   track onto the private path.
-- Email confirmation is required before first login, which adds a real speed bump to the
-  "log in mid-checkout to buy" flow — worth revisiting if drop-off there turns out to be a
-  problem.
+- Editing a track's cover art doesn't delete the old cover file from storage — orphaned,
+  not a correctness problem, just some unused storage
+- No bulk actions on the dashboard (re-order tracks, etc.)

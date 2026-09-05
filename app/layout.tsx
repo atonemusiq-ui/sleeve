@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Sleeve",
+  title: "Fyby",
   description: "Direct-to-fan music sales. Artists keep the large majority of every sale.",
 };
 

@@ -55,7 +55,7 @@ export default async function LibraryPage() {
       <header className="flex items-center justify-between mb-12">
         <h1 className="font-display text-3xl text-gold">My Music</h1>
         <Link href="/" className="font-mono text-sm hover:text-gold">
-          Back to Sleeve
+          Back to Fyby
         </Link>
       </header>
 
