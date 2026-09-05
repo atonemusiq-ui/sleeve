@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/server";
+import { trackNeedsCoverCredit } from "@/lib/coverCompliance";
 import { redirect } from "next/navigation";
 
 export async function startCheckout(formData: FormData) {
@@ -28,12 +29,22 @@ export async function startCheckout(formData: FormData) {
 
   const { data: track, error } = await supabase
     .from("tracks")
-    .select("id, title, price_cents, artists ( profiles ( display_name ) )")
+    .select("id, title, price_cents, genre, artists ( profiles ( display_name ) )")
     .eq("id", trackId)
     .single();
 
   if (error || !track) {
     throw new Error("Could not find that track.");
+  }
+
+  // Cover songs owe the original songwriter/producer a royalty — see
+  // lib/coverCompliance.ts — and can't be sold until the artist has credited
+  // them as a contributor. Checked here, before a Stripe session (and any
+  // money) exists, rather than after payment.
+  if (await trackNeedsCoverCredit(track.id, track.genre)) {
+    throw new Error(
+      "This cover can't be purchased yet — the artist still needs to credit the original songwriter/producer before it can go on sale."
+    );
   }
 
   const artistName =
@@ -116,13 +127,27 @@ export async function startAlbumCheckout(formData: FormData) {
     throw new Error("Could not find that album.");
   }
 
-  const { count: trackCount } = await supabase
+  const { data: albumTrackRows } = await supabase
     .from("album_tracks")
-    .select("track_id", { count: "exact", head: true })
+    .select("tracks ( id, title, genre )")
     .eq("album_id", albumId);
 
-  if (!trackCount || trackCount === 0) {
+  if (!albumTrackRows || albumTrackRows.length === 0) {
     throw new Error("This album has no tracks.");
+  }
+  const trackCount = albumTrackRows.length;
+
+  // Same cover-song gate as a single-track purchase (see
+  // app/actions/checkout.ts's startCheckout and lib/coverCompliance.ts),
+  // applied to every track in the bundle — one uncredited cover blocks the
+  // whole album purchase rather than silently selling it anyway.
+  for (const row of albumTrackRows) {
+    const track = row.tracks as any;
+    if (track && (await trackNeedsCoverCredit(track.id, track.genre))) {
+      throw new Error(
+        `This album can't be purchased yet — "${track.title}" is a cover and still needs the original songwriter/producer credited before it can go on sale.`
+      );
+    }
   }
 
   const artistName = (album as any).artists?.profiles?.display_name ?? "Unknown artist";

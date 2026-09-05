@@ -32,6 +32,12 @@ export function isValidGenre(value: string | null | undefined): value is Genre {
   return (GENRES as readonly string[]).includes(value);
 }
 
+// A cover is, by definition, someone else's composition — the platform
+// requires crediting and paying the original songwriter(s)/producer(s) for
+// any track tagged with this genre. See lib/coverCompliance.ts for the
+// enforcement (blocks a sale until that credit exists as a contributor).
+export const COVERS_GENRE: Genre = "Covers";
+
 // The free-text tag is a single short label per track (an artist's own
 // word for their sound that isn't on the fixed genre list) — capped well
 // short of anything that'd break a storefront pill's layout.

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { startCheckout } from "@/app/actions/checkout";
+import { tracksNeedingCoverCredit } from "@/lib/coverCompliance";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -27,6 +28,12 @@ export default async function ArtistPage({ params }: { params: { id: string } })
   } = await supabase.auth.getUser();
 
   const artistName = (artist as any).profiles?.display_name ?? "Unknown artist";
+
+  // Cover songs (see lib/coverCompliance.ts) can't be sold until the artist
+  // has credited the original songwriter/producer as a contributor.
+  const blockedTrackIds = await tracksNeedingCoverCredit(
+    (tracks ?? []).map((t) => ({ id: t.id, genre: t.genre }))
+  );
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
@@ -106,18 +113,26 @@ export default async function ArtistPage({ params }: { params: { id: string } })
               )}
               </div>
               <div className="flex items-center justify-between mt-6">
-                <span className="font-mono text-forest text-lg">
-                  ${(track.price_cents / 100).toFixed(2)}
-                </span>
-                <form action={startCheckout}>
-                  <input type="hidden" name="trackId" value={track.id} />
-                  <button
-                    type="submit"
-                    className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
-                  >
-                    {user ? "Buy" : "Log in to buy"}
-                  </button>
-                </form>
+                {blockedTrackIds.has(track.id) ? (
+                  <p className="font-mono text-xs text-rust">
+                    Pending original songwriter/producer credit — check back soon.
+                  </p>
+                ) : (
+                  <>
+                    <span className="font-mono text-forest text-lg">
+                      ${(track.price_cents / 100).toFixed(2)}
+                    </span>
+                    <form action={startCheckout}>
+                      <input type="hidden" name="trackId" value={track.id} />
+                      <button
+                        type="submit"
+                        className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
+                      >
+                        {user ? "Buy" : "Log in to buy"}
+                      </button>
+                    </form>
+                  </>
+                )}
               </div>
             </div>
           ))}

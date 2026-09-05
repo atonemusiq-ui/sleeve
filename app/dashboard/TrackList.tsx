@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateTrack } from "@/app/actions/tracks";
-import { GENRES, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
+import { GENRES, MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE } from "@/lib/genres";
 import ContributorManager, { type Contributor } from "./ContributorManager";
 
 // Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
@@ -259,9 +259,17 @@ function TrackRow({
     );
   }
 
+  const needsCoverCredit = track.genre === COVERS_GENRE && contributors.length === 0;
+
   return (
     <div className="border border-paper/15 rounded-lg px-5 py-4 bg-paper/5 flex flex-col gap-3">
       {error && <p className="text-rust font-mono text-sm">{error}</p>}
+      {needsCoverCredit && (
+        <p className="font-mono text-xs text-rust bg-rust/10 border border-rust/30 rounded px-3 py-2">
+          This is tagged as a cover — it's blocked from sale until you credit the original
+          songwriter/producer as a contributor below (with their royalty share).
+        </p>
+      )}
       <div className="flex items-center gap-4">
         <div className="w-12 h-12 rounded bg-paper/10 flex-shrink-0 overflow-hidden">
           {track.cover_url ? (

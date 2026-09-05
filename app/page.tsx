@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { startCheckout, startAlbumCheckout } from "@/app/actions/checkout";
+import { tracksNeedingCoverCredit } from "@/lib/coverCompliance";
 import Link from "next/link";
 import StorefrontGrid from "./StorefrontGrid";
 
@@ -47,6 +48,13 @@ export default async function StorefrontPage() {
     const album = row.albums as any;
     if (album) albumTrackCounts[album.id] = (albumTrackCounts[album.id] ?? 0) + 1;
   }
+
+  // Cover songs (see lib/coverCompliance.ts) can't be sold until the artist
+  // has credited the original songwriter/producer as a contributor — this
+  // never exposes who the contributor is, just which tracks are blocked.
+  const blockedTrackIds = Array.from(
+    await tracksNeedingCoverCredit(normalizedTracks.map((t) => ({ id: t.id, genre: t.genre })))
+  );
 
   const {
     data: { user },
@@ -118,6 +126,7 @@ export default async function StorefrontPage() {
           isLoggedIn={Boolean(user)}
           albumByTrackId={albumByTrackId}
           albumTrackCounts={albumTrackCounts}
+          blockedTrackIds={blockedTrackIds}
         />
       )}
     </main>

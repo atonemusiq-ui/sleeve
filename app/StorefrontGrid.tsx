@@ -27,6 +27,7 @@ export default function StorefrontGrid({
   isLoggedIn,
   albumByTrackId,
   albumTrackCounts,
+  blockedTrackIds,
 }: {
   tracks: Track[];
   startCheckout: (formData: FormData) => void;
@@ -34,9 +35,27 @@ export default function StorefrontGrid({
   isLoggedIn: boolean;
   albumByTrackId: Record<string, AlbumRef>;
   albumTrackCounts: Record<string, number>;
+  // Cover songs pending the original songwriter/producer credit (see
+  // lib/coverCompliance.ts) — never who the contributor is, just which
+  // track ids aren't sellable yet.
+  blockedTrackIds: string[];
 }) {
   const [query, setQuery] = useState("");
   const [selectedGenre, setSelectedGenre] = useState("All");
+
+  const blockedSet = useMemo(() => new Set(blockedTrackIds), [blockedTrackIds]);
+
+  // An album is blocked as a bundle if any one of its tracks is a
+  // not-yet-credited cover — one bad track shouldn't let the rest of the
+  // album sell around it.
+  const blockedAlbumIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const t of tracks) {
+      const album = albumByTrackId[t.id];
+      if (album && blockedSet.has(t.id)) ids.add(album.id);
+    }
+    return ids;
+  }, [tracks, albumByTrackId, blockedSet]);
 
   // Only genres that actually have a track get a pill — an artist not
   // picking a genre at all just means that track only ever shows under
@@ -95,6 +114,8 @@ export default function StorefrontGrid({
           {filtered.map((track) => {
             const album = albumByTrackId[track.id];
             const albumTrackCount = album ? albumTrackCounts[album.id] ?? 0 : 0;
+            const trackBlocked = blockedSet.has(track.id);
+            const albumBlocked = album ? blockedAlbumIds.has(album.id) : false;
 
             return (
               <div
@@ -160,36 +181,48 @@ export default function StorefrontGrid({
                   )}
                 </div>
                 <div className="flex flex-col gap-2 mt-6">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-forest text-lg">
-                      ${(track.price_cents / 100).toFixed(2)}
-                    </span>
-                    <form action={startCheckout}>
-                      <input type="hidden" name="trackId" value={track.id} />
-                      <button
-                        type="submit"
-                        className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
-                      >
-                        {isLoggedIn ? "Buy this song" : "Log in to buy"}
-                      </button>
-                    </form>
-                  </div>
-                  {album && (
-                    <div className="flex items-center justify-between border-t border-paper/10 pt-2">
-                      <span className="font-mono text-forest text-sm">
-                        Album ${(album.price_cents / 100).toFixed(2)}
+                  {trackBlocked ? (
+                    <p className="font-mono text-xs text-rust">
+                      This cover is pending the original songwriter/producer credit — check back
+                      soon.
+                    </p>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-forest text-lg">
+                        ${(track.price_cents / 100).toFixed(2)}
                       </span>
-                      <form action={startAlbumCheckout}>
-                        <input type="hidden" name="albumId" value={album.id} />
+                      <form action={startCheckout}>
+                        <input type="hidden" name="trackId" value={track.id} />
                         <button
                           type="submit"
-                          className="font-mono text-xs px-3 py-1.5 rounded bg-gold text-ink font-medium hover:opacity-90"
+                          className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
                         >
-                          {isLoggedIn ? "Buy full album" : "Log in to buy"}
+                          {isLoggedIn ? "Buy this song" : "Log in to buy"}
                         </button>
                       </form>
                     </div>
                   )}
+                  {album &&
+                    (albumBlocked ? (
+                      <p className="font-mono text-xs text-rust border-t border-paper/10 pt-2">
+                        Full album pending a songwriter/producer credit on one of its covers.
+                      </p>
+                    ) : (
+                      <div className="flex items-center justify-between border-t border-paper/10 pt-2">
+                        <span className="font-mono text-forest text-sm">
+                          Album ${(album.price_cents / 100).toFixed(2)}
+                        </span>
+                        <form action={startAlbumCheckout}>
+                          <input type="hidden" name="albumId" value={album.id} />
+                          <button
+                            type="submit"
+                            className="font-mono text-xs px-3 py-1.5 rounded bg-gold text-ink font-medium hover:opacity-90"
+                          >
+                            {isLoggedIn ? "Buy full album" : "Log in to buy"}
+                          </button>
+                        </form>
+                      </div>
+                    ))}
                 </div>
               </div>
             );

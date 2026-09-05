@@ -6,7 +6,7 @@ import { publishTrack } from "@/app/actions/upload";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { GENRES, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
+import { GENRES, MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE } from "@/lib/genres";
 
 // Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
 // app/actions/tracks.ts, which is what actually enforces this server-side.
@@ -210,6 +210,13 @@ export default function UploadForm({ artistId }: { artistId: string }) {
             </option>
           ))}
         </select>
+        {genre === COVERS_GENRE && (
+          <p className="font-mono text-xs text-rust mt-1.5">
+            Covers require crediting and paying the original songwriter(s)/producer(s). Publish
+            this track, then add them under Contributors on your dashboard with their royalty
+            share — sales are blocked until you do.
+          </p>
+        )}
       </div>
 
       <div>
