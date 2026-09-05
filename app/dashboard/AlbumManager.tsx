@@ -13,14 +13,17 @@ export type Album = {
 };
 
 // Nudges only — createAlbum/updateAlbum (app/actions/albums.ts) accept any
-// price in the $1-$100 range, an artist can always override.
+// price in the $1-$100 range, an artist can always override. The cutoff
+// between the two tiers is a full-length album: 12+ tracks.
+const FULL_ALBUM_TRACK_COUNT = 12;
+
 function suggestedPriceFor(trackCount: number): string {
-  return trackCount >= 4 ? "17.00" : "8.00";
+  return trackCount >= FULL_ALBUM_TRACK_COUNT ? "17.00" : "8.00";
 }
 function suggestionLabel(trackCount: number): string {
-  return trackCount >= 4
-    ? "Suggested $15-20 for a 4+ track album"
-    : "Suggested $7-10 for a 3-track-or-fewer album";
+  return trackCount >= FULL_ALBUM_TRACK_COUNT
+    ? `Suggested $15-20 for a ${FULL_ALBUM_TRACK_COUNT}+ track album`
+    : `Suggested $7-10 for an album under ${FULL_ALBUM_TRACK_COUNT} tracks`;
 }
 
 export default function AlbumManager({
