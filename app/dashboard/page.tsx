@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import UploadForm from "./UploadForm";
 import TrackList from "./TrackList";
+import type { Contributor } from "./ContributorManager";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
@@ -60,6 +61,45 @@ export default async function DashboardPage() {
       return { ...track, playUrl: track.audio_url ?? null };
     })
   );
+
+  // Contributors + their running "owed" totals, grouped by track so
+  // TrackList can render each track's own contributor list. RLS ("artists
+  // manage contributors on their own tracks" in supabase/schema.sql) already
+  // scopes both queries to this artist even without the explicit filters
+  // below, but the filters keep the query itself intention-revealing.
+  const trackIds = (tracks ?? []).map((t) => t.id);
+
+  const { data: contributorRows } = trackIds.length
+    ? await supabase
+        .from("contributors")
+        .select("id, track_id, name, email, phone, publishing_info, percentage")
+        .in("track_id", trackIds)
+    : { data: [] as any[] };
+
+  const contributorIds = (contributorRows ?? []).map((c) => c.id);
+
+  const { data: owedRows } = contributorIds.length
+    ? await supabase
+        .from("contributor_payouts")
+        .select("contributor_id, amount_owed_cents")
+        .eq("status", "owed")
+        .in("contributor_id", contributorIds)
+    : { data: [] as any[] };
+
+  const owedByContributor = new Map<string, number>();
+  for (const row of owedRows ?? []) {
+    owedByContributor.set(
+      row.contributor_id,
+      (owedByContributor.get(row.contributor_id) ?? 0) + (row.amount_owed_cents ?? 0)
+    );
+  }
+
+  const contributorsByTrack: Record<string, Contributor[]> = {};
+  for (const c of contributorRows ?? []) {
+    const list = contributorsByTrack[c.track_id] ?? [];
+    list.push({ ...c, owedCents: owedByContributor.get(c.id) ?? 0 });
+    contributorsByTrack[c.track_id] = list;
+  }
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
@@ -144,7 +184,13 @@ export default async function DashboardPage() {
         </p>
       )}
 
-      {artist?.id && <TrackList tracks={tracksWithPlayUrls} artistId={artist.id} />}
+      {artist?.id && (
+        <TrackList
+          tracks={tracksWithPlayUrls}
+          artistId={artist.id}
+          contributorsByTrack={contributorsByTrack}
+        />
+      )}
     </main>
   );
 }

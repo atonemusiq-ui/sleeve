@@ -299,3 +299,103 @@ create policy "artists delete their own previews"
     bucket_id = 'track-previews'
     and (storage.foldername(name))[1] in (select id::text from artists where user_id = auth.uid())
   );
+-- ============================================================================
+-- Contributors: per-track collaborators with a royalty split, and the
+-- payout ledger tracking what's owed to each of them per sale.
+-- ============================================================================
+create table if not exists contributors (
+  id uuid primary key default gen_random_uuid(),
+  track_id uuid not null references tracks(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+alter table contributors add column if not exists name text not null;
+alter table contributors add column if not exists email text;
+alter table contributors add column if not exists phone text;
+alter table contributors add column if not exists publishing_info text;
+alter table contributors add column if not exists percentage numeric not null;
+
+alter table contributors enable row level security;
+
+drop policy if exists "artists manage contributors on their own tracks" on contributors;
+create policy "artists manage contributors on their own tracks"
+  on contributors for all
+  using (
+    track_id in (
+      select t.id from tracks t
+      join artists a on a.id = t.artist_id
+      where a.user_id = auth.uid()
+    )
+  )
+  with check (
+    track_id in (
+      select t.id from tracks t
+      join artists a on a.id = t.artist_id
+      where a.user_id = auth.uid()
+    )
+  );
+
+-- Defense-in-depth: app/actions/contributors.ts checks the 100% cap before
+-- writing (that's what gives the artist a clean inline error), but enforce
+-- it here too so it can never be violated even if that check is bypassed.
+create or replace function public.check_contributor_percentage_total()
+returns trigger
+language plpgsql
+as $$
+declare
+  total numeric;
+begin
+  select coalesce(sum(percentage), 0) into total
+  from contributors
+  where track_id = new.track_id
+    and id != coalesce(new.id, '00000000-0000-0000-0000-000000000000'::uuid);
+
+  if total + new.percentage > 100 then
+    raise exception 'Contributor percentages for this track would exceed 100%% (existing %, plus new %)', total, new.percentage;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists enforce_contributor_percentage_total on contributors;
+create trigger enforce_contributor_percentage_total
+  before insert or update on contributors
+  for each row execute function public.check_contributor_percentage_total();
+
+create table if not exists contributor_payouts (
+  id uuid primary key default gen_random_uuid(),
+  contributor_id uuid not null references contributors(id) on delete cascade,
+  purchase_id uuid references purchases(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+alter table contributor_payouts add column if not exists amount_owed_cents integer;
+alter table contributor_payouts add column if not exists status text not null default 'owed' check (status in ('owed', 'paid'));
+alter table contributor_payouts add column if not exists paid_at timestamptz;
+
+alter table contributor_payouts enable row level security;
+
+drop policy if exists "artists read payouts for their own contributors" on contributor_payouts;
+create policy "artists read payouts for their own contributors"
+  on contributor_payouts for select
+  using (
+    contributor_id in (
+      select c.id from contributors c
+      join tracks t on t.id = c.track_id
+      join artists a on a.id = t.artist_id
+      where a.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "artists update payouts for their own contributors" on contributor_payouts;
+create policy "artists update payouts for their own contributors"
+  on contributor_payouts for update
+  using (
+    contributor_id in (
+      select c.id from contributors c
+      join tracks t on t.id = c.track_id
+      join artists a on a.id = t.artist_id
+      where a.user_id = auth.uid()
+    )
+  );

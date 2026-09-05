@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import ContributorManager, { type Contributor } from "./ContributorManager";
 
 type Track = {
   id: string;
@@ -17,22 +18,37 @@ type Track = {
 export default function TrackList({
   tracks,
   artistId,
+  contributorsByTrack,
 }: {
   tracks: Track[];
   artistId: string;
+  contributorsByTrack: Record<string, Contributor[]>;
 }) {
   if (tracks.length === 0) return null;
 
   return (
     <div className="flex flex-col gap-4">
       {tracks.map((track) => (
-        <TrackRow key={track.id} track={track} artistId={artistId} />
+        <TrackRow
+          key={track.id}
+          track={track}
+          artistId={artistId}
+          contributors={contributorsByTrack[track.id] ?? []}
+        />
       ))}
     </div>
   );
 }
 
-function TrackRow({ track, artistId }: { track: Track; artistId: string }) {
+function TrackRow({
+  track,
+  artistId,
+  contributors,
+}: {
+  track: Track;
+  artistId: string;
+  contributors: Contributor[];
+}) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(track.title);
   const [price, setPrice] = useState((track.price_cents / 100).toFixed(2));
@@ -218,6 +234,7 @@ function TrackRow({ track, artistId }: { track: Track; artistId: string }) {
       {!track.preview_url && (
         <p className="font-mono text-xs text-rust mt-1">Preview unavailable, fans won't hear a sample until this is fixed.</p>
       )}
+      <ContributorManager trackId={track.id} contributors={contributors} />
     </div>
   );
 }

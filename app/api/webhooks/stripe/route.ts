@@ -67,20 +67,24 @@ export async function POST(req: Request) {
       }
     }
 
-    const { error } = await supabase.from("purchases").insert({
-      track_id: trackId,
-      // Checkout requires login now (see app/actions/checkout.ts), so this
-      // should always be present — but stay tolerant of null in case an
-      // older/anonymous session's checkout completes after this deploy.
-      fan_id: fanId,
-      buyer_email: buyerEmail,
-      buyer_phone: buyerPhone,
-      amount_cents: Number(amountCents),
-      platform_fee_cents: Number(platformFeeCents),
-      artist_payout_cents: Number(artistPayoutCents),
-      stripe_payment_intent_id: paymentIntentId,
-      status: "complete",
-    });
+    const { data: insertedPurchase, error } = await supabase
+      .from("purchases")
+      .insert({
+        track_id: trackId,
+        // Checkout requires login now (see app/actions/checkout.ts), so this
+        // should always be present — but stay tolerant of null in case an
+        // older/anonymous session's checkout completes after this deploy.
+        fan_id: fanId,
+        buyer_email: buyerEmail,
+        buyer_phone: buyerPhone,
+        amount_cents: Number(amountCents),
+        platform_fee_cents: Number(platformFeeCents),
+        artist_payout_cents: Number(artistPayoutCents),
+        stripe_payment_intent_id: paymentIntentId,
+        status: "complete",
+      })
+      .select("id")
+      .single();
 
     if (error) {
       // A unique-violation here (code 23505) means we lost a race against
@@ -92,6 +96,37 @@ export async function POST(req: Request) {
       }
       console.error("Failed to record purchase:", error.message);
       return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+
+    // Contributor royalty split: anyone with a percentage on this track gets
+    // a `contributor_payouts` row for their proportional cut of the
+    // artist's payout, tracked separately as "owed" until the artist marks
+    // it paid (app/actions/contributors.ts). This is bookkeeping only — it
+    // doesn't move any money on its own; the full artist_payout_cents still
+    // transfers to the artist's own Stripe account below, same as before
+    // contributors existed. Best-effort: a failure here shouldn't block the
+    // purchase record or the artist's transfer, so log and move on.
+    try {
+      const { data: contributors } = await supabase
+        .from("contributors")
+        .select("id, percentage")
+        .eq("track_id", trackId);
+
+      if (contributors && contributors.length > 0) {
+        const payoutRows = contributors.map((contributor) => ({
+          contributor_id: contributor.id,
+          purchase_id: insertedPurchase.id,
+          amount_owed_cents: Math.round((Number(artistPayoutCents) * Number(contributor.percentage)) / 100),
+          status: "owed" as const,
+        }));
+
+        const { error: payoutError } = await supabase.from("contributor_payouts").insert(payoutRows);
+        if (payoutError) {
+          console.error("Failed to record contributor payouts:", payoutError.message);
+        }
+      }
+    } catch (contributorErr: any) {
+      console.error("Contributor payout lookup failed:", contributorErr.message);
     }
 
     // The purchase is recorded, but the payment itself landed entirely in
