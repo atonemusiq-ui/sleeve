@@ -58,6 +58,11 @@ export default function LoginPage({
           Sign up
         </a>
       </p>
+      <p className="font-mono text-xs text-paper/50 mt-2">
+        <a href="/forgot-password" className="text-gold">
+          Forgot your password?
+        </a>
+      </p>
     </main>
   );
 }

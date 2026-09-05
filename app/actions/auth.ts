@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { redirect } from "next/navigation";
 
 export async function signup(formData: FormData) {
@@ -39,6 +40,35 @@ export async function signup(formData: FormData) {
   // `profiles`/`artists` rows are created by the database trigger above, so
   // there's nothing left to insert here.
 
+  // Artists still confirm their email before they can log in — they handle
+  // real money via Stripe Connect, so that's worth the friction. Fans
+  // don't: email confirmation was exactly the extra step in "get bounced to
+  // sign up mid-checkout, then come back and buy" (see
+  // app/actions/checkout.ts), so a fan gets auto-confirmed and signed in
+  // immediately instead. This uses the service-role admin API — a trusted,
+  // server-only operation — rather than touching the project-wide "confirm
+  // email" setting, which would also turn off confirmation for artists.
+  if (role === "fan") {
+    const admin = createServiceRoleClient();
+    const { error: confirmError } = await admin.auth.admin.updateUserById(data.user.id, {
+      email_confirm: true,
+    });
+
+    if (!confirmError) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (!signInError) {
+        redirect(next && next.startsWith("/") ? next : "/");
+      }
+    }
+    // If auto-confirm or sign-in failed for any reason, fall through to the
+    // same "check your email" path an artist gets — worst case a fan sees
+    // one extra step, not a broken signup.
+  }
+
   // Email confirmation is required, so signUp() doesn't return an active
   // session yet — send them to log in once they've confirmed their email
   // instead of straight to the dashboard.
@@ -71,4 +101,24 @@ export async function logout() {
   const supabase = createClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+export async function requestPasswordReset(formData: FormData) {
+  const email = formData.get("email") as string;
+
+  const supabase = createClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  // Errors here (including "no account with that email") are deliberately
+  // not surfaced — same message either way, so this can't be used to probe
+  // which emails have accounts.
+  await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${siteUrl}/reset-password`,
+  });
+
+  redirect(
+    `/forgot-password?message=${encodeURIComponent(
+      "If an account exists for that email, a reset link is on its way."
+    )}`
+  );
 }
