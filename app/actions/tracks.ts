@@ -2,26 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { isAllowedTrackPrice, trackPriceError } from "@/lib/trackPricing";
 
 export type TrackActionResult = { error?: string };
-
-// Single-track pricing is a fixed $3/$4/$5 menu now (see the price <select>
-// in UploadForm.tsx and TrackList.tsx) rather than a free-text field — this
-// is the server-side half of that: a request that skips the dropdown (a
-// stale client, a tampered request) still can't set an arbitrary price.
-// Album pricing is unrelated and stays a bounded range (see
-// app/actions/albums.ts).
-export const ALLOWED_TRACK_PRICE_CENTS = [300, 400, 500] as const;
-
-export function isAllowedTrackPrice(priceCents: number): boolean {
-  return (ALLOWED_TRACK_PRICE_CENTS as readonly number[]).includes(priceCents);
-}
-
-// Used by UploadForm.tsx/publishTrack (app/actions/upload.ts) too, so the
-// "not a valid price" message reads the same everywhere it can occur.
-export function trackPriceError(): string {
-  return `Price must be one of $${ALLOWED_TRACK_PRICE_CENTS.map((c) => (c / 100).toFixed(0)).join(", $")}.`;
-}
 
 // Covers the title/price/cover edits on an already-published track
 // (TrackList.tsx's inline edit form). The cover file itself still uploads

@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { findDuplicateTrack } from "@/lib/fingerprint/check-duplicate";
-import { isAllowedTrackPrice, trackPriceError } from "@/app/actions/tracks";
+import { isAllowedTrackPrice, trackPriceError } from "@/lib/trackPricing";
 import { revalidatePath } from "next/cache";
 
 export type PublishTrackInput = {
