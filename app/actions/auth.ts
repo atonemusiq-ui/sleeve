@@ -54,14 +54,38 @@ export async function signup(formData: FormData) {
       email_confirm: true,
     });
 
-    if (!confirmError) {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+    if (confirmError) {
+      console.error("[signup] fan auto-confirm failed", {
+        userId: data.user.id,
         email,
-        password,
+        message: confirmError.message,
       });
+    } else {
+      // Immediately signing in right after admin-confirming can occasionally
+      // race ahead of that confirmation propagating through Supabase's auth
+      // backend, which surfaces as a spurious "Email not confirmed" on the
+      // very next call. One short retry absorbs that lag instead of bouncing
+      // a fan to "check your email" over a race condition that isn't theirs.
+      let signInError = (await supabase.auth.signInWithPassword({ email, password })).error;
+
+      if (signInError) {
+        console.error("[signup] fan sign-in after auto-confirm failed, retrying once", {
+          userId: data.user.id,
+          email,
+          message: signInError.message,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        signInError = (await supabase.auth.signInWithPassword({ email, password })).error;
+      }
 
       if (!signInError) {
         redirect(next && next.startsWith("/") ? next : "/");
+      } else {
+        console.error("[signup] fan sign-in after auto-confirm failed twice", {
+          userId: data.user.id,
+          email,
+          message: signInError.message,
+        });
       }
     }
     // If auto-confirm or sign-in failed for any reason, fall through to the

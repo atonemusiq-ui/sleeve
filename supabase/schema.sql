@@ -57,14 +57,10 @@ alter table tracks add column if not exists audio_path text;
 -- app falls back to it when audio_path is null. Do not use this for new
 -- uploads.
 alter table tracks add column if not exists audio_url text;
--- preview_url: full public URL in the public track-previews bucket. 
-Unlike
--- audio_path, this is meant to be freely playable by anyone, no signed 
-URL,
--- no purchase required. A 15-second clip trimmed client-side at upload 
-time
--- (see app/dashboard/UploadForm.tsx). Nullable, older tracks uploaded 
-before
+-- preview_url: full public URL in the public track-previews bucket. Unlike
+-- audio_path, this is meant to be freely playable by anyone, no signed URL,
+-- no purchase required. A 15-second clip trimmed client-side at upload time
+-- (see app/dashboard/UploadForm.tsx). Nullable, older tracks uploaded before
 -- this feature will not have one.
 alter table tracks add column if not exists preview_url text;
 
@@ -229,6 +225,13 @@ insert into storage.buckets (id, name, public)
 values ('track-covers', 'track-covers', true)
 on conflict (id) do update set public = excluded.public;
 
+-- track-previews (public) the 15-second preview clip trimmed client-side at
+-- upload (see lib/generatePreviewClip.ts / app/dashboard/UploadForm.tsx).
+-- Freely playable, same "<artist_id>/..." path convention as covers.
+insert into storage.buckets (id, name, public)
+values ('track-previews', 'track-previews', true)
+on conflict (id) do update set public = excluded.public;
+
 drop policy if exists "artists upload their own audio" on storage.objects;
 create policy "artists upload their own audio"
   on storage.objects for insert
@@ -258,6 +261,19 @@ create policy "covers are publicly readable"
   on storage.objects for select
   using (bucket_id = 'track-covers');
 
+drop policy if exists "artists upload their own previews" on storage.objects;
+create policy "artists upload their own previews"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'track-previews'
+    and (storage.foldername(name))[1] in (select id::text from artists where user_id = auth.uid())
+  );
+
+drop policy if exists "previews are publicly readable" on storage.objects;
+create policy "previews are publicly readable"
+  on storage.objects for select
+  using (bucket_id = 'track-previews');
+
 -- Lets an artist take a track down (app/dashboard/TrackList.tsx) and have
 -- its audio file actually removed from storage, not just orphaned.
 drop policy if exists "artists delete their own audio" on storage.objects;
@@ -273,5 +289,13 @@ create policy "artists delete their own covers"
   on storage.objects for delete
   using (
     bucket_id = 'track-covers'
+    and (storage.foldername(name))[1] in (select id::text from artists where user_id = auth.uid())
+  );
+
+drop policy if exists "artists delete their own previews" on storage.objects;
+create policy "artists delete their own previews"
+  on storage.objects for delete
+  using (
+    bucket_id = 'track-previews'
     and (storage.foldername(name))[1] in (select id::text from artists where user_id = auth.uid())
   );

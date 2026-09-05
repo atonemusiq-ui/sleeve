@@ -1,6 +1,7 @@
 "use client";
 import { generatePreviewClip } from "@/lib/generatePreviewClip";
-
+import { generateAudioFingerprint } from "@/lib/fingerprint/generateFingerprint";
+import { publishTrack } from "@/app/actions/upload";
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -13,11 +14,13 @@ export default function UploadForm({ artistId }: { artistId: string }) {
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [flagged, setFlagged] = useState<number | null>(null);
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setFlagged(null);
 
     if (!audioFile) {
       setError("Please choose an audio file.");
@@ -34,6 +37,26 @@ export default function UploadForm({ artistId }: { artistId: string }) {
     const supabase = createClient();
 
     try {
+      // Fingerprint the file up front, before any storage upload — if it
+      // turns out to be a duplicate, publishTrack() below will flag it
+      // instead of inserting a track row, but we still needed the audio
+      // file uploaded so the artist (and, on the admin review page, a human
+      // reviewer) can actually listen to what got flagged.
+      let fingerprint = "";
+      let fingerprintDuration = 0;
+      try {
+        const result = await generateAudioFingerprint(audioFile);
+        fingerprint = result.fingerprint;
+        fingerprintDuration = result.durationSeconds;
+      } catch (fingerprintErr) {
+        console.error("Fingerprint generation failed:", fingerprintErr);
+        // Fall through with an empty fingerprint — publishTrack() will just
+        // publish without a duplicate check rather than block a legitimate
+        // upload over a client-side analysis failure (e.g. an unsupported
+        // codec Web Audio can't decode for analysis but Supabase Storage is
+        // happy to store).
+      }
+
       // Upload audio into the private "track-audio" bucket — we store the
       // storage *path*, not a URL, since there's no public URL to have. The
       // track only becomes playable via a signed URL minted after a
@@ -59,13 +82,11 @@ export default function UploadForm({ artistId }: { artistId: string }) {
         if (previewError) {
           console.error("Preview upload failed:", previewError.message);
         } else {
-          previewUrl = 
-supabase.storage.from("track-previews").getPublicUrl(previewPath).data.publicUrl;
+          previewUrl = supabase.storage.from("track-previews").getPublicUrl(previewPath).data.publicUrl;
         }
       } catch (previewErr) {
         console.error("Preview clip generation failed:", previewErr);
       }
-
 
       // Cover art goes in the separate *public* "track-covers" bucket — fine
       // to serve directly, unlike the paid audio.
@@ -81,17 +102,29 @@ supabase.storage.from("track-previews").getPublicUrl(previewPath).data.publicUrl
         coverUrl = supabase.storage.from("track-covers").getPublicUrl(coverPath).data.publicUrl;
       }
 
-      // Insert the track row
-      const { error: insertError } = await supabase.from("tracks").insert({
-        artist_id: artistId,
+      // The actual `tracks` row insert happens server-side in publishTrack()
+      // so the duplicate-fingerprint check can't be bypassed by a client
+      // that just skips calling it.
+      const result = await publishTrack({
+        artistId,
         title,
-        price_cents: priceCents,
-        audio_path: audioPath,
-        cover_url: coverUrl,
-        preview_url: previewUrl,
+        priceCents,
+        audioPath,
+        coverUrl,
+        previewUrl,
+        fingerprint,
+        fingerprintDuration,
       });
 
-      if (insertError) throw new Error(`Saving track failed: ${insertError.message}`);
+      if (result.status === "error") {
+        throw new Error(result.message);
+      }
+
+      if (result.status === "flagged") {
+        setFlagged(result.similarity);
+        setUploading(false);
+        return;
+      }
 
       setTitle("");
       setPrice("5.00");
@@ -113,6 +146,14 @@ supabase.storage.from("track-previews").getPublicUrl(previewPath).data.publicUrl
       <h2 className="font-display text-xl">Publish a track</h2>
 
       {error && <p className="text-rust font-mono text-sm">{error}</p>}
+
+      {flagged !== null && (
+        <p className="text-rust font-mono text-sm">
+          This looks very similar to a track already on Fyby ({Math.round(flagged * 100)}% match) —
+          it's been held for review instead of published. If this is a mistake (a re-upload of your
+          own track, a false positive), reach out and we'll sort it out.
+        </p>
+      )}
 
       <div>
         <label className="block font-mono text-xs text-paper/60 mb-1">Title</label>
