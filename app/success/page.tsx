@@ -24,6 +24,42 @@ function ErrorState({ message }: { message: string }) {
   );
 }
 
+type TrackAudio = { id: string; title: string; downloadUrl: string | null };
+
+// Shared by both the single-track and album paths below — mints a signed
+// download URL for the private "track-audio" bucket, or falls back to a
+// legacy public audio_url for any track uploaded before audio was made
+// private.
+async function resolveDownloadUrl(
+  admin: ReturnType<typeof createServiceRoleClient>,
+  track: { audio_path: string | null; audio_url: string | null }
+): Promise<string | null> {
+  if (track.audio_path) {
+    const { data: signed } = await admin.storage
+      .from("track-audio")
+      .createSignedUrl(track.audio_path, SIGNED_URL_TTL_SECONDS, { download: true });
+    return signed?.signedUrl ?? null;
+  }
+  return track.audio_url ?? null;
+}
+
+function AccountPrompt({ buyerEmail }: { buyerEmail: string | null }) {
+  return (
+    <div className="border border-gold/30 rounded-lg p-6 mb-10 bg-gold/5">
+      <p className="text-paper/80 mb-4">
+        Create a free account and this (plus anything else you've bought) is always waiting in
+        your library — no more hunting for this link.
+      </p>
+      <Link
+        href={`/signup?email=${encodeURIComponent(buyerEmail ?? "")}&next=${encodeURIComponent("/library")}`}
+        className="font-mono text-sm px-4 py-2.5 rounded bg-gold text-ink font-medium hover:opacity-90 inline-block"
+      >
+        Create free account
+      </Link>
+    </div>
+  );
+}
+
 export default async function SuccessPage({
   searchParams,
 }: {
@@ -56,36 +92,13 @@ export default async function SuccessPage({
   }
 
   const trackId = session.metadata?.track_id;
-  if (!trackId) {
-    return <ErrorState message="This checkout session isn't linked to a track." />;
+  const albumId = session.metadata?.album_id;
+
+  if (!trackId && !albumId) {
+    return <ErrorState message="This checkout session isn't linked to a track or album." />;
   }
 
-  const supabase = createServiceRoleClient();
-
-  const { data: track } = await supabase
-    .from("tracks")
-    .select("id, title, audio_path, audio_url, cover_url, artists ( profiles ( display_name ) )")
-    .eq("id", trackId)
-    .single();
-
-  if (!track) {
-    return <ErrorState message="That track is no longer available." />;
-  }
-
-  const artistName = (track as any).artists?.profiles?.display_name ?? "Unknown artist";
-
-  // Prefer the private, signed path (new uploads). Fall back to a legacy
-  // public audio_url for any track uploaded before audio was made private —
-  // still works, just wasn't gated to begin with.
-  let downloadUrl: string | null = null;
-  if (track.audio_path) {
-    const { data: signed } = await supabase.storage
-      .from("track-audio")
-      .createSignedUrl(track.audio_path, SIGNED_URL_TTL_SECONDS, { download: true });
-    downloadUrl = signed?.signedUrl ?? null;
-  } else if (track.audio_url) {
-    downloadUrl = track.audio_url;
-  }
+  const admin = createServiceRoleClient();
 
   // Checkout requires login now (see app/actions/checkout.ts), so this is
   // normally already someone's own account — but a bookmarked /success link
@@ -100,6 +113,105 @@ export default async function SuccessPage({
     data: { user },
   } = await sessionSupabase.auth.getUser();
   const buyerEmail = session.customer_details?.email ?? null;
+
+  if (albumId) {
+    const { data: album } = await admin
+      .from("albums")
+      .select("id, title, artists ( profiles ( display_name ) )")
+      .eq("id", albumId)
+      .single();
+
+    if (!album) {
+      return <ErrorState message="That album is no longer available." />;
+    }
+
+    const { data: albumTrackRows } = await admin
+      .from("album_tracks")
+      .select("track_order, tracks ( id, title, audio_path, audio_url )")
+      .eq("album_id", albumId)
+      .order("track_order", { ascending: true });
+
+    const tracks: TrackAudio[] = await Promise.all(
+      (albumTrackRows ?? []).map(async (row) => {
+        const track = row.tracks as any;
+        return {
+          id: track?.id,
+          title: track?.title ?? "Untitled",
+          downloadUrl: track ? await resolveDownloadUrl(admin, track) : null,
+        };
+      })
+    );
+
+    const artistName = (album as any).artists?.profiles?.display_name ?? "Unknown artist";
+
+    return (
+      <main className="max-w-xl mx-auto px-6 py-24 text-center">
+        <h1 className="font-display text-3xl text-gold mb-4">Thank you!</h1>
+        <p className="text-paper/70 mb-2">
+          The artist gets paid directly — not a fraction of a cent, but a real share of what you
+          just paid.
+        </p>
+        <p className="text-paper/70 mb-10">
+          <span className="font-display text-xl text-paper">{album.title}</span>
+          <br />
+          by {artistName}
+        </p>
+
+        <div className="flex flex-col gap-4 mb-10">
+          {tracks.map((track) => (
+            <div
+              key={track.id}
+              className="border border-paper/15 rounded-lg p-4 flex flex-col items-center gap-3 bg-paper/5"
+            >
+              <span className="font-display text-base">{track.title}</span>
+              {track.downloadUrl ? (
+                <>
+                  <audio controls src={track.downloadUrl} className="w-full h-10" />
+                  <a
+                    href={track.downloadUrl}
+                    download
+                    className="font-mono text-xs px-3 py-2 rounded bg-gold text-ink font-medium hover:opacity-90"
+                  >
+                    Download track
+                  </a>
+                </>
+              ) : (
+                <p className="font-mono text-xs text-rust">
+                  We couldn&apos;t find an audio file for this track. Contact the artist — your
+                  purchase is recorded.
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+        <p className="font-mono text-xs text-paper/50 mb-10">
+          These links expire in an hour — bookmark this page to get fresh ones anytime.
+        </p>
+
+        {!user && <AccountPrompt buyerEmail={buyerEmail} />}
+
+        <Link
+          href="/"
+          className="font-mono text-sm px-4 py-2 rounded border border-gold/40 text-gold hover:bg-gold/10"
+        >
+          Back to Fyby
+        </Link>
+      </main>
+    );
+  }
+
+  const { data: track } = await admin
+    .from("tracks")
+    .select("id, title, audio_path, audio_url, cover_url, artists ( profiles ( display_name ) )")
+    .eq("id", trackId)
+    .single();
+
+  if (!track) {
+    return <ErrorState message="That track is no longer available." />;
+  }
+
+  const artistName = (track as any).artists?.profiles?.display_name ?? "Unknown artist";
+  const downloadUrl = await resolveDownloadUrl(admin, track);
 
   return (
     <main className="max-w-xl mx-auto px-6 py-24 text-center">
@@ -135,22 +247,7 @@ export default async function SuccessPage({
         </p>
       )}
 
-      {!user && (
-        <div className="border border-gold/30 rounded-lg p-6 mb-10 bg-gold/5">
-          <p className="text-paper/80 mb-4">
-            Create a free account and this track (plus anything else you've bought) is always
-            waiting in your library — no more hunting for this link.
-          </p>
-          <Link
-            href={`/signup?email=${encodeURIComponent(buyerEmail ?? "")}&next=${encodeURIComponent(
-              "/library"
-            )}`}
-            className="font-mono text-sm px-4 py-2.5 rounded bg-gold text-ink font-medium hover:opacity-90 inline-block"
-          >
-            Create free account
-          </Link>
-        </div>
-      )}
+      {!user && <AccountPrompt buyerEmail={buyerEmail} />}
 
       <Link
         href="/"

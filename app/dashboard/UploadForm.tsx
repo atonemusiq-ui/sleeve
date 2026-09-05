@@ -7,6 +7,10 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
+// Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
+// app/actions/tracks.ts, which is what actually enforces this server-side.
+const TRACK_PRICE_OPTIONS = ["3.00", "4.00", "5.00"];
+
 export default function UploadForm({ artistId }: { artistId: string }) {
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("5.00");
@@ -167,15 +171,17 @@ export default function UploadForm({ artistId }: { artistId: string }) {
 
       <div>
         <label className="block font-mono text-xs text-paper/60 mb-1">Price (USD)</label>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
+        <select
           value={price}
           onChange={(e) => setPrice(e.target.value)}
-          required
           className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper font-mono"
-        />
+        >
+          {TRACK_PRICE_OPTIONS.map((option) => (
+            <option key={option} value={option} className="bg-ink text-paper">
+              ${option}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div>

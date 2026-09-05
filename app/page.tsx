@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { startCheckout } from "@/app/actions/checkout";
+import { startCheckout, startAlbumCheckout } from "@/app/actions/checkout";
 import Link from "next/link";
 import StorefrontGrid from "./StorefrontGrid";
 
@@ -24,6 +24,29 @@ export default async function StorefrontPage() {
         }
       : track.artists,
   }));
+
+  // Albums are publicly readable (see supabase/schema.sql), so every track
+  // that belongs to one can offer a "Buy full album" option alongside its
+  // own "Buy this song" — built as a track_id -> album lookup so
+  // StorefrontGrid doesn't need to know anything about the albums table
+  // itself. A track only ever belongs to one album in practice, so the
+  // first match wins if that ever isn't true.
+  const { data: albumTrackRows } = await supabase
+    .from("album_tracks")
+    .select("track_id, albums ( id, title, price_cents )");
+
+  const albumByTrackId: Record<string, { id: string; title: string; price_cents: number }> = {};
+  for (const row of albumTrackRows ?? []) {
+    const album = row.albums as any;
+    if (album && !albumByTrackId[row.track_id]) {
+      albumByTrackId[row.track_id] = { id: album.id, title: album.title, price_cents: album.price_cents };
+    }
+  }
+  const albumTrackCounts: Record<string, number> = {};
+  for (const row of albumTrackRows ?? []) {
+    const album = row.albums as any;
+    if (album) albumTrackCounts[album.id] = (albumTrackCounts[album.id] ?? 0) + 1;
+  }
 
   const {
     data: { user },
@@ -84,7 +107,14 @@ export default async function StorefrontPage() {
       )}
 
       {!error && tracks && tracks.length > 0 && (
-        <StorefrontGrid tracks={normalizedTracks} startCheckout={startCheckout} isLoggedIn={Boolean(user)} />
+        <StorefrontGrid
+          tracks={normalizedTracks}
+          startCheckout={startCheckout}
+          startAlbumCheckout={startAlbumCheckout}
+          isLoggedIn={Boolean(user)}
+          albumByTrackId={albumByTrackId}
+          albumTrackCounts={albumTrackCounts}
+        />
       )}
     </main>
   );

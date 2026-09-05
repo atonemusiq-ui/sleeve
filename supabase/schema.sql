@@ -399,3 +399,72 @@ create policy "artists update payouts for their own contributors"
       where a.user_id = auth.uid()
     )
   );
+
+-- ============================================================================
+-- Albums: artist-curated bundles of existing tracks sold at a flat price.
+-- ============================================================================
+create table if not exists albums (
+  id uuid primary key default gen_random_uuid(),
+  artist_id uuid not null references artists(id) on delete cascade,
+  title text not null,
+  cover_url text,
+  price_cents integer not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists album_tracks (
+  album_id uuid not null references albums(id) on delete cascade,
+  track_id uuid not null references tracks(id) on delete cascade,
+  track_order integer not null,
+  primary key (album_id, track_id)
+);
+
+alter table purchases add column if not exists album_id uuid references albums(id);
+
+alter table albums enable row level security;
+alter table album_tracks enable row level security;
+
+drop policy if exists "albums are publicly readable" on albums;
+create policy "albums are publicly readable"
+  on albums for select
+  using (true);
+
+drop policy if exists "artists manage their own albums" on albums;
+create policy "artists manage their own albums"
+  on albums for all
+  using (artist_id in (select id from artists where user_id = auth.uid()))
+  with check (artist_id in (select id from artists where user_id = auth.uid()));
+
+drop policy if exists "album_tracks are publicly readable" on album_tracks;
+create policy "album_tracks are publicly readable"
+  on album_tracks for select
+  using (true);
+
+drop policy if exists "artists manage their own album_tracks" on album_tracks;
+create policy "artists manage their own album_tracks"
+  on album_tracks for all
+  using (
+    album_id in (
+      select a.id from albums a
+      join artists ar on ar.id = a.artist_id
+      where ar.user_id = auth.uid()
+    )
+  )
+  with check (
+    album_id in (
+      select a.id from albums a
+      join artists ar on ar.id = a.artist_id
+      where ar.user_id = auth.uid()
+    )
+  );
+
+-- A single Stripe payment can now cover multiple tracks (an album), so the
+-- old "one row per payment_intent, period" unique index has to become
+-- "one row per (payment_intent, track)" — still blocks a true duplicate
+-- webhook redelivery from double-inserting the same track's purchase row,
+-- but no longer blocks the 2nd/3rd/... track of a legitimate album sale
+-- that shares one payment_intent_id.
+drop index if exists purchases_stripe_payment_intent_id_key;
+create unique index if not exists purchases_stripe_payment_intent_track_key
+  on purchases (stripe_payment_intent_id, track_id)
+  where stripe_payment_intent_id is not null;

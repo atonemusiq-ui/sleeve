@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import UploadForm from "./UploadForm";
 import TrackList from "./TrackList";
+import AlbumManager, { type Album } from "./AlbumManager";
 import type { Contributor } from "./ContributorManager";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
@@ -101,6 +102,37 @@ export default async function DashboardPage() {
     contributorsByTrack[c.track_id] = list;
   }
 
+  // Albums + their ordered track lists, scoped to this artist. RLS ("artists
+  // manage their own albums"/"...album_tracks" in supabase/schema.sql)
+  // already limits both to rows this artist owns.
+  const { data: albumRows } = artist?.id
+    ? await supabase
+        .from("albums")
+        .select("id, title, price_cents, created_at")
+        .eq("artist_id", artist.id)
+        .order("created_at", { ascending: false })
+    : { data: [] as any[] };
+
+  const albumIds = (albumRows ?? []).map((a) => a.id);
+  const { data: albumTrackRows } = albumIds.length
+    ? await supabase
+        .from("album_tracks")
+        .select("album_id, track_order, tracks ( id, title )")
+        .in("album_id", albumIds)
+        .order("track_order", { ascending: true })
+    : { data: [] as any[] };
+
+  const albums: Album[] = (albumRows ?? []).map((a) => ({
+    id: a.id,
+    title: a.title,
+    price_cents: a.price_cents,
+    tracks: (albumTrackRows ?? [])
+      .filter((at) => at.album_id === a.id)
+      .map((at) => ({ id: (at.tracks as any)?.id, title: (at.tracks as any)?.title ?? "Untitled" })),
+  }));
+
+  const albumEligibleTracks = (tracks ?? []).map((t) => ({ id: t.id, title: t.title }));
+
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
       <header className="flex items-center justify-between mb-12">
@@ -173,6 +205,8 @@ export default async function DashboardPage() {
       </div>
 
       {artist?.id && <UploadForm artistId={artist.id} />}
+
+      {artist?.id && <AlbumManager tracks={albumEligibleTracks} albums={albums} />}
 
       <h2 className="font-display text-xl mb-4">Your catalog</h2>
 

@@ -3,7 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { updateTrack } from "@/app/actions/tracks";
 import ContributorManager, { type Contributor } from "./ContributorManager";
+
+// Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
+// app/actions/tracks.ts, which is what actually enforces this server-side.
+const TRACK_PRICE_OPTIONS = ["3.00", "4.00", "5.00"];
 
 type Track = {
   id: string;
@@ -60,19 +65,17 @@ function TrackRow({
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
-    const priceCents = Math.round(parseFloat(price) * 100);
-    if (isNaN(priceCents) || priceCents < 0) {
-      setError("Please enter a valid price.");
-      return;
-    }
-
     setBusy(true);
-    const supabase = createClient();
 
     try {
-      let coverUrl = track.cover_url;
+      // Cover upload stays a direct client->storage call (server actions
+      // don't take File objects well) — everything else (including the
+      // actual price/title write) goes through updateTrack() now, which
+      // enforces the fixed $3/$4/$5 price menu server-side rather than
+      // trusting whatever this form sends. See app/actions/tracks.ts.
+      let coverUrl: string | null = null;
       if (coverFile) {
+        const supabase = createClient();
         const coverPath = `${artistId}/${Date.now()}-${coverFile.name}`;
         const { error: coverError } = await supabase.storage
           .from("track-covers")
@@ -81,12 +84,14 @@ function TrackRow({
         coverUrl = supabase.storage.from("track-covers").getPublicUrl(coverPath).data.publicUrl;
       }
 
-      const { error: updateError } = await supabase
-        .from("tracks")
-        .update({ title, price_cents: priceCents, cover_url: coverUrl })
-        .eq("id", track.id);
+      const formData = new FormData();
+      formData.set("trackId", track.id);
+      formData.set("title", title);
+      formData.set("price", price);
+      if (coverUrl) formData.set("coverUrl", coverUrl);
 
-      if (updateError) throw new Error(`Saving changes failed: ${updateError.message}`);
+      const result = await updateTrack(formData);
+      if (result.error) throw new Error(result.error);
 
       setEditing(false);
       setCoverFile(null);
@@ -148,15 +153,17 @@ function TrackRow({
 
         <div>
           <label className="block font-mono text-xs text-paper/60 mb-1">Price (USD)</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
+          <select
             value={price}
             onChange={(e) => setPrice(e.target.value)}
-            required
             className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper font-mono"
-          />
+          >
+            {TRACK_PRICE_OPTIONS.map((option) => (
+              <option key={option} value={option} className="bg-ink text-paper">
+                ${option}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div>

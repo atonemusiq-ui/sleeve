@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { findDuplicateTrack } from "@/lib/fingerprint/check-duplicate";
+import { isAllowedTrackPrice, trackPriceError } from "@/app/actions/tracks";
 import { revalidatePath } from "next/cache";
 
 export type PublishTrackInput = {
@@ -51,6 +52,13 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
 
   if (!artist) {
     return { status: "error", message: "That artist account doesn't match your login." };
+  }
+
+  // Single-track pricing is a fixed $3/$4/$5 menu (see the price <select> in
+  // UploadForm.tsx) — validated here too so a stale client or a direct call
+  // can't slip an arbitrary price past the dropdown.
+  if (!isAllowedTrackPrice(input.priceCents)) {
+    return { status: "error", message: trackPriceError() };
   }
 
   const match = await findDuplicateTrack(admin, input.fingerprint);
