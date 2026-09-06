@@ -2,7 +2,6 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { logout } from "@/app/actions/auth";
 import { connectStripeAccount } from "@/app/actions/stripe-connect";
-import { updateBio } from "@/app/actions/artist";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import UploadForm from "./UploadForm";
@@ -10,6 +9,7 @@ import TrackList from "./TrackList";
 import AlbumManager, { type Album } from "./AlbumManager";
 import type { Contributor } from "./ContributorManager";
 import BookingRequestsList, { type BookingRequest } from "./BookingRequestsList";
+import BioManager from "./BioManager";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
@@ -36,7 +36,7 @@ export default async function DashboardPage() {
 
   const { data: artist } = await supabase
     .from("artists")
-    .select("id, stripe_account_id, bio")
+    .select("id, stripe_account_id, bio, bio_photo_url")
     .eq("user_id", user.id)
     .single();
 
@@ -205,21 +205,13 @@ export default async function DashboardPage() {
             "preview it once you have a track published"
           )}.
         </p>
-        <form action={updateBio} className="flex flex-col gap-3">
-          <textarea
-            name="bio"
-            defaultValue={artist?.bio ?? ""}
-            rows={4}
-            placeholder="Tell fans a bit about yourself..."
-            className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper"
+        {artist?.id && (
+          <BioManager
+            artistId={artist.id}
+            bio={artist.bio}
+            bioPhotoUrl={(artist as any).bio_photo_url ?? null}
           />
-          <button
-            type="submit"
-            className="self-start font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
-          >
-            Save bio
-          </button>
-        </form>
+        )}
       </div>
 
       <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-3">

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { isAllowedTrackPrice, trackPriceError } from "@/lib/trackPricing";
 import { isValidGenre, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
+import { isAiDisclosureLevel, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 
 export type TrackActionResult = { error?: string };
 
@@ -20,7 +21,7 @@ export async function updateTrack(formData: FormData): Promise<TrackActionResult
   const coverUrl = (formData.get("coverUrl") as string) || null;
   const genre = (formData.get("genre") as string) || null;
   const customTag = (formData.get("customTag") as string)?.trim() || null;
-  const aiDisclosure = formData.get("aiDisclosure") === "true";
+  const aiDisclosure = formData.get("aiDisclosure") as string;
 
   if (!title) return { error: "Title is required." };
   if (isNaN(priceCents) || !isAllowedTrackPrice(priceCents)) {
@@ -31,6 +32,9 @@ export async function updateTrack(formData: FormData): Promise<TrackActionResult
   }
   if (customTag && customTag.length > MAX_CUSTOM_TAG_LENGTH) {
     return { error: `Tag must be ${MAX_CUSTOM_TAG_LENGTH} characters or fewer.` };
+  }
+  if (!isAiDisclosureLevel(aiDisclosure)) {
+    return { error: "Please answer the AI disclosure question." };
   }
 
   const supabase = createClient();
@@ -59,7 +63,7 @@ export async function updateTrack(formData: FormData): Promise<TrackActionResult
     cover_url?: string;
     genre: string | null;
     custom_tag: string | null;
-    ai_disclosure: boolean;
+    ai_disclosure: AiDisclosureLevel;
   } = {
     title,
     price_cents: priceCents,

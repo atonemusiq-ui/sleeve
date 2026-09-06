@@ -5,6 +5,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { findDuplicateTrack } from "@/lib/fingerprint/check-duplicate";
 import { isAllowedTrackPrice, trackPriceError } from "@/lib/trackPricing";
 import { isValidGenre, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
+import { isAiDisclosureLevel, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 import { revalidatePath } from "next/cache";
 
 export type PublishTrackInput = {
@@ -18,7 +19,8 @@ export type PublishTrackInput = {
   fingerprintDuration: number;
   genre: string | null;
   customTag: string | null;
-  aiDisclosure: boolean;
+  aiDisclosure: AiDisclosureLevel;
+  rightsAttested: boolean;
 };
 
 export type PublishTrackResult =
@@ -76,6 +78,19 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
   const customTag = input.customTag?.trim() || null;
   if (customTag && customTag.length > MAX_CUSTOM_TAG_LENGTH) {
     return { status: "error", message: `Tag must be ${MAX_CUSTOM_TAG_LENGTH} characters or fewer.` };
+  }
+
+  // AI disclosure is a required 3-way choice (see lib/aiDisclosure.ts) — not
+  // optional — and publishing requires confirming the rights attestation
+  // shown next to it in UploadForm.tsx.
+  if (!isAiDisclosureLevel(input.aiDisclosure)) {
+    return { status: "error", message: "Please answer the AI disclosure question." };
+  }
+  if (!input.rightsAttested) {
+    return {
+      status: "error",
+      message: "You must confirm you own the rights to this track before publishing.",
+    };
   }
 
   const match = await findDuplicateTrack(admin, input.fingerprint);

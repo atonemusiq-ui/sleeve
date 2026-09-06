@@ -7,6 +7,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { GENRES, MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE } from "@/lib/genres";
+import { AI_DISCLOSURE_LEVELS, RIGHTS_ATTESTATION_TEXT, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 
 // Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
 // app/actions/tracks.ts, which is what actually enforces this server-side.
@@ -17,7 +18,8 @@ export default function UploadForm({ artistId }: { artistId: string }) {
   const [price, setPrice] = useState("5.00");
   const [genre, setGenre] = useState("");
   const [customTag, setCustomTag] = useState("");
-  const [aiDisclosure, setAiDisclosure] = useState(false);
+  const [aiDisclosure, setAiDisclosure] = useState<AiDisclosureLevel>("human");
+  const [rightsAttested, setRightsAttested] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -38,6 +40,11 @@ export default function UploadForm({ artistId }: { artistId: string }) {
     const priceCents = Math.round(parseFloat(price) * 100);
     if (isNaN(priceCents) || priceCents < 0) {
       setError("Please enter a valid price.");
+      return;
+    }
+
+    if (!rightsAttested) {
+      setError("Please confirm you own the rights to this track before publishing.");
       return;
     }
 
@@ -125,6 +132,7 @@ export default function UploadForm({ artistId }: { artistId: string }) {
         genre: genre || null,
         customTag: customTag || null,
         aiDisclosure,
+        rightsAttested,
       });
 
       if (result.status === "error") {
@@ -141,7 +149,8 @@ export default function UploadForm({ artistId }: { artistId: string }) {
       setPrice("5.00");
       setGenre("");
       setCustomTag("");
-      setAiDisclosure(false);
+      setAiDisclosure("human");
+      setRightsAttested(false);
       setAudioFile(null);
       setCoverFile(null);
       router.refresh();
@@ -232,17 +241,37 @@ export default function UploadForm({ artistId }: { artistId: string }) {
         />
       </div>
 
+      <div>
+        <label className="block font-mono text-xs text-paper/60 mb-1">
+          Did AI play a part in making this track?
+        </label>
+        <select
+          value={aiDisclosure}
+          onChange={(e) => setAiDisclosure(e.target.value as AiDisclosureLevel)}
+          required
+          className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper font-mono"
+        >
+          {AI_DISCLOSURE_LEVELS.map((level) => (
+            <option key={level.value} value={level.value} className="bg-ink text-paper">
+              {level.label}
+            </option>
+          ))}
+        </select>
+        <p className="font-mono text-xs text-paper/50 mt-1.5">
+          Answering "AI-Assisted" or "Fully AI-Generated" shows that label on the storefront —
+          buyers can see it before purchasing.
+        </p>
+      </div>
+
       <label className="flex items-start gap-2 font-mono text-xs text-paper/70">
         <input
           type="checkbox"
-          checked={aiDisclosure}
-          onChange={(e) => setAiDisclosure(e.target.checked)}
+          checked={rightsAttested}
+          onChange={(e) => setRightsAttested(e.target.checked)}
+          required
           className="mt-0.5"
         />
-        <span>
-          This track involved AI-generated vocals, instrumentation, or production. Checking this
-          shows an "AI-assisted" label on the storefront — buyers can see it before purchasing.
-        </span>
+        <span>{RIGHTS_ATTESTATION_TEXT}</span>
       </label>
 
       <div>

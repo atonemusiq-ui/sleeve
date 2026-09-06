@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateTrack } from "@/app/actions/tracks";
 import { GENRES, MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE } from "@/lib/genres";
+import { AI_DISCLOSURE_LEVELS, aiDisclosureBadge, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 import ContributorManager, { type Contributor } from "./ContributorManager";
 
 // Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
@@ -21,7 +22,7 @@ type Track = {
   playUrl: string | null;
   genre: string | null;
   custom_tag: string | null;
-  ai_disclosure: boolean;
+  ai_disclosure: AiDisclosureLevel;
 };
 
 export default function TrackList({
@@ -97,7 +98,7 @@ function TrackRow({
       formData.set("price", price);
       formData.set("genre", genre);
       formData.set("customTag", customTag);
-      formData.set("aiDisclosure", String(aiDisclosure));
+      formData.set("aiDisclosure", aiDisclosure);
       if (coverUrl) formData.set("coverUrl", coverUrl);
 
       const result = await updateTrack(formData);
@@ -207,15 +208,22 @@ function TrackRow({
           />
         </div>
 
-        <label className="flex items-start gap-2 font-mono text-xs text-paper/70">
-          <input
-            type="checkbox"
-            checked={aiDisclosure}
-            onChange={(e) => setAiDisclosure(e.target.checked)}
-            className="mt-0.5"
-          />
-          <span>This track involved AI-generated vocals, instrumentation, or production.</span>
-        </label>
+        <div>
+          <label className="block font-mono text-xs text-paper/60 mb-1">
+            Did AI play a part in making this track?
+          </label>
+          <select
+            value={aiDisclosure}
+            onChange={(e) => setAiDisclosure(e.target.value as AiDisclosureLevel)}
+            className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper font-mono"
+          >
+            {AI_DISCLOSURE_LEVELS.map((level) => (
+              <option key={level.value} value={level.value} className="bg-ink text-paper">
+                {level.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div>
           <label className="block font-mono text-xs text-paper/60 mb-1">
@@ -299,7 +307,7 @@ function TrackRow({
           </button>
         </div>
       </div>
-      {(track.genre || track.custom_tag || track.ai_disclosure) && (
+      {(track.genre || track.custom_tag || aiDisclosureBadge(track.ai_disclosure)) && (
         <div className="flex flex-wrap gap-1.5">
           {track.genre && (
             <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-paper/20 text-paper/60">
@@ -311,9 +319,9 @@ function TrackRow({
               #{track.custom_tag}
             </span>
           )}
-          {track.ai_disclosure && (
+          {aiDisclosureBadge(track.ai_disclosure) && (
             <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-gold/40 text-gold">
-              AI-assisted
+              {aiDisclosureBadge(track.ai_disclosure)}
             </span>
           )}
         </div>

@@ -513,3 +513,64 @@ create policy "artists manage their own booking requests"
   on booking_requests for all
   using (artist_id in (select id from artists where user_id = auth.uid()))
   with check (artist_id in (select id from artists where user_id = auth.uid()));
+
+-- ============================================================================
+-- AI disclosure upgrade: a plain yes/no isn't enough per the original Phase 5
+-- spec — it's a required 3-way choice (see lib/aiDisclosure.ts). The `do`
+-- block only runs the boolean->text conversion when the column is still the
+-- original boolean type, so this stays safe to re-run on both a brand-new
+-- project (where the earlier "add column if not exists ai_disclosure
+-- boolean" above just ran) and the already-upgraded live project.
+-- ============================================================================
+do $$
+begin
+  if (
+    select data_type from information_schema.columns
+    where table_name = 'tracks' and column_name = 'ai_disclosure'
+  ) = 'boolean' then
+    alter table tracks alter column ai_disclosure drop default;
+    alter table tracks alter column ai_disclosure type text
+      using (case when ai_disclosure then 'ai_assisted' else 'human' end);
+  end if;
+end $$;
+
+update tracks set ai_disclosure = 'human' where ai_disclosure is null;
+alter table tracks alter column ai_disclosure set default 'human';
+alter table tracks alter column ai_disclosure set not null;
+
+alter table tracks drop constraint if exists tracks_ai_disclosure_check;
+alter table tracks add constraint tracks_ai_disclosure_check
+  check (ai_disclosure in ('human', 'ai_assisted', 'ai_generated'));
+
+-- ============================================================================
+-- Artist bio photo: shown near the bio on the public artist page
+-- (app/artists/[id]/page.tsx) when present. Uploaded from the dashboard
+-- (app/dashboard/BioManager.tsx) into its own public bucket, same
+-- "<artist_id>/..." path convention as track covers/previews.
+-- ============================================================================
+alter table artists add column if not exists bio_photo_url text;
+
+insert into storage.buckets (id, name, public)
+values ('artist-photos', 'artist-photos', true)
+on conflict (id) do update set public = excluded.public;
+
+drop policy if exists "artists upload their own bio photo" on storage.objects;
+create policy "artists upload their own bio photo"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'artist-photos'
+    and (storage.foldername(name))[1] in (select id::text from artists where user_id = auth.uid())
+  );
+
+drop policy if exists "bio photos are publicly readable" on storage.objects;
+create policy "bio photos are publicly readable"
+  on storage.objects for select
+  using (bucket_id = 'artist-photos');
+
+drop policy if exists "artists delete their own bio photo" on storage.objects;
+create policy "artists delete their own bio photo"
+  on storage.objects for delete
+  using (
+    bucket_id = 'artist-photos'
+    and (storage.foldername(name))[1] in (select id::text from artists where user_id = auth.uid())
+  );

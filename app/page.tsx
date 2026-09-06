@@ -3,6 +3,9 @@ import { startCheckout, startAlbumCheckout } from "@/app/actions/checkout";
 import { tracksNeedingCoverCredit } from "@/lib/coverCompliance";
 import Link from "next/link";
 import StorefrontGrid from "./StorefrontGrid";
+import HeroSection from "./HeroSection";
+import HowItWorks from "./HowItWorks";
+import TrustFooter from "./TrustFooter";
 
 export default async function StorefrontPage() {
   const supabase = createClient();
@@ -99,13 +102,15 @@ export default async function StorefrontPage() {
         </nav>
       </header>
 
-      <p className="text-paper/70 mb-3 max-w-xl">
-        Buy tracks directly from independent artists. A fixed price, paid mostly to the artist —
-        not a fraction of a cent per stream.
-      </p>
+      {/* Hero, "How it works", and the trust footer are the marketing case
+          for signing up — shown only to logged-out visitors. Logged-in
+          users (fans and artists alike) go straight to browsing below. */}
+      {!user && <HeroSection />}
+
       <p className="text-paper/40 font-mono text-xs mb-10 max-w-xl">
         Artists disclose it themselves when a track involves AI-generated vocals, instrumentation,
-        or production — look for the "AI-assisted" label on those tracks.
+        or production — look for the "AI-Assisted"/"Fully AI-Generated" label on those tracks, or
+        browse the AI Music row below.
       </p>
 
       <div className="ticket-divider mb-10" />
@@ -128,6 +133,13 @@ export default async function StorefrontPage() {
           albumTrackCounts={albumTrackCounts}
           blockedTrackIds={blockedTrackIds}
         />
+      )}
+
+      {!user && (
+        <>
+          <HowItWorks />
+          <TrustFooter />
+        </>
       )}
     </main>
   );

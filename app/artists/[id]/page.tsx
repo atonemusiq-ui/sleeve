@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { startCheckout } from "@/app/actions/checkout";
 import { tracksNeedingCoverCredit } from "@/lib/coverCompliance";
+import { aiDisclosureBadge } from "@/lib/aiDisclosure";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import BookingForm from "./BookingForm";
@@ -10,7 +11,7 @@ export default async function ArtistPage({ params }: { params: { id: string } })
 
   const { data: artist } = await supabase
     .from("artists")
-    .select("id, bio, profiles ( display_name )")
+    .select("id, bio, bio_photo_url, profiles ( display_name )")
     .eq("id", params.id)
     .single();
 
@@ -55,9 +56,19 @@ export default async function ArtistPage({ params }: { params: { id: string } })
         </nav>
       </div>
 
-      <header className="mt-6 mb-10">
-        <h1 className="font-display text-3xl text-gold">{artistName}</h1>
-        {artist.bio && <p className="text-paper/70 mt-3 max-w-xl">{artist.bio}</p>}
+      <header className="mt-6 mb-10 flex items-start gap-5">
+        {(artist as any).bio_photo_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={(artist as any).bio_photo_url}
+            alt={artistName}
+            className="w-20 h-20 rounded-full object-cover flex-shrink-0 border border-paper/15"
+          />
+        )}
+        <div>
+          <h1 className="font-display text-3xl text-gold">{artistName}</h1>
+          {artist.bio && <p className="text-paper/70 mt-3 max-w-xl">{artist.bio}</p>}
+        </div>
       </header>
 
       <div className="ticket-divider mb-10" />
@@ -85,7 +96,7 @@ export default async function ArtistPage({ params }: { params: { id: string } })
                   )}
                 </div>
                 <h2 className="font-display text-xl">{track.title}</h2>
-                {(track.genre || track.custom_tag || track.ai_disclosure) && (
+                {(track.genre || track.custom_tag || aiDisclosureBadge(track.ai_disclosure)) && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {track.genre && (
                       <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-paper/20 text-paper/50">
@@ -97,9 +108,9 @@ export default async function ArtistPage({ params }: { params: { id: string } })
                         #{track.custom_tag}
                       </span>
                     )}
-                    {track.ai_disclosure && (
+                    {aiDisclosureBadge(track.ai_disclosure) && (
                       <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-gold/40 text-gold">
-                        AI-assisted
+                        {aiDisclosureBadge(track.ai_disclosure)}
                       </span>
                     )}
                   </div>

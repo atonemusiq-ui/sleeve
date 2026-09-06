@@ -25,3 +25,32 @@
 .ticket-divider::after {
   right: -10px;
 }
+
+/* Horizontally scrolling genre rows (app/StorefrontGrid.tsx) — hide the
+   scrollbar itself since scroll-snap plus the row's own edge fade already
+   signal "more to scroll" without needing a visible bar. */
+.scroll-row {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scroll-row::-webkit-scrollbar {
+  display: none;
+}
+
+/* Simple fade-and-rise entrance used by the homepage hero (app/HeroSection.tsx)
+   and the animated payout receipt (app/ReceiptAnimation.tsx). */
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-rise {
+  animation: fade-rise 0.6s ease-out both;
+}
