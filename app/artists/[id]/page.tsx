@@ -3,6 +3,7 @@ import { startCheckout } from "@/app/actions/checkout";
 import { tracksNeedingCoverCredit } from "@/lib/coverCompliance";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import BookingForm from "./BookingForm";
 
 export default async function ArtistPage({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -138,6 +139,10 @@ export default async function ArtistPage({ params }: { params: { id: string } })
           ))}
         </div>
       )}
+
+      <div className="ticket-divider my-10" />
+
+      <BookingForm artistId={artist.id} />
     </main>
   );
 }
