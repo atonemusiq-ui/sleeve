@@ -9,6 +9,7 @@ import UploadForm from "./UploadForm";
 import TrackList from "./TrackList";
 import AlbumManager, { type Album } from "./AlbumManager";
 import type { Contributor } from "./ContributorManager";
+import BookingRequestsList, { type BookingRequest } from "./BookingRequestsList";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
@@ -135,6 +136,21 @@ export default async function DashboardPage() {
 
   const albumEligibleTracks = (tracks ?? []).map((t) => ({ id: t.id, title: t.title }));
 
+  // Booking requests fans submit from this artist's public page
+  // (app/artists/[id]/BookingForm.tsx). RLS ("artists manage their own
+  // booking requests" in supabase/schema.sql) already scopes this to rows
+  // this artist owns even without the explicit filter, but the filter keeps
+  // the query itself intention-revealing (same pattern as albums above).
+  const { data: bookingRows } = artist?.id
+    ? await supabase
+        .from("booking_requests")
+        .select("id, fan_name, fan_email, fan_phone, event_date, event_location, message, status, created_at")
+        .eq("artist_id", artist.id)
+        .order("created_at", { ascending: false })
+    : { data: [] as any[] };
+
+  const bookingRequests: BookingRequest[] = (bookingRows ?? []) as BookingRequest[];
+
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
       <header className="flex items-center justify-between mb-12">
@@ -204,6 +220,22 @@ export default async function DashboardPage() {
             Save bio
           </button>
         </form>
+      </div>
+
+      <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-3">
+        <div>
+          <h2 className="font-display text-lg">Booking requests</h2>
+          <p className="font-mono text-xs text-paper/60 mt-1">
+            Fans can send these from your public artist page — {artist?.id ? (
+              <Link href={`/artists/${artist.id}`} className="text-gold">
+                preview it
+              </Link>
+            ) : (
+              "preview it once you have a track published"
+            )}.
+          </p>
+        </div>
+        <BookingRequestsList requests={bookingRequests} />
       </div>
 
       {artist?.id && <UploadForm artistId={artist.id} />}

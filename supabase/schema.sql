@@ -480,3 +480,36 @@ create unique index if not exists purchases_stripe_payment_intent_track_key
 alter table tracks add column if not exists genre text;
 alter table tracks add column if not exists custom_tag text;
 alter table tracks add column if not exists ai_disclosure boolean not null default false;
+
+-- ============================================================================
+-- Booking requests: fans can inquire about booking an artist directly from
+-- the artist's public page (app/artists/[id]/BookingForm.tsx) — no account
+-- required to submit one, which is why the insert policy below is
+-- intentionally public. Only the owning artist can ever read, update
+-- (change status), or delete the requests they receive.
+-- ============================================================================
+create table if not exists booking_requests (
+  id uuid primary key default gen_random_uuid(),
+  artist_id uuid not null references artists(id) on delete cascade,
+  fan_name text not null,
+  fan_email text not null,
+  fan_phone text,
+  event_date date,
+  event_location text,
+  message text not null,
+  status text not null default 'new' check (status in ('new', 'contacted', 'booked', 'declined')),
+  created_at timestamptz not null default now()
+);
+
+alter table booking_requests enable row level security;
+
+drop policy if exists "anyone can submit a booking request" on booking_requests;
+create policy "anyone can submit a booking request"
+  on booking_requests for insert
+  with check (true);
+
+drop policy if exists "artists manage their own booking requests" on booking_requests;
+create policy "artists manage their own booking requests"
+  on booking_requests for all
+  using (artist_id in (select id from artists where user_id = auth.uid()))
+  with check (artist_id in (select id from artists where user_id = auth.uid()));
