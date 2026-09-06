@@ -83,6 +83,12 @@ export default function StorefrontGrid({
     })).filter((row) => row.tracks.length > 0);
   }, [tracks, q]);
 
+  // Genre is optional on a track — an artist can leave it unset — so a
+  // "New Releases" row covering every track (already sorted newest-first by
+  // the query in app/page.tsx) guarantees nothing is only reachable through
+  // search just because it was never tagged with a genre.
+  const newReleases = q ? [] : tracks;
+
   // Pulls in regardless of genre — an "AI-Assisted" or "Fully AI-Generated"
   // track shows up here even if it's already in one of the rows above.
   const aiMusicTracks = useMemo(() => {
@@ -125,6 +131,9 @@ export default function StorefrontGrid({
         <p className="text-paper/50 font-mono text-sm">No tracks published yet.</p>
       ) : (
         <div>
+          {newReleases.length > 0 && (
+            <GenreRow title="New Releases" tracks={newReleases} {...tileProps} />
+          )}
           {aiMusicTracks.length > 0 && (
             <GenreRow title="AI Music" tracks={aiMusicTracks} {...tileProps} />
           )}
