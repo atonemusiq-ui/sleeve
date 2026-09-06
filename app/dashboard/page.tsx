@@ -10,6 +10,7 @@ import AlbumManager, { type Album } from "./AlbumManager";
 import type { Contributor } from "./ContributorManager";
 import BookingRequestsList, { type BookingRequest } from "./BookingRequestsList";
 import BioManager from "./BioManager";
+import GalleryManager from "./GalleryManager";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
@@ -36,7 +37,7 @@ export default async function DashboardPage() {
 
   const { data: artist } = await supabase
     .from("artists")
-    .select("id, stripe_account_id, bio, bio_photo_url")
+    .select("id, stripe_account_id, bio, bio_photo_url, gallery_urls")
     .eq("user_id", user.id)
     .single();
 
@@ -211,6 +212,22 @@ export default async function DashboardPage() {
             bio={artist.bio}
             bioPhotoUrl={(artist as any).bio_photo_url ?? null}
           />
+        )}
+      </div>
+
+      <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-3">
+        <h2 className="font-display text-lg">Photo gallery</h2>
+        <p className="font-mono text-xs text-paper/60">
+          Up to 4 photos shown on your public artist page — {artist?.id ? (
+            <Link href={`/artists/${artist.id}`} className="text-gold">
+              preview it
+            </Link>
+          ) : (
+            "preview it once you have a track published"
+          )}.
+        </p>
+        {artist?.id && (
+          <GalleryManager artistId={artist.id} galleryUrls={(artist as any).gallery_urls ?? []} />
         )}
       </div>
 

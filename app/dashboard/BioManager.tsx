@@ -18,6 +18,7 @@ export default function BioManager({
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [removePhoto, setRemovePhoto] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -27,38 +28,82 @@ export default function BioManager({
       ? null
       : bioPhotoUrl;
 
+  // Picking a photo saves it immediately, rather than staging it locally
+  // until the separate "Save bio" button is clicked below — previously a
+  // chosen photo only existed as an in-memory preview until that click, so
+  // navigating away right after picking one lost it, which looked like the
+  // photo "disappearing" even though nothing had actually failed.
+  async function handlePhotoChange(file: File | null) {
+    if (!file) return;
+    setError(null);
+    setPhotoFile(file);
+    setRemovePhoto(false);
+    setPhotoBusy(true);
+
+    try {
+      const supabase = createClient();
+      const photoPath = `${artistId}/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("artist-photos")
+        .upload(photoPath, file);
+      if (uploadError) throw new Error(`Photo upload failed: ${uploadError.message}`);
+      const uploadedUrl = supabase.storage.from("artist-photos").getPublicUrl(photoPath).data
+        .publicUrl;
+
+      const formData = new FormData();
+      formData.set("bio", bioText);
+      formData.set("bioPhotoUrl", uploadedUrl);
+      const result = await updateBio(formData);
+      if (result.error) throw new Error(result.error);
+
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message ?? "Something went wrong.");
+      setPhotoFile(null);
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  // Same idea as above — removing a photo takes effect right away instead
+  // of waiting for "Save bio".
+  async function handleRemovePhoto() {
+    setError(null);
+    setPhotoBusy(true);
+
+    try {
+      const formData = new FormData();
+      formData.set("bio", bioText);
+      formData.set("removePhoto", "true");
+      const result = await updateBio(formData);
+      if (result.error) throw new Error(result.error);
+
+      setPhotoFile(null);
+      setRemovePhoto(true);
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message ?? "Something went wrong.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  // The bio text keeps its own explicit Save — only the photo needed to
+  // become instant, since a half-typed bio shouldn't autosave on every
+  // keystroke. Sending only "bio" here (no bioPhotoUrl/removePhoto) leaves
+  // the photo exactly as it is; see app/actions/artist.ts's updateBio.
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
 
     try {
-      // Photo upload stays a direct client->storage call (server actions
-      // don't take File objects well) — everything else (including the
-      // actual bio text write) goes through updateBio(). Same split as
-      // track cover art in app/dashboard/TrackList.tsx.
-      let bioPhotoUploadedUrl: string | null = null;
-      if (photoFile) {
-        const supabase = createClient();
-        const photoPath = `${artistId}/${Date.now()}-${photoFile.name}`;
-        const { error: uploadError } = await supabase.storage
-          .from("artist-photos")
-          .upload(photoPath, photoFile);
-        if (uploadError) throw new Error(`Photo upload failed: ${uploadError.message}`);
-        bioPhotoUploadedUrl = supabase.storage.from("artist-photos").getPublicUrl(photoPath).data
-          .publicUrl;
-      }
-
       const formData = new FormData();
       formData.set("bio", bioText);
-      if (bioPhotoUploadedUrl) formData.set("bioPhotoUrl", bioPhotoUploadedUrl);
-      if (removePhoto && !bioPhotoUploadedUrl) formData.set("removePhoto", "true");
 
       const result = await updateBio(formData);
       if (result.error) throw new Error(result.error);
 
-      setPhotoFile(null);
-      setRemovePhoto(false);
       router.refresh();
     } catch (err: any) {
       setError(err.message ?? "Something went wrong.");
@@ -86,19 +131,15 @@ export default function BioManager({
           <input
             type="file"
             accept="image/*"
-            onChange={(e) => {
-              setPhotoFile(e.target.files?.[0] ?? null);
-              setRemovePhoto(false);
-            }}
-            className="text-paper font-mono text-xs"
+            disabled={photoBusy}
+            onChange={(e) => handlePhotoChange(e.target.files?.[0] ?? null)}
+            className="text-paper font-mono text-xs disabled:opacity-50"
           />
-          {previewUrl && (
+          {photoBusy && <p className="font-mono text-xs text-paper/50">Saving photo...</p>}
+          {!photoBusy && previewUrl && (
             <button
               type="button"
-              onClick={() => {
-                setPhotoFile(null);
-                setRemovePhoto(true);
-              }}
+              onClick={handleRemovePhoto}
               className="self-start font-mono text-xs text-rust hover:underline"
             >
               Remove photo

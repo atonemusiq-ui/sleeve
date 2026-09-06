@@ -11,7 +11,7 @@ export default async function ArtistPage({ params }: { params: { id: string } })
 
   const { data: artist } = await supabase
     .from("artists")
-    .select("id, bio, bio_photo_url, profiles ( display_name )")
+    .select("id, bio, bio_photo_url, gallery_urls, profiles ( display_name )")
     .eq("id", params.id)
     .single();
 
@@ -30,6 +30,7 @@ export default async function ArtistPage({ params }: { params: { id: string } })
   } = await supabase.auth.getUser();
 
   const artistName = (artist as any).profiles?.display_name ?? "Unknown artist";
+  const galleryUrls: string[] = ((artist as any).gallery_urls ?? []).filter(Boolean);
 
   // Cover songs (see lib/coverCompliance.ts) can't be sold until the artist
   // has credited the original songwriter/producer as a contributor.
@@ -70,6 +71,19 @@ export default async function ArtistPage({ params }: { params: { id: string } })
           {artist.bio && <p className="text-paper/70 mt-3 max-w-xl">{artist.bio}</p>}
         </div>
       </header>
+
+      {galleryUrls.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
+            {galleryUrls.map((url, i) => (
+              <div key={i} className="aspect-square rounded-lg overflow-hidden bg-paper/10">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt={`${artistName} photo ${i + 1}`} className="w-full h-full object-cover" />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="ticket-divider mb-10" />
 

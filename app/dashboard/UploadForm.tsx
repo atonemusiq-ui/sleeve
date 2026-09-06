@@ -8,10 +8,19 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { GENRES, MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE } from "@/lib/genres";
 import { AI_DISCLOSURE_LEVELS, RIGHTS_ATTESTATION_TEXT, type AiDisclosureLevel } from "@/lib/aiDisclosure";
+import { extractEmbeddedArtwork, type EmbeddedArtwork } from "@/lib/extractEmbeddedArtwork";
+import { DEFAULT_TRACK_COVER_URL } from "@/lib/defaultCover";
 
 // Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
 // app/actions/tracks.ts, which is what actually enforces this server-side.
 const TRACK_PRICE_OPTIONS = ["3.00", "4.00", "5.00"];
+
+function extensionForMime(mime: string): string {
+  if (mime.includes("png")) return "png";
+  if (mime.includes("webp")) return "webp";
+  if (mime.includes("gif")) return "gif";
+  return "jpg";
+}
 
 export default function UploadForm({ artistId }: { artistId: string }) {
   const [title, setTitle] = useState("");
@@ -25,7 +34,40 @@ export default function UploadForm({ artistId }: { artistId: string }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [flagged, setFlagged] = useState<number | null>(null);
+  // Artwork Fyby found already embedded in the audio file's own tags (see
+  // lib/extractEmbeddedArtwork.ts) — offered as a one-click "use this"
+  // instead of making the artist upload it again separately.
+  const [embeddedArtwork, setEmbeddedArtwork] = useState<EmbeddedArtwork | null>(null);
+  const [checkingArtwork, setCheckingArtwork] = useState(false);
   const router = useRouter();
+
+  async function handleAudioChange(file: File | null) {
+    setAudioFile(file);
+    setEmbeddedArtwork(null);
+    if (!file) return;
+
+    setCheckingArtwork(true);
+    try {
+      const found = await extractEmbeddedArtwork(file);
+      // Don't override artwork the artist already picked by hand.
+      if (found && !coverFile) {
+        setEmbeddedArtwork(found);
+      }
+    } finally {
+      setCheckingArtwork(false);
+    }
+  }
+
+  function acceptEmbeddedArtwork() {
+    if (!embeddedArtwork) return;
+    const ext = extensionForMime(embeddedArtwork.mimeType);
+    setCoverFile(new File([embeddedArtwork.blob], `embedded-cover.${ext}`, { type: embeddedArtwork.mimeType }));
+    setEmbeddedArtwork(null);
+  }
+
+  function declineEmbeddedArtwork() {
+    setEmbeddedArtwork(null);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -153,6 +195,7 @@ export default function UploadForm({ artistId }: { artistId: string }) {
       setRightsAttested(false);
       setAudioFile(null);
       setCoverFile(null);
+      setEmbeddedArtwork(null);
       router.refresh();
     } catch (err: any) {
       setError(err.message ?? "Something went wrong.");
@@ -279,28 +322,93 @@ export default function UploadForm({ artistId }: { artistId: string }) {
         <input
           type="file"
           accept="audio/*"
-          onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => handleAudioChange(e.target.files?.[0] ?? null)}
           required
-          className="w-full text-paper font-mono text-sm"
+          className="w-full text-paper font-mono text-sm file:mr-3 file:px-4 file:py-2.5 file:rounded file:border-0 file:bg-gold file:text-ink file:font-mono file:text-sm file:font-medium file:cursor-pointer hover:file:opacity-90"
         />
+        {checkingArtwork && (
+          <p className="font-mono text-xs text-paper/50 mt-1">Checking file for embedded artwork...</p>
+        )}
       </div>
 
+      {embeddedArtwork && (
+        <div className="flex items-center gap-4 border border-gold/40 bg-gold/5 rounded-lg px-4 py-3">
+          <div className="w-14 h-14 rounded bg-paper/10 flex-shrink-0 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={URL.createObjectURL(embeddedArtwork.blob)}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <div className="flex-1">
+            <p className="font-mono text-xs text-paper">
+              We found artwork already attached to this song file — use it as the cover?
+            </p>
+            <div className="flex gap-3 mt-2">
+              <button
+                type="button"
+                onClick={acceptEmbeddedArtwork}
+                className="font-mono text-xs px-3 py-1.5 rounded bg-gold text-ink font-medium hover:opacity-90"
+              >
+                Use this artwork
+              </button>
+              <button
+                type="button"
+                onClick={declineEmbeddedArtwork}
+                className="font-mono text-xs px-3 py-1.5 rounded border border-paper/20 hover:bg-paper/10"
+              >
+                No, I'll upload my own
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div>
-        <label className="block font-mono text-xs text-paper/60 mb-1">
-          Cover art (optional)
-        </label>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)}
-          className="w-full text-paper font-mono text-sm"
-        />
+        <label className="block font-mono text-xs text-paper/60 mb-1">Cover art</label>
+        <div className="flex items-center gap-4">
+          <div className="w-20 h-20 rounded bg-paper/10 flex-shrink-0 overflow-hidden border border-paper/15">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={coverFile ? URL.createObjectURL(coverFile) : DEFAULT_TRACK_COVER_URL}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <div className="flex-1 border border-dashed border-paper/25 rounded-lg px-4 py-3">
+            {coverFile ? (
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-mono text-xs text-paper/70 truncate">{coverFile.name}</p>
+                <button
+                  type="button"
+                  onClick={() => setCoverFile(null)}
+                  className="font-mono text-xs text-rust hover:underline flex-shrink-0"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <>
+                <p className="font-mono text-xs text-paper/60 mb-2">
+                  Upload your artwork here — or leave blank for the default Fyby cover.
+                </p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)}
+                  className="w-full text-paper font-mono text-xs file:mr-3 file:px-3 file:py-1.5 file:rounded file:border-0 file:bg-gold file:text-ink file:font-mono file:text-xs file:font-medium file:cursor-pointer hover:file:opacity-90"
+                />
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       <button
         type="submit"
         disabled={uploading}
-        className="mt-2 bg-gold text-ink font-mono text-sm font-medium rounded px-4 py-2.5 hover:opacity-90 disabled:opacity-50"
+        className="mt-2 bg-gold text-ink font-mono text-base font-medium rounded-lg px-6 py-3.5 hover:opacity-90 disabled:opacity-50"
       >
         {uploading ? "Publishing..." : "Publish"}
       </button>

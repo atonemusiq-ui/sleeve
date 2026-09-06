@@ -574,3 +574,25 @@ create policy "artists delete their own bio photo"
     bucket_id = 'artist-photos'
     and (storage.foldername(name))[1] in (select id::text from artists where user_id = auth.uid())
   );
+
+-- ============================================================================
+-- Artist photo gallery: up to 4 photos an artist can show on their public
+-- page (app/artists/[id]/page.tsx), managed from the dashboard
+-- (app/dashboard/GalleryManager.tsx). Stored as a plain array of public URLs
+-- (order = display order) in the same "artist-photos" bucket as the bio
+-- photo above — that bucket's policies are scoped by folder (artist id),
+-- not filename, so no new storage policies are needed for it.
+-- ============================================================================
+alter table artists add column if not exists gallery_urls text[] not null default '{}';
+
+-- ============================================================================
+-- Generic Fyby cover art: every track published from here on gets a real
+-- cover_url even if the artist didn't upload one (see app/actions/upload.ts
+-- and lib/defaultCover.ts) — song and artwork are meant to travel together,
+-- either the artist's own art (including any artwork already embedded in
+-- the audio file itself, see lib/extractEmbeddedArtwork.ts) or this
+-- fallback, never nothing. Backfilling here so tracks published before this
+-- default existed match too, instead of some tracks having art and others
+-- none.
+-- ============================================================================
+update tracks set cover_url = '/fyby-default-cover.svg' where cover_url is null;

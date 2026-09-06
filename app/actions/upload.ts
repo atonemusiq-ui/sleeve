@@ -6,6 +6,7 @@ import { findDuplicateTrack } from "@/lib/fingerprint/check-duplicate";
 import { isAllowedTrackPrice, trackPriceError } from "@/lib/trackPricing";
 import { isValidGenre, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
 import { isAiDisclosureLevel, type AiDisclosureLevel } from "@/lib/aiDisclosure";
+import { DEFAULT_TRACK_COVER_URL } from "@/lib/defaultCover";
 import { revalidatePath } from "next/cache";
 
 export type PublishTrackInput = {
@@ -104,12 +105,17 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
     return { status: "flagged", similarity: match.similarity };
   }
 
+  // Every track gets real artwork — the artist's own upload (including one
+  // pulled straight out of the audio file's own tags, see
+  // lib/extractEmbeddedArtwork.ts) if provided, otherwise the generic Fyby
+  // cover, rather than showing no artwork at all on the storefront/embed
+  // widget.
   const { error } = await admin.from("tracks").insert({
     artist_id: input.artistId,
     title: input.title,
     price_cents: input.priceCents,
     audio_path: input.audioPath,
-    cover_url: input.coverUrl,
+    cover_url: input.coverUrl || DEFAULT_TRACK_COVER_URL,
     preview_url: input.previewUrl,
     audio_fingerprint: input.fingerprint,
     fingerprint_duration: Math.round(input.fingerprintDuration),
