@@ -68,7 +68,24 @@ function TrackRow({
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showEmbed, setShowEmbed] = useState(false);
+  const [copied, setCopied] = useState(false);
   const router = useRouter();
+
+  const embedSnippet = `<iframe src="${
+    typeof window !== "undefined" ? window.location.origin : ""
+  }/embed/${track.id}" width="300" height="420" frameborder="0" style="border:none;overflow:hidden;"></iframe>`;
+
+  async function handleCopyEmbed() {
+    try {
+      await navigator.clipboard.writeText(embedSnippet);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access can be denied by the browser — the textarea below
+      // is still selectable/copyable by hand, so this isn't a hard failure.
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -299,6 +316,12 @@ function TrackRow({
             Edit
           </button>
           <button
+            onClick={() => setShowEmbed((v) => !v)}
+            className="font-mono text-xs px-2 py-1 rounded border border-paper/20 hover:bg-paper/10"
+          >
+            {showEmbed ? "Hide embed" : "Embed this song"}
+          </button>
+          <button
             onClick={handleDelete}
             disabled={busy}
             className="font-mono text-xs px-2 py-1 rounded border border-rust/40 text-rust hover:bg-rust/10 disabled:opacity-50"
@@ -307,6 +330,27 @@ function TrackRow({
           </button>
         </div>
       </div>
+      {showEmbed && (
+        <div className="flex flex-col gap-2 border border-paper/15 rounded px-3 py-2 bg-paper/5">
+          <p className="font-mono text-xs text-paper/60">
+            Paste this into any site to embed a "Buy" widget for this track.
+          </p>
+          <textarea
+            readOnly
+            value={embedSnippet}
+            rows={2}
+            onFocus={(e) => e.currentTarget.select()}
+            className="w-full bg-ink border border-paper/20 rounded px-2 py-1 text-paper font-mono text-xs"
+          />
+          <button
+            type="button"
+            onClick={handleCopyEmbed}
+            className="self-start font-mono text-xs px-2 py-1 rounded bg-gold text-ink font-medium hover:opacity-90"
+          >
+            {copied ? "Copied!" : "Copy snippet"}
+          </button>
+        </div>
+      )}
       {(track.genre || track.custom_tag || aiDisclosureBadge(track.ai_disclosure)) && (
         <div className="flex flex-wrap gap-1.5">
           {track.genre && (
