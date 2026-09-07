@@ -115,7 +115,7 @@ export default async function Image({ params }: { params: { trackId: string } })
           <div style={{ display: "flex", fontSize: 32, color: "rgba(232,225,211,0.7)", marginBottom: 40 }}>
             by {artistName}
           </div>
-          <div style={{ display: "flex", fontSize: 26, color: "#e8e1d3" }}>🎤 Press the mic to hear it</div>
+          <div style={{ display: "flex", fontSize: 26, color: "#e8e1d3" }}>Press the mic to hear it</div>
         </div>
       </div>
     ),

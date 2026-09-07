@@ -33,6 +33,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     artistUrl
   )}`;
 
+  const bodyWidth = 380;
+  const metalGradient = "linear-gradient(180deg, #e8c96b 0%, #d4a537 45%, #b0822a 100%)";
+
   return new ImageResponse(
     (
       <div
@@ -46,42 +49,77 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
           background: "#16121a",
         }}
       >
-        {/* Mic housing: a big rounded capsule holding the QR code where the
-            mesh/grille would be, a thin stand, and a base arc beneath it. */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 420,
-            height: 420,
-            borderRadius: 210,
-            background: "#d4a537",
-            border: "10px solid #e8e1d3",
-          }}
-        >
+        {/* A large-diaphragm-style condenser mic silhouette, built as a
+            stack of segments (grille head, capsule viewport holding the QR,
+            a selector ring, a tapered lower body, and the XLR connector),
+            rather than a plain circle — the QR itself stays a clean,
+            unobstructed square so it keeps scanning reliably. */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+          {/* Grille head */}
           <div
             style={{
               display: "flex",
-              width: 320,
-              height: 320,
-              borderRadius: 24,
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              width: bodyWidth,
+              height: 110,
+              borderRadius: "190px 190px 20px 20px",
+              background: metalGradient,
               overflow: "hidden",
+            }}
+          >
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} style={{ display: "flex", width: 300, height: 5, borderRadius: 3, background: "#16121a" }} />
+            ))}
+          </div>
+
+          {/* Capsule viewport — the QR code sits here, flush with the body */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: bodyWidth,
+              height: 340,
               background: "#e8e1d3",
+              border: "4px solid #b0822a",
+              borderTop: "none",
+              borderBottom: "none",
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrUrl} width={320} height={320} />
+            <img src={qrUrl} width={300} height={300} />
           </div>
-        </div>
-        <div style={{ display: "flex", width: 10, height: 60, background: "#d4a537", marginTop: -4 }} />
-        <div style={{ display: "flex", width: 140, height: 16, borderRadius: 8, background: "#d4a537" }} />
 
-        <div style={{ display: "flex", fontSize: 44, fontWeight: 700, color: "#e8e1d3", marginTop: 46 }}>
+          {/* Pattern-selector ring */}
+          <div style={{ display: "flex", width: bodyWidth, height: 22, background: "#8a6a20" }} />
+
+          {/* Tapered lower body */}
+          <div
+            style={{
+              display: "flex",
+              width: 300,
+              height: 90,
+              borderRadius: "0 0 36px 36px",
+              background: metalGradient,
+            }}
+          />
+
+          {/* XLR connector */}
+          <div style={{ display: "flex", width: 60, height: 24, background: "#16121a", borderRadius: "0 0 8px 8px" }} />
+
+          {/* Stand */}
+          <div style={{ display: "flex", width: 8, height: 60, background: "#d4a537", marginTop: 6 }} />
+          <div style={{ display: "flex", width: 170, height: 16, borderRadius: 8, background: "#d4a537" }} />
+        </div>
+
+        <div style={{ display: "flex", fontSize: 44, fontWeight: 700, color: "#e8e1d3", marginTop: 44 }}>
           {artistName}
         </div>
         <div style={{ display: "flex", fontSize: 28, color: "#d4a537", marginTop: 10 }}>
-          🎤 Scan the mic to hear my music on Fyby
+          Scan the mic to hear my music on Fyby
         </div>
       </div>
     ),
