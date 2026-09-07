@@ -2,6 +2,37 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { trackNeedsCoverCredit } from "@/lib/coverCompliance";
 import { aiDisclosureBadge, type AiDisclosureLevel } from "@/lib/aiDisclosure";
+import type { Metadata } from "next";
+
+// Powers the og:title/og:description a crawler shows alongside the image
+// from opengraph-image.tsx (same folder) when this link is pasted into
+// Facebook, Twitter/X, iMessage, Slack, Discord, etc. — the platforms that
+// actually unfurl a plain link. Instagram/TikTok/Snapchat don't do this at
+// all for post captions, which is why there's a separate downloadable share
+// graphic for those (app/artists/[id]/share-card/route.tsx).
+export async function generateMetadata({
+  params,
+}: {
+  params: { trackId: string };
+}): Promise<Metadata> {
+  const admin = createServiceRoleClient();
+  const { data: track } = await admin
+    .from("tracks")
+    .select("title, artists ( profiles ( display_name ) )")
+    .eq("id", params.trackId)
+    .maybeSingle();
+
+  const title = track?.title ?? "A song on Fyby";
+  const artistName = (track as any)?.artists?.profiles?.display_name ?? "an independent artist";
+  const description = `Listen to "${title}" by ${artistName} and buy it directly — no streaming middleman.`;
+
+  return {
+    title: `${title} — ${artistName} | Fyby`,
+    description,
+    openGraph: { title, description, type: "music.song" },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
 
 // The embeddable "buy this song" widget — meant to be dropped into an
 // <iframe> on an artist's own site, a blog post, etc. (see the "Embed this

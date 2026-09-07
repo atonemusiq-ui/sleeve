@@ -10,6 +10,7 @@ import AlbumManager, { type Album } from "./AlbumManager";
 import type { Contributor } from "./ContributorManager";
 import BookingRequestsList, { type BookingRequest } from "./BookingRequestsList";
 import BioManager from "./BioManager";
+import ShareCard from "./ShareCard";
 import GalleryManager from "./GalleryManager";
 import VideoManager from "./VideoManager";
 import type { VideoTier } from "@/lib/videoTiers";
@@ -223,6 +224,15 @@ export default async function DashboardPage() {
             bioPhotoUrl={(artist as any).bio_photo_url ?? null}
           />
         )}
+      </div>
+
+      <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-3">
+        <h2 className="font-display text-lg">Share on social media</h2>
+        <p className="font-mono text-xs text-paper/60">
+          A mic-branded graphic with a QR code straight to your artist page — made for posts on
+          apps that don&apos;t let you drop a clickable link into a caption.
+        </p>
+        {artist?.id && <ShareCard artistId={artist.id} artistName={profile.display_name} />}
       </div>
 
       <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-3">
