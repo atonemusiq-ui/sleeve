@@ -11,6 +11,7 @@ import { MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE, subgenresFor, MAX_GENRE_SUGGESTION
 import { AI_DISCLOSURE_LEVELS, RIGHTS_ATTESTATION_TEXT, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 import { extractEmbeddedArtwork, type EmbeddedArtwork } from "@/lib/extractEmbeddedArtwork";
 import { DEFAULT_TRACK_COVER_URL } from "@/lib/defaultCover";
+import CollapsibleSection from "./CollapsibleSection";
 
 // Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
 // app/actions/tracks.ts, which is what actually enforces this server-side.
@@ -238,12 +239,8 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-4"
-    >
-      <h2 className="font-display text-xl">Release a track</h2>
-
+    <CollapsibleSection title="Release a track">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       {error && <p className="text-rust font-mono text-sm">{error}</p>}
 
       {flagged !== null && (
@@ -486,6 +483,7 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
       >
         {uploading ? "Releasing..." : "Release"}
       </button>
-    </form>
+      </form>
+    </CollapsibleSection>
   );
 }

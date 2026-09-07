@@ -13,6 +13,7 @@ import BioManager from "./BioManager";
 import ShareCard from "./ShareCard";
 import GalleryManager from "./GalleryManager";
 import VideoManager from "./VideoManager";
+import CollapsibleSection from "./CollapsibleSection";
 import type { VideoTier } from "@/lib/videoTiers";
 import { GENRES } from "@/lib/genres";
 
@@ -163,6 +164,12 @@ export default async function DashboardPage() {
 
   const bookingRequests: BookingRequest[] = (bookingRows ?? []) as BookingRequest[];
 
+  // Small status hints shown in each collapsed section's header, and used to
+  // decide what should greet the artist already open vs. tucked away.
+  const galleryUrls: string[] = (artist as any)?.gallery_urls ?? [];
+  const hasVideo = Boolean((artist as any)?.bio_video_url);
+  const newBookingsCount = bookingRequests.filter((r) => r.status === "new").length;
+
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
       <header className="flex items-center justify-between mb-12">
@@ -187,15 +194,26 @@ export default async function DashboardPage() {
 
       <div className="ticket-divider mb-10" />
 
-      <div className="border border-paper/15 rounded-lg px-5 py-4 bg-paper/5 mb-10 flex items-center justify-between">
-        <div>
-          <h2 className="font-display text-lg">Payouts</h2>
-          <p className="font-mono text-xs text-paper/60 mt-1">
-            {artist?.stripe_account_id
-              ? "Bank account connected via Stripe."
-              : "Connect a bank account to get paid when your tracks sell."}
-          </p>
-        </div>
+      <CollapsibleSection
+        title="Payouts"
+        defaultOpen={!artist?.stripe_account_id}
+        badge={
+          <span
+            className={`font-mono text-[10px] px-2 py-0.5 rounded-full border ${
+              artist?.stripe_account_id
+                ? "text-forest border-forest/40"
+                : "text-rust border-rust/40"
+            }`}
+          >
+            {artist?.stripe_account_id ? "Connected" : "Not connected"}
+          </span>
+        }
+      >
+        <p className="font-mono text-xs text-paper/60">
+          {artist?.stripe_account_id
+            ? "Bank account connected via Stripe."
+            : "Connect a bank account to get paid when your tracks sell."}
+        </p>
         <form action={connectStripeAccount}>
           <button
             type="submit"
@@ -204,10 +222,9 @@ export default async function DashboardPage() {
             {artist?.stripe_account_id ? "Update payout info" : "Connect bank account"}
           </button>
         </form>
-      </div>
+      </CollapsibleSection>
 
-      <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-3">
-        <h2 className="font-display text-lg">Bio</h2>
+      <CollapsibleSection title="Bio" defaultOpen={!artist?.bio}>
         <p className="font-mono text-xs text-paper/60">
           Shown on your public artist page — {artist?.id ? (
             <Link href={`/artists/${artist.id}`} className="text-gold">
@@ -224,19 +241,24 @@ export default async function DashboardPage() {
             bioPhotoUrl={(artist as any).bio_photo_url ?? null}
           />
         )}
-      </div>
+      </CollapsibleSection>
 
-      <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-3">
-        <h2 className="font-display text-lg">Share on social media</h2>
+      <CollapsibleSection title="Share on social media">
         <p className="font-mono text-xs text-paper/60">
           A mic-branded graphic with a QR code straight to your artist page — made for posts on
           apps that don&apos;t let you drop a clickable link into a caption.
         </p>
         {artist?.id && <ShareCard artistId={artist.id} artistName={profile.display_name} />}
-      </div>
+      </CollapsibleSection>
 
-      <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-3">
-        <h2 className="font-display text-lg">Photo gallery</h2>
+      <CollapsibleSection
+        title="Photo gallery"
+        badge={
+          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border border-paper/20 text-paper/50">
+            {galleryUrls.length}/4 photos
+          </span>
+        }
+      >
         <p className="font-mono text-xs text-paper/60">
           Up to 4 photos shown on your public artist page — {artist?.id ? (
             <Link href={`/artists/${artist.id}`} className="text-gold">
@@ -246,13 +268,17 @@ export default async function DashboardPage() {
             "preview it once you have a track released"
           )}.
         </p>
-        {artist?.id && (
-          <GalleryManager artistId={artist.id} galleryUrls={(artist as any).gallery_urls ?? []} />
-        )}
-      </div>
+        {artist?.id && <GalleryManager artistId={artist.id} galleryUrls={galleryUrls} />}
+      </CollapsibleSection>
 
-      <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-3">
-        <h2 className="font-display text-lg">Music video</h2>
+      <CollapsibleSection
+        title="Music video"
+        badge={
+          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border border-paper/20 text-paper/50">
+            {hasVideo ? "Added" : "Not added"}
+          </span>
+        }
+      >
         <p className="font-mono text-xs text-paper/60">
           Shown on your public artist page — {artist?.id ? (
             <Link href={`/artists/${artist.id}`} className="text-gold">
@@ -272,23 +298,30 @@ export default async function DashboardPage() {
             bioVideoType={(artist as any).bio_video_type ?? null}
           />
         )}
-      </div>
+      </CollapsibleSection>
 
-      <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-3">
-        <div>
-          <h2 className="font-display text-lg">Booking requests</h2>
-          <p className="font-mono text-xs text-paper/60 mt-1">
-            Fans can send these from your public artist page — {artist?.id ? (
-              <Link href={`/artists/${artist.id}`} className="text-gold">
-                preview it
-              </Link>
-            ) : (
-              "preview it once you have a track released"
-            )}.
-          </p>
-        </div>
+      <CollapsibleSection
+        title="Booking requests"
+        defaultOpen={newBookingsCount > 0}
+        badge={
+          newBookingsCount > 0 && (
+            <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border border-gold/40 text-gold">
+              {newBookingsCount} new
+            </span>
+          )
+        }
+      >
+        <p className="font-mono text-xs text-paper/60">
+          Fans can send these from your public artist page — {artist?.id ? (
+            <Link href={`/artists/${artist.id}`} className="text-gold">
+              preview it
+            </Link>
+          ) : (
+            "preview it once you have a track released"
+          )}.
+        </p>
         <BookingRequestsList requests={bookingRequests} />
-      </div>
+      </CollapsibleSection>
 
       {artist?.id && <UploadForm artistId={artist.id} allGenres={allGenres} />}
 

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createAlbum, updateAlbum, deleteAlbum } from "@/app/actions/albums";
+import CollapsibleSection from "./CollapsibleSection";
 
 export type AlbumTrackRef = { id: string; title: string };
 export type Album = {
@@ -37,25 +38,32 @@ export default function AlbumManager({
   const [editingId, setEditingId] = useState<string | null>(null);
 
   return (
-    <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="font-display text-xl">Albums</h2>
+    <CollapsibleSection
+      title="Albums"
+      badge={
+        albums.length > 0 ? (
+          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border border-paper/20 text-paper/50">
+            {albums.length}
+          </span>
+        ) : undefined
+      }
+    >
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-mono text-xs text-paper/50">
+          {tracks.length === 0
+            ? "Release at least one track before you can bundle an album."
+            : "Bundle tracks together at a discount."}
+        </p>
         {!creating && (
           <button
             onClick={() => setCreating(true)}
             disabled={tracks.length === 0}
-            className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10 disabled:opacity-40"
+            className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10 disabled:opacity-40 flex-shrink-0"
           >
             + New album
           </button>
         )}
       </div>
-
-      {tracks.length === 0 && (
-        <p className="font-mono text-xs text-paper/50">
-          Release at least one track before you can bundle an album.
-        </p>
-      )}
 
       {creating && (
         <AlbumForm
@@ -86,7 +94,7 @@ export default function AlbumManager({
           )
         )}
       </div>
-    </div>
+    </CollapsibleSection>
   );
 }
 
