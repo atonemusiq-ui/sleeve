@@ -2,11 +2,12 @@
 import { generatePreviewClip } from "@/lib/generatePreviewClip";
 import { generateAudioFingerprint } from "@/lib/fingerprint/generateFingerprint";
 import { publishTrack } from "@/app/actions/upload";
+import { suggestGenre } from "@/app/actions/genres";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { GENRES, MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE } from "@/lib/genres";
+import { MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE, subgenresFor, MAX_GENRE_SUGGESTION_LENGTH } from "@/lib/genres";
 import { AI_DISCLOSURE_LEVELS, RIGHTS_ATTESTATION_TEXT, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 import { extractEmbeddedArtwork, type EmbeddedArtwork } from "@/lib/extractEmbeddedArtwork";
 import { DEFAULT_TRACK_COVER_URL } from "@/lib/defaultCover";
@@ -22,11 +23,15 @@ function extensionForMime(mime: string): string {
   return "jpg";
 }
 
-export default function UploadForm({ artistId }: { artistId: string }) {
+export default function UploadForm({ artistId, allGenres }: { artistId: string; allGenres: string[] }) {
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("5.00");
   const [genre, setGenre] = useState("");
+  const [subgenre, setSubgenre] = useState("");
   const [customTag, setCustomTag] = useState("");
+  const [suggestedGenre, setSuggestedGenre] = useState("");
+  const [suggestingGenre, setSuggestingGenre] = useState(false);
+  const [suggestGenreMessage, setSuggestGenreMessage] = useState<string | null>(null);
   const [aiDisclosure, setAiDisclosure] = useState<AiDisclosureLevel>("human");
   const [rightsAttested, setRightsAttested] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -40,6 +45,32 @@ export default function UploadForm({ artistId }: { artistId: string }) {
   const [embeddedArtwork, setEmbeddedArtwork] = useState<EmbeddedArtwork | null>(null);
   const [checkingArtwork, setCheckingArtwork] = useState(false);
   const router = useRouter();
+
+  // Only the fixed base genres carry subgenres (see lib/genres.ts's
+  // SUBGENRES map) — an admin-approved suggestion never has any.
+  const subgenreOptions = useMemo(() => subgenresFor(genre), [genre]);
+
+  function handleGenreChange(value: string) {
+    setGenre(value);
+    setSubgenre(""); // last genre's subgenre almost never applies to the new one
+  }
+
+  async function handleSuggestGenre() {
+    const name = suggestedGenre.trim();
+    if (!name) return;
+    setSuggestingGenre(true);
+    setSuggestGenreMessage(null);
+    const formData = new FormData();
+    formData.set("name", name);
+    const result = await suggestGenre(formData);
+    setSuggestingGenre(false);
+    if (result.error) {
+      setSuggestGenreMessage(result.error);
+      return;
+    }
+    setSuggestedGenre("");
+    setSuggestGenreMessage("Thanks — sent to the team for review.");
+  }
 
   async function handleAudioChange(file: File | null) {
     setAudioFile(file);
@@ -172,6 +203,7 @@ export default function UploadForm({ artistId }: { artistId: string }) {
         fingerprint,
         fingerprintDuration,
         genre: genre || null,
+        subgenre: subgenre || null,
         customTag: customTag || null,
         aiDisclosure,
         rightsAttested,
@@ -190,6 +222,7 @@ export default function UploadForm({ artistId }: { artistId: string }) {
       setTitle("");
       setPrice("5.00");
       setGenre("");
+      setSubgenre("");
       setCustomTag("");
       setAiDisclosure("human");
       setRightsAttested(false);
@@ -250,13 +283,13 @@ export default function UploadForm({ artistId }: { artistId: string }) {
         <label className="block font-mono text-xs text-paper/60 mb-1">Genre (optional)</label>
         <select
           value={genre}
-          onChange={(e) => setGenre(e.target.value)}
+          onChange={(e) => handleGenreChange(e.target.value)}
           className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper font-mono"
         >
           <option value="" className="bg-ink text-paper">
             No genre
           </option>
-          {GENRES.map((g) => (
+          {allGenres.map((g) => (
             <option key={g} value={g} className="bg-ink text-paper">
               {g}
             </option>
@@ -269,7 +302,48 @@ export default function UploadForm({ artistId }: { artistId: string }) {
             share — sales are blocked until you do.
           </p>
         )}
+
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            value={suggestedGenre}
+            onChange={(e) => setSuggestedGenre(e.target.value)}
+            maxLength={MAX_GENRE_SUGGESTION_LENGTH}
+            placeholder="Don't see your genre? Suggest one..."
+            className="flex-1 bg-paper/5 border border-paper/20 rounded px-3 py-1.5 text-paper text-sm"
+          />
+          <button
+            type="button"
+            onClick={handleSuggestGenre}
+            disabled={suggestingGenre || !suggestedGenre.trim()}
+            className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10 disabled:opacity-40 flex-shrink-0"
+          >
+            {suggestingGenre ? "Sending..." : "Suggest"}
+          </button>
+        </div>
+        {suggestGenreMessage && (
+          <p className="font-mono text-xs text-paper/60 mt-1">{suggestGenreMessage}</p>
+        )}
       </div>
+
+      {subgenreOptions.length > 0 && (
+        <div>
+          <label className="block font-mono text-xs text-paper/60 mb-1">Subgenre (optional)</label>
+          <select
+            value={subgenre}
+            onChange={(e) => setSubgenre(e.target.value)}
+            className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper font-mono"
+          >
+            <option value="" className="bg-ink text-paper">
+              No subgenre
+            </option>
+            {subgenreOptions.map((sg) => (
+              <option key={sg} value={sg} className="bg-ink text-paper">
+                {sg}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div>
         <label className="block font-mono text-xs text-paper/60 mb-1">

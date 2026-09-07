@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { startCheckout, startAlbumCheckout } from "@/app/actions/checkout";
 import { tracksNeedingCoverCredit } from "@/lib/coverCompliance";
+import { GENRES } from "@/lib/genres";
 import Link from "next/link";
 import StorefrontGrid from "./StorefrontGrid";
 import HeroSection from "./HeroSection";
@@ -13,9 +14,15 @@ export default async function StorefrontPage() {
   const { data: tracks, error } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, created_at, cover_url, preview_url, genre, custom_tag, ai_disclosure, artists ( id, bio, user_id, profiles ( display_name ) )"
+      "id, title, price_cents, created_at, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, artists ( id, bio, user_id, profiles ( display_name ) )"
     )
     .order("created_at", { ascending: false });
+
+  // Admin-approved genre suggestions (see app/actions/genres.ts and
+  // app/admin/genres/page.tsx) get their own row on the storefront too,
+  // alongside the fixed list in lib/genres.ts.
+  const { data: approvedGenreRows } = await supabase.from("approved_genres").select("name").order("name");
+  const allGenres = [...GENRES, ...(approvedGenreRows ?? []).map((g) => g.name)];
 
   const normalizedTracks = (tracks ?? []).map((track: any) => ({
     ...track,
@@ -132,6 +139,7 @@ export default async function StorefrontPage() {
           albumByTrackId={albumByTrackId}
           albumTrackCounts={albumTrackCounts}
           blockedTrackIds={blockedTrackIds}
+          allGenres={allGenres}
         />
       )}
 

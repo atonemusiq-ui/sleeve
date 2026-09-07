@@ -44,6 +44,9 @@ export default async function ReportedVideosPage() {
           <Link href="/admin/flagged" className="hover:text-gold">
             Flagged uploads
           </Link>
+          <Link href="/admin/genres" className="hover:text-gold">
+            Genre suggestions
+          </Link>
           <Link href="/dashboard" className="hover:text-gold">
             Back to dashboard
           </Link>

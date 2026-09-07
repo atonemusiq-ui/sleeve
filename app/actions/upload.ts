@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { findDuplicateTrack } from "@/lib/fingerprint/check-duplicate";
 import { isAllowedTrackPrice, trackPriceError } from "@/lib/trackPricing";
-import { isValidGenre, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
+import { isValidGenre, isValidSubgenre, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
 import { isAiDisclosureLevel, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 import { DEFAULT_TRACK_COVER_URL } from "@/lib/defaultCover";
 import { revalidatePath } from "next/cache";
@@ -19,6 +19,7 @@ export type PublishTrackInput = {
   fingerprint: string;
   fingerprintDuration: number;
   genre: string | null;
+  subgenre: string | null;
   customTag: string | null;
   aiDisclosure: AiDisclosureLevel;
   rightsAttested: boolean;
@@ -69,11 +70,27 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
   }
 
   // Genre is optional — an empty/null value is fine, but a non-empty one
-  // must be one of the fixed options (see lib/genres.ts and the <select> in
-  // UploadForm.tsx) so the storefront's genre filter always has a known,
-  // finite set to build pills from.
+  // must be either one of the fixed options (see lib/genres.ts and the
+  // <select> in UploadForm.tsx) or a name an admin has approved off the
+  // genre_suggestions queue (see app/actions/genres.ts and
+  // app/admin/genres/page.tsx) — checked against the DB since that list
+  // grows at runtime, unlike the fixed one.
   if (input.genre && !isValidGenre(input.genre)) {
-    return { status: "error", message: "That's not a recognized genre." };
+    const { data: approved } = await admin
+      .from("approved_genres")
+      .select("id")
+      .eq("name", input.genre)
+      .maybeSingle();
+    if (!approved) {
+      return { status: "error", message: "That's not a recognized genre." };
+    }
+  }
+
+  // Subgenre is only meaningful under a genre that has one — see
+  // lib/genres.ts's SUBGENRES map — and, like genre, is unconstrained at the
+  // DB layer so the list can grow without a migration.
+  if (input.subgenre && !isValidSubgenre(input.genre, input.subgenre)) {
+    return { status: "error", message: "That's not a recognized subgenre for this genre." };
   }
 
   const customTag = input.customTag?.trim() || null;
@@ -120,6 +137,7 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
     audio_fingerprint: input.fingerprint,
     fingerprint_duration: Math.round(input.fingerprintDuration),
     genre: input.genre || null,
+    subgenre: input.subgenre || null,
     custom_tag: customTag,
     ai_disclosure: input.aiDisclosure,
   });

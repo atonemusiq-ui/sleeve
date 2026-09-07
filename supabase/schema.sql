@@ -659,3 +659,49 @@ create policy "artists delete their own bio video"
     bucket_id = 'artist-videos'
     and (storage.foldername(name))[1] in (select id::text from artists where user_id = auth.uid())
   );
+
+-- ============================================================================
+-- Phase 5 addendum: subgenre depth + a genre-suggestion queue.
+--
+-- Subgenres nest under three existing top-level genres (see lib/genres.ts's
+-- SUBGENRES map) and, like `genre` itself, are validated at the app layer
+-- rather than a DB constraint so the list can grow without a migration —
+-- `subgenre` is just another unconstrained text column.
+--
+-- The top-level genre list stays the fixed set in lib/genres.ts (unchanged,
+-- so existing tracks' genre values keep matching), but an artist can now
+-- suggest one that isn't on it. A suggestion lands in `genre_suggestions` as
+-- 'pending' and does NOT become selectable on its own — an admin reviews it
+-- at /admin/genres (restricted the same way as /admin/flagged and
+-- /admin/videos) and, on approval, its name is copied into `approved_genres`,
+-- which the upload form and storefront read alongside the fixed list.
+-- ============================================================================
+alter table tracks add column if not exists subgenre text;
+
+create table if not exists genre_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  suggested_by uuid references profiles(id),
+  suggested_name text not null,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamptz not null default now()
+);
+
+alter table genre_suggestions enable row level security;
+
+drop policy if exists "logged in users can suggest a genre" on genre_suggestions;
+create policy "logged in users can suggest a genre"
+  on genre_suggestions for insert
+  with check (auth.uid() is not null and suggested_by = auth.uid());
+
+create table if not exists approved_genres (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  created_at timestamptz not null default now()
+);
+
+alter table approved_genres enable row level security;
+
+drop policy if exists "approved genres are publicly readable" on approved_genres;
+create policy "approved genres are publicly readable"
+  on approved_genres for select
+  using (true);

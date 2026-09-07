@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { GENRES } from "@/lib/genres";
 import { aiDisclosureBadge, isAiMusic, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 
 type Track = {
@@ -12,6 +11,7 @@ type Track = {
   cover_url: string | null;
   preview_url: string | null;
   genre: string | null;
+  subgenre: string | null;
   custom_tag: string | null;
   ai_disclosure: AiDisclosureLevel;
   artists: {
@@ -30,6 +30,7 @@ export default function StorefrontGrid({
   albumByTrackId,
   albumTrackCounts,
   blockedTrackIds,
+  allGenres,
 }: {
   tracks: Track[];
   startCheckout: (formData: FormData) => void;
@@ -41,6 +42,10 @@ export default function StorefrontGrid({
   // lib/coverCompliance.ts) — never who the contributor is, just which
   // track ids aren't sellable yet.
   blockedTrackIds: string[];
+  // Fixed list from lib/genres.ts plus any admin-approved suggestion (see
+  // app/actions/genres.ts) — determines row order/presence the same way the
+  // fixed list alone used to.
+  allGenres: string[];
 }) {
   const [query, setQuery] = useState("");
 
@@ -72,16 +77,18 @@ export default function StorefrontGrid({
     });
   }, [tracks, q]);
 
-  // Rows follow the fixed genre order from lib/genres.ts (rather than
-  // alphabetical) so the browse order is deliberate — only genres that
-  // actually have a track get a row.
+  // Rows follow the fixed genre order from lib/genres.ts, admin-approved
+  // suggestions appended after (rather than alphabetical) so the browse
+  // order is deliberate — only genres that actually have a track get a row.
   const genreRows = useMemo(() => {
     if (q) return [];
-    return GENRES.map((genre) => ({
-      genre,
-      tracks: tracks.filter((t) => t.genre === genre),
-    })).filter((row) => row.tracks.length > 0);
-  }, [tracks, q]);
+    return allGenres
+      .map((genre) => ({
+        genre,
+        tracks: tracks.filter((t) => t.genre === genre),
+      }))
+      .filter((row) => row.tracks.length > 0);
+  }, [tracks, q, allGenres]);
 
   // Genre is optional on a track — an artist can leave it unset — so a
   // "New Releases" row covering every track (already sorted newest-first by
@@ -138,7 +145,13 @@ export default function StorefrontGrid({
             <GenreRow title="AI Music" tracks={aiMusicTracks} {...tileProps} />
           )}
           {genreRows.map((row) => (
-            <GenreRow key={row.genre} title={row.genre} tracks={row.tracks} {...tileProps} />
+            <GenreRow
+              key={row.genre}
+              title={row.genre}
+              tracks={row.tracks}
+              showSubgenreTabs
+              {...tileProps}
+            />
           ))}
         </div>
       )}
@@ -156,12 +169,60 @@ type TileProps = {
   blockedAlbumIds: Set<string>;
 };
 
-function GenreRow({ title, tracks, ...tileProps }: { title: string; tracks: Track[] } & TileProps) {
+function GenreRow({
+  title,
+  tracks,
+  showSubgenreTabs,
+  ...tileProps
+}: { title: string; tracks: Track[]; showSubgenreTabs?: boolean } & TileProps) {
+  const [activeSubgenre, setActiveSubgenre] = useState<string | null>(null);
+
+  // Only offered when the row's own tracks actually carry subgenres (e.g. a
+  // Rock row with some Classic Rock/Alternative tagged) — a plain genre row
+  // with none just renders the same as before.
+  const subgenres = useMemo(() => {
+    if (!showSubgenreTabs) return [];
+    return Array.from(new Set(tracks.map((t) => t.subgenre).filter((sg): sg is string => Boolean(sg))));
+  }, [tracks, showSubgenreTabs]);
+
+  const visibleTracks = activeSubgenre ? tracks.filter((t) => t.subgenre === activeSubgenre) : tracks;
+
   return (
     <div className="mb-10">
       <h2 className="font-display text-xl mb-3">{title}</h2>
+
+      {subgenres.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          <button
+            type="button"
+            onClick={() => setActiveSubgenre(null)}
+            className={`font-mono text-xs px-3 py-1 rounded-full border ${
+              activeSubgenre === null
+                ? "border-gold bg-gold/10 text-gold"
+                : "border-paper/20 text-paper/60 hover:bg-paper/10"
+            }`}
+          >
+            All
+          </button>
+          {subgenres.map((sg) => (
+            <button
+              key={sg}
+              type="button"
+              onClick={() => setActiveSubgenre(sg)}
+              className={`font-mono text-xs px-3 py-1 rounded-full border ${
+                activeSubgenre === sg
+                  ? "border-gold bg-gold/10 text-gold"
+                  : "border-paper/20 text-paper/60 hover:bg-paper/10"
+              }`}
+            >
+              {sg}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="scroll-row flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
-        {tracks.map((track) => (
+        {visibleTracks.map((track) => (
           <div key={track.id} className="snap-start shrink-0 w-64">
             <TrackTile track={track} {...tileProps} />
           </div>

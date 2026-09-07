@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateTrack } from "@/app/actions/tracks";
-import { GENRES, MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE } from "@/lib/genres";
+import { MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE, subgenresFor } from "@/lib/genres";
 import { AI_DISCLOSURE_LEVELS, aiDisclosureBadge, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 import ContributorManager, { type Contributor } from "./ContributorManager";
 
@@ -21,6 +21,7 @@ type Track = {
   preview_url: string | null;
   playUrl: string | null;
   genre: string | null;
+  subgenre: string | null;
   custom_tag: string | null;
   ai_disclosure: AiDisclosureLevel;
 };
@@ -29,10 +30,12 @@ export default function TrackList({
   tracks,
   artistId,
   contributorsByTrack,
+  allGenres,
 }: {
   tracks: Track[];
   artistId: string;
   contributorsByTrack: Record<string, Contributor[]>;
+  allGenres: string[];
 }) {
   if (tracks.length === 0) return null;
 
@@ -44,6 +47,7 @@ export default function TrackList({
           track={track}
           artistId={artistId}
           contributors={contributorsByTrack[track.id] ?? []}
+          allGenres={allGenres}
         />
       ))}
     </div>
@@ -54,15 +58,18 @@ function TrackRow({
   track,
   artistId,
   contributors,
+  allGenres,
 }: {
   track: Track;
   artistId: string;
   contributors: Contributor[];
+  allGenres: string[];
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(track.title);
   const [price, setPrice] = useState((track.price_cents / 100).toFixed(2));
   const [genre, setGenre] = useState(track.genre ?? "");
+  const [subgenre, setSubgenre] = useState(track.subgenre ?? "");
   const [customTag, setCustomTag] = useState(track.custom_tag ?? "");
   const [aiDisclosure, setAiDisclosure] = useState(track.ai_disclosure);
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -71,6 +78,13 @@ function TrackRow({
   const [showEmbed, setShowEmbed] = useState(false);
   const [copied, setCopied] = useState(false);
   const router = useRouter();
+
+  const subgenreOptions = useMemo(() => subgenresFor(genre), [genre]);
+
+  function handleGenreChange(value: string) {
+    setGenre(value);
+    setSubgenre("");
+  }
 
   const embedSnippet = `<iframe src="${
     typeof window !== "undefined" ? window.location.origin : ""
@@ -114,6 +128,7 @@ function TrackRow({
       formData.set("title", title);
       formData.set("price", price);
       formData.set("genre", genre);
+      formData.set("subgenre", subgenre);
       formData.set("customTag", customTag);
       formData.set("aiDisclosure", aiDisclosure);
       if (coverUrl) formData.set("coverUrl", coverUrl);
@@ -198,19 +213,39 @@ function TrackRow({
           <label className="block font-mono text-xs text-paper/60 mb-1">Genre (optional)</label>
           <select
             value={genre}
-            onChange={(e) => setGenre(e.target.value)}
+            onChange={(e) => handleGenreChange(e.target.value)}
             className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper font-mono"
           >
             <option value="" className="bg-ink text-paper">
               No genre
             </option>
-            {GENRES.map((g) => (
+            {allGenres.map((g) => (
               <option key={g} value={g} className="bg-ink text-paper">
                 {g}
               </option>
             ))}
           </select>
         </div>
+
+        {subgenreOptions.length > 0 && (
+          <div>
+            <label className="block font-mono text-xs text-paper/60 mb-1">Subgenre (optional)</label>
+            <select
+              value={subgenre}
+              onChange={(e) => setSubgenre(e.target.value)}
+              className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper font-mono"
+            >
+              <option value="" className="bg-ink text-paper">
+                No subgenre
+              </option>
+              {subgenreOptions.map((sg) => (
+                <option key={sg} value={sg} className="bg-ink text-paper">
+                  {sg}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
           <label className="block font-mono text-xs text-paper/60 mb-1">
@@ -270,6 +305,7 @@ function TrackRow({
               setTitle(track.title);
               setPrice((track.price_cents / 100).toFixed(2));
               setGenre(track.genre ?? "");
+              setSubgenre(track.subgenre ?? "");
               setCustomTag(track.custom_tag ?? "");
               setAiDisclosure(track.ai_disclosure);
               setCoverFile(null);

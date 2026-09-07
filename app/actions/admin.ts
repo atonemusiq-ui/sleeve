@@ -62,3 +62,34 @@ export async function removeReportedVideo(formData: FormData) {
   revalidatePath("/admin/videos");
   revalidatePath(`/artists/${artistId}`);
 }
+
+// Genre suggestions (see app/actions/genres.ts's suggestGenre and
+// app/admin/genres/page.tsx) — approving one copies its name into
+// approved_genres (upsert, so re-approving an already-live name is a no-op)
+// so the upload form's dropdown and the storefront's rows pick it up
+// immediately; the suggestion row itself just moves out of the pending
+// queue rather than being deleted, so there's a record of who asked for it.
+export async function approveGenreSuggestion(formData: FormData) {
+  await requireAdmin();
+  const id = formData.get("id") as string;
+  const name = (formData.get("name") as string)?.trim();
+  const admin = createServiceRoleClient();
+
+  if (name) {
+    await admin.from("approved_genres").upsert({ name }, { onConflict: "name" });
+  }
+  await admin.from("genre_suggestions").update({ status: "approved" }).eq("id", id);
+
+  revalidatePath("/admin/genres");
+  revalidatePath("/dashboard");
+  revalidatePath("/");
+}
+
+export async function rejectGenreSuggestion(formData: FormData) {
+  await requireAdmin();
+  const id = formData.get("id") as string;
+  const admin = createServiceRoleClient();
+
+  await admin.from("genre_suggestions").update({ status: "rejected" }).eq("id", id);
+  revalidatePath("/admin/genres");
+}

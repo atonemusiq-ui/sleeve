@@ -13,6 +13,7 @@ import BioManager from "./BioManager";
 import GalleryManager from "./GalleryManager";
 import VideoManager from "./VideoManager";
 import type { VideoTier } from "@/lib/videoTiers";
+import { GENRES } from "@/lib/genres";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
@@ -46,10 +47,17 @@ export default async function DashboardPage() {
   const { data: tracks, error } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, created_at, audio_path, audio_url, cover_url, preview_url, genre, custom_tag, ai_disclosure"
+      "id, title, price_cents, created_at, audio_path, audio_url, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure"
     )
     .eq("artist_id", artist?.id)
     .order("created_at", { ascending: false });
+
+  // Admin-approved genre suggestions (see app/actions/genres.ts and
+  // app/admin/genres/page.tsx) sit alongside the fixed list from
+  // lib/genres.ts wherever a genre picker is offered — publicly readable,
+  // so the plain (non-service-role) client is fine here.
+  const { data: approvedGenreRows } = await supabase.from("approved_genres").select("name").order("name");
+  const allGenres = [...GENRES, ...(approvedGenreRows ?? []).map((g) => g.name)];
 
   // Audio lives in the private "track-audio" bucket now, so the artist's own
   // dashboard needs a signed URL to play it back — ownership was already
@@ -272,7 +280,7 @@ export default async function DashboardPage() {
         <BookingRequestsList requests={bookingRequests} />
       </div>
 
-      {artist?.id && <UploadForm artistId={artist.id} />}
+      {artist?.id && <UploadForm artistId={artist.id} allGenres={allGenres} />}
 
       {artist?.id && <AlbumManager tracks={albumEligibleTracks} albums={albums} />}
 
@@ -291,6 +299,7 @@ export default async function DashboardPage() {
           tracks={tracksWithPlayUrls}
           artistId={artist.id}
           contributorsByTrack={contributorsByTrack}
+          allGenres={allGenres}
         />
       )}
     </main>

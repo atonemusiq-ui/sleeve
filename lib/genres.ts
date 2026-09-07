@@ -6,7 +6,10 @@
 //
 // Genre is optional on a track — an artist can leave it unset — and is
 // validated against this fixed list server-side so the storefront's genre
-// filter always has a known, finite set of values to build pills from.
+// filter always has a known, finite set of values to build pills from. This
+// base list is intentionally frozen (an admin-approved suggestion is layered
+// on top instead, see approved_genres below) so existing tracks' genre
+// values never stop matching a row.
 export const GENRES = [
   "Gospel/Christian",
   "R&B/Soul",
@@ -42,3 +45,28 @@ export const COVERS_GENRE: Genre = "Covers";
 // word for their sound that isn't on the fixed genre list) — capped well
 // short of anything that'd break a storefront pill's layout.
 export const MAX_CUSTOM_TAG_LENGTH = 30;
+
+// Subgenre depth under a few top-level genres — optional, only offered on
+// the upload form when the chosen genre has an entry here, and validated
+// the same way as `genre` itself (app-layer only, see app/actions/upload.ts
+// and app/actions/tracks.ts) so this can grow without a migration either.
+export const SUBGENRES: Partial<Record<Genre, readonly string[]>> = {
+  "Hip-Hop/Rap": ["Gospel Rap", "West Coast", "New York", "Positive/Conscious"],
+  "R&B/Soul": ["R&B 80s", "R&B 90s", "R&B 2000s"],
+  Rock: ["Classic Rock", "Alternative/Indie", "Hard Rock/Metal"],
+  Country: ["Love Songs"],
+};
+
+export function subgenresFor(genre: string | null | undefined): readonly string[] {
+  if (!genre || !isValidGenre(genre)) return [];
+  return SUBGENRES[genre] ?? [];
+}
+
+export function isValidSubgenre(genre: string | null | undefined, subgenre: string | null | undefined): boolean {
+  if (!subgenre) return true; // subgenre is always optional
+  return subgenresFor(genre).includes(subgenre);
+}
+
+// A suggested genre name goes through /admin/genres review before it's
+// selectable — see genre_suggestions/approved_genres in supabase/schema.sql.
+export const MAX_GENRE_SUGGESTION_LENGTH = 40;

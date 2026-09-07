@@ -1,9 +1,10 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { revalidatePath } from "next/cache";
 import { isAllowedTrackPrice, trackPriceError } from "@/lib/trackPricing";
-import { isValidGenre, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
+import { isValidGenre, isValidSubgenre, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
 import { isAiDisclosureLevel, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 
 export type TrackActionResult = { error?: string };
@@ -20,6 +21,7 @@ export async function updateTrack(formData: FormData): Promise<TrackActionResult
   const priceCents = Math.round(parseFloat(formData.get("price") as string) * 100);
   const coverUrl = (formData.get("coverUrl") as string) || null;
   const genre = (formData.get("genre") as string) || null;
+  const subgenre = (formData.get("subgenre") as string) || null;
   const customTag = (formData.get("customTag") as string)?.trim() || null;
   const aiDisclosure = formData.get("aiDisclosure") as string;
 
@@ -28,7 +30,12 @@ export async function updateTrack(formData: FormData): Promise<TrackActionResult
     return { error: trackPriceError() };
   }
   if (genre && !isValidGenre(genre)) {
-    return { error: "That's not a recognized genre." };
+    const admin = createServiceRoleClient();
+    const { data: approved } = await admin.from("approved_genres").select("id").eq("name", genre).maybeSingle();
+    if (!approved) return { error: "That's not a recognized genre." };
+  }
+  if (subgenre && !isValidSubgenre(genre, subgenre)) {
+    return { error: "That's not a recognized subgenre for this genre." };
   }
   if (customTag && customTag.length > MAX_CUSTOM_TAG_LENGTH) {
     return { error: `Tag must be ${MAX_CUSTOM_TAG_LENGTH} characters or fewer.` };
@@ -62,12 +69,14 @@ export async function updateTrack(formData: FormData): Promise<TrackActionResult
     price_cents: number;
     cover_url?: string;
     genre: string | null;
+    subgenre: string | null;
     custom_tag: string | null;
     ai_disclosure: AiDisclosureLevel;
   } = {
     title,
     price_cents: priceCents,
     genre,
+    subgenre,
     custom_tag: customTag,
     ai_disclosure: aiDisclosure,
   };
