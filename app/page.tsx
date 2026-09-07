@@ -6,6 +6,7 @@ import Link from "next/link";
 import StorefrontGrid from "./StorefrontGrid";
 import HeroSection from "./HeroSection";
 import HowItWorks from "./HowItWorks";
+import FounderStory from "./FounderStory";
 import TrustFooter from "./TrustFooter";
 
 export default async function StorefrontPage() {
@@ -146,6 +147,7 @@ export default async function StorefrontPage() {
       {!user && (
         <>
           <HowItWorks />
+          <FounderStory />
           <TrustFooter />
         </>
       )}
