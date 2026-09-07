@@ -120,7 +120,7 @@ export default async function StorefrontPage() {
       )}
 
       {!error && (!tracks || tracks.length === 0) && (
-        <p className="text-paper/50 font-mono text-sm">No tracks published yet.</p>
+        <p className="text-paper/50 font-mono text-sm">No tracks released yet.</p>
       )}
 
       {!error && tracks && tracks.length > 0 && (

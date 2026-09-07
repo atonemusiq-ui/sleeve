@@ -86,7 +86,7 @@ export default function UploadForm({ artistId }: { artistId: string }) {
     }
 
     if (!rightsAttested) {
-      setError("Please confirm you own the rights to this track before publishing.");
+      setError("Please confirm you own the rights to this track before releasing.");
       return;
     }
 
@@ -209,14 +209,14 @@ export default function UploadForm({ artistId }: { artistId: string }) {
       onSubmit={handleSubmit}
       className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-4"
     >
-      <h2 className="font-display text-xl">Publish a track</h2>
+      <h2 className="font-display text-xl">Release a track</h2>
 
       {error && <p className="text-rust font-mono text-sm">{error}</p>}
 
       {flagged !== null && (
         <p className="text-rust font-mono text-sm">
           This looks very similar to a track already on Fyby ({Math.round(flagged * 100)}% match) —
-          it's been held for review instead of published. If this is a mistake (a re-upload of your
+          it's been held for review instead of released. If this is a mistake (a re-upload of your
           own track, a false positive), reach out and we'll sort it out.
         </p>
       )}
@@ -264,7 +264,7 @@ export default function UploadForm({ artistId }: { artistId: string }) {
         </select>
         {genre === COVERS_GENRE && (
           <p className="font-mono text-xs text-rust mt-1.5">
-            Covers require crediting and paying the original songwriter(s)/producer(s). Publish
+            Covers require crediting and paying the original songwriter(s)/producer(s). Release
             this track, then add them under Contributors on your dashboard with their royalty
             share — sales are blocked until you do.
           </p>
@@ -410,7 +410,7 @@ export default function UploadForm({ artistId }: { artistId: string }) {
         disabled={uploading}
         className="mt-2 bg-gold text-ink font-mono text-base font-medium rounded-lg px-6 py-3.5 hover:opacity-90 disabled:opacity-50"
       >
-        {uploading ? "Publishing..." : "Publish"}
+        {uploading ? "Releasing..." : "Release"}
       </button>
     </form>
   );

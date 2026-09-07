@@ -596,3 +596,66 @@ alter table artists add column if not exists gallery_urls text[] not null defaul
 -- none.
 -- ============================================================================
 update tracks set cover_url = '/fyby-default-cover.svg' where cover_url is null;
+
+-- ============================================================================
+-- Artist bio music video — a paid add-on (see app/actions/video.ts and
+-- lib/videoTiers.ts for the three Stripe-unlocked tiers: link, upload,
+-- both). video_tier is set by the webhook once the unlock payment
+-- completes; bio_video_url/bio_video_type describe whatever the artist has
+-- actually added, if anything, under that tier. video_content_agreed
+-- records that they accepted the content policy (lib/videoPolicy.ts) the
+-- last time they saved a video.
+-- ============================================================================
+alter table artists add column if not exists video_tier text check (video_tier in ('link', 'upload', 'both'));
+alter table artists add column if not exists bio_video_url text;
+alter table artists add column if not exists bio_video_type text check (bio_video_type in ('link', 'upload'));
+alter table artists add column if not exists video_content_agreed boolean not null default false;
+alter table artists add column if not exists video_unlocked_at timestamptz;
+
+-- Enforcement side of the content policy: anyone (fan or not) can report a
+-- video from the public artist page (app/artists/[id]/ReportVideoButton.tsx
+-- -> app/actions/video.ts's reportVideo); only an admin can read/act on
+-- reports (app/admin/videos/page.tsx, via the service-role client — same
+-- pattern as flagged_uploads, so no select/update policy is needed here).
+create table if not exists reported_videos (
+  id uuid primary key default gen_random_uuid(),
+  artist_id uuid not null references artists(id) on delete cascade,
+  video_url text,
+  status text not null default 'pending' check (status in ('pending', 'dismissed', 'removed')),
+  created_at timestamptz not null default now()
+);
+
+alter table reported_videos enable row level security;
+
+drop policy if exists "anyone can report a video" on reported_videos;
+create policy "anyone can report a video"
+  on reported_videos for insert
+  with check (true);
+
+-- Uploaded bio videos live here (the "link" tier never touches storage at
+-- all — it's just a URL to someone else's host). Public + folder-scoped RLS,
+-- same shape as the "artist-photos" bucket above.
+insert into storage.buckets (id, name, public)
+values ('artist-videos', 'artist-videos', true)
+on conflict (id) do update set public = excluded.public;
+
+drop policy if exists "artists upload their own bio video" on storage.objects;
+create policy "artists upload their own bio video"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'artist-videos'
+    and (storage.foldername(name))[1] in (select id::text from artists where user_id = auth.uid())
+  );
+
+drop policy if exists "bio videos are publicly readable" on storage.objects;
+create policy "bio videos are publicly readable"
+  on storage.objects for select
+  using (bucket_id = 'artist-videos');
+
+drop policy if exists "artists delete their own bio video" on storage.objects;
+create policy "artists delete their own bio video"
+  on storage.objects for delete
+  using (
+    bucket_id = 'artist-videos'
+    and (storage.foldername(name))[1] in (select id::text from artists where user_id = auth.uid())
+  );

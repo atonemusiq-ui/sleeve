@@ -47,9 +47,14 @@ export default async function FlaggedUploadsPage() {
     <main className="max-w-4xl mx-auto px-6 py-12">
       <header className="flex items-center justify-between mb-12">
         <h1 className="font-display text-3xl text-gold">Flagged uploads</h1>
-        <Link href="/dashboard" className="font-mono text-sm hover:text-gold">
-          Back to dashboard
-        </Link>
+        <div className="flex items-center gap-4 font-mono text-sm">
+          <Link href="/admin/videos" className="hover:text-gold">
+            Reported videos
+          </Link>
+          <Link href="/dashboard" className="hover:text-gold">
+            Back to dashboard
+          </Link>
+        </div>
       </header>
 
       <div className="ticket-divider mb-10" />

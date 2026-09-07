@@ -5,13 +5,15 @@ import { aiDisclosureBadge } from "@/lib/aiDisclosure";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import BookingForm from "./BookingForm";
+import ReportVideoButton from "./ReportVideoButton";
+import VideoEmbed from "@/app/VideoEmbed";
 
 export default async function ArtistPage({ params }: { params: { id: string } }) {
   const supabase = createClient();
 
   const { data: artist } = await supabase
     .from("artists")
-    .select("id, bio, bio_photo_url, gallery_urls, profiles ( display_name )")
+    .select("id, bio, bio_photo_url, gallery_urls, bio_video_url, bio_video_type, profiles ( display_name )")
     .eq("id", params.id)
     .single();
 
@@ -85,10 +87,17 @@ export default async function ArtistPage({ params }: { params: { id: string } })
         </>
       )}
 
+      {(artist as any).bio_video_url && (artist as any).bio_video_type && (
+        <div className="mb-10">
+          <VideoEmbed type={(artist as any).bio_video_type} url={(artist as any).bio_video_url} />
+          <ReportVideoButton artistId={artist.id} videoUrl={(artist as any).bio_video_url} />
+        </div>
+      )}
+
       <div className="ticket-divider mb-10" />
 
       {(!tracks || tracks.length === 0) && (
-        <p className="text-paper/50 font-mono text-sm">No tracks published yet.</p>
+        <p className="text-paper/50 font-mono text-sm">No tracks released yet.</p>
       )}
 
       {tracks && tracks.length > 0 && (

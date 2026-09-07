@@ -1,7 +1,7 @@
 const STEPS = [
   {
     title: "1. Upload your music",
-    body: "Add your tracks, set a price, and publish — takes minutes, no label required.",
+    body: "Add your tracks, set a price, and release — takes minutes, no label required.",
   },
   {
     title: "2. Fans buy directly",

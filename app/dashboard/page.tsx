@@ -11,6 +11,8 @@ import type { Contributor } from "./ContributorManager";
 import BookingRequestsList, { type BookingRequest } from "./BookingRequestsList";
 import BioManager from "./BioManager";
 import GalleryManager from "./GalleryManager";
+import VideoManager from "./VideoManager";
+import type { VideoTier } from "@/lib/videoTiers";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
@@ -37,7 +39,7 @@ export default async function DashboardPage() {
 
   const { data: artist } = await supabase
     .from("artists")
-    .select("id, stripe_account_id, bio, bio_photo_url, gallery_urls")
+    .select("id, stripe_account_id, bio, bio_photo_url, gallery_urls, video_tier, bio_video_url, bio_video_type")
     .eq("user_id", user.id)
     .single();
 
@@ -203,7 +205,7 @@ export default async function DashboardPage() {
               preview it
             </Link>
           ) : (
-            "preview it once you have a track published"
+            "preview it once you have a track released"
           )}.
         </p>
         {artist?.id && (
@@ -223,11 +225,34 @@ export default async function DashboardPage() {
               preview it
             </Link>
           ) : (
-            "preview it once you have a track published"
+            "preview it once you have a track released"
           )}.
         </p>
         {artist?.id && (
           <GalleryManager artistId={artist.id} galleryUrls={(artist as any).gallery_urls ?? []} />
+        )}
+      </div>
+
+      <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col gap-3">
+        <h2 className="font-display text-lg">Music video</h2>
+        <p className="font-mono text-xs text-paper/60">
+          Shown on your public artist page — {artist?.id ? (
+            <Link href={`/artists/${artist.id}`} className="text-gold">
+              preview it
+            </Link>
+          ) : (
+            "preview it once you have a track released"
+          )}
+          . A paid add-on since video costs more to host than a photo — pick whichever tier fits how
+          you want to share it.
+        </p>
+        {artist?.id && (
+          <VideoManager
+            artistId={artist.id}
+            videoTier={((artist as any).video_tier as VideoTier | null) ?? null}
+            bioVideoUrl={(artist as any).bio_video_url ?? null}
+            bioVideoType={(artist as any).bio_video_type ?? null}
+          />
         )}
       </div>
 
@@ -240,7 +265,7 @@ export default async function DashboardPage() {
                 preview it
               </Link>
             ) : (
-              "preview it once you have a track published"
+              "preview it once you have a track released"
             )}.
           </p>
         </div>
@@ -257,7 +282,7 @@ export default async function DashboardPage() {
 
       {!error && (!tracks || tracks.length === 0) && (
         <p className="text-paper/50 font-mono text-sm">
-          Nothing published yet. Use the form above to publish your first track.
+          Nothing released yet. Use the form above to release your first track.
         </p>
       )}
 

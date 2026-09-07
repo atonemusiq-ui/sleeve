@@ -117,6 +117,34 @@ export async function POST(req: Request) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
 
+    // The bio video feature (app/actions/video.ts's startVideoUnlockCheckout)
+    // is a flat Fyby platform fee, not a fan purchase — no track/album, no
+    // artist payout transfer, just unlocking a tier on the artist's own row.
+    // Handled before the track/album branches below since it has neither
+    // track_id nor album_id in its metadata.
+    if (session.metadata?.type === "video_unlock") {
+      const artistId = session.metadata?.artist_id ?? null;
+      const tier = session.metadata?.tier ?? null;
+
+      if (!artistId || !tier) {
+        console.error("Video-unlock webhook missing expected metadata:", session.metadata);
+        return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
+      }
+
+      const supabase = createServiceRoleClient();
+      const { error } = await supabase
+        .from("artists")
+        .update({ video_tier: tier, video_unlocked_at: new Date().toISOString() })
+        .eq("id", artistId);
+
+      if (error) {
+        console.error("Failed to unlock video tier:", error.message);
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+
+      return NextResponse.json({ received: true });
+    }
+
     const trackId = session.metadata?.track_id ?? null;
     const albumId = session.metadata?.album_id ?? null;
     const fanId = session.metadata?.fan_id ?? null;

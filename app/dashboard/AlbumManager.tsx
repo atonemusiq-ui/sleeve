@@ -53,7 +53,7 @@ export default function AlbumManager({
 
       {tracks.length === 0 && (
         <p className="font-mono text-xs text-paper/50">
-          Publish at least one track before you can bundle an album.
+          Release at least one track before you can bundle an album.
         </p>
       )}
 
@@ -95,7 +95,7 @@ function AlbumRow({ album, onEdit }: { album: Album; onEdit: () => void }) {
   const router = useRouter();
 
   async function handleDelete() {
-    if (!window.confirm(`Take down the album "${album.title}"? Individual tracks stay published.`)) {
+    if (!window.confirm(`Take down the album "${album.title}"? Individual tracks stay released.`)) {
       return;
     }
     setBusy(true);

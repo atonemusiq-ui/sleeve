@@ -128,7 +128,7 @@ export default function StorefrontGrid({
           </div>
         )
       ) : tracks.length === 0 ? (
-        <p className="text-paper/50 font-mono text-sm">No tracks published yet.</p>
+        <p className="text-paper/50 font-mono text-sm">No tracks released yet.</p>
       ) : (
         <div>
           {newReleases.length > 0 && (
