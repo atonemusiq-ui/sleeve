@@ -16,6 +16,20 @@ export default function TrustFooter() {
       >
         Start Selling
       </Link>
+
+      <p className="font-mono text-[11px] text-paper/30 mt-8">
+        <Link href="/terms" className="hover:text-gold">
+          Terms
+        </Link>{" "}
+        ·{" "}
+        <Link href="/privacy" className="hover:text-gold">
+          Privacy
+        </Link>{" "}
+        ·{" "}
+        <Link href="/artist-agreement" className="hover:text-gold">
+          Artist Agreement
+        </Link>
+      </p>
     </section>
   );
 }

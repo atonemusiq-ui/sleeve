@@ -45,7 +45,7 @@ export default function NotificationBell({ notifications }: { notifications: Not
               reaching for extra client-side event wiring where a simpler DOM
               trick does the job. */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-ink border border-paper/20 rounded-lg shadow-lg z-50">
+          <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-[calc(100vw-3rem)] max-w-80 max-h-96 overflow-y-auto bg-ink border border-paper/20 rounded-lg shadow-lg z-50">
             <div className="flex items-center justify-between px-4 py-3 border-b border-paper/10">
               <span className="font-display text-sm">Notifications</span>
               {unreadCount > 0 && (

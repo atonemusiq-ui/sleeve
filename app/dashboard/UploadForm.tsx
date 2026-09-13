@@ -416,7 +416,7 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
             <p className="font-mono text-xs text-paper">
               We found artwork already attached to this song file — use it as the cover?
             </p>
-            <div className="flex gap-3 mt-2">
+            <div className="flex flex-wrap gap-3 mt-2">
               <button
                 type="button"
                 onClick={acceptEmbeddedArtwork}

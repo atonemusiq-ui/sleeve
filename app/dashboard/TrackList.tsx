@@ -337,7 +337,7 @@ function TrackRow({
           songwriter/producer as a contributor below (with their royalty share).
         </p>
       )}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="w-12 h-12 rounded bg-paper/10 flex-shrink-0 overflow-hidden">
           {track.cover_url ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -348,9 +348,9 @@ function TrackRow({
             </div>
           )}
         </div>
-        <span className="font-display text-lg flex-1">{track.title}</span>
+        <span className="font-display text-lg flex-1 min-w-[120px]">{track.title}</span>
         <span className="font-mono text-forest">${(track.price_cents / 100).toFixed(2)}</span>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setEditing(true)}
             className="font-mono text-xs px-2 py-1 rounded border border-paper/20 hover:bg-paper/10"

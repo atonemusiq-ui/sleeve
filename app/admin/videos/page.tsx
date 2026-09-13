@@ -38,9 +38,9 @@ export default async function ReportedVideosPage() {
 
   return (
     <main className="max-w-4xl mx-auto px-6 py-12">
-      <header className="flex items-center justify-between mb-12">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-12">
         <h1 className="font-display text-3xl text-gold">Reported videos</h1>
-        <div className="flex items-center gap-4 font-mono text-sm">
+        <div className="flex flex-wrap items-center gap-4 font-mono text-sm">
           <Link href="/admin/flagged" className="hover:text-gold">
             Flagged uploads
           </Link>

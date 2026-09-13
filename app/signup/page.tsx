@@ -92,6 +92,27 @@ export default function SignupPage({
         </button>
       </form>
 
+      <p className="font-mono text-[11px] text-paper/40 mt-4 text-center">
+        By signing up, you agree to Fyby&apos;s{" "}
+        <Link href="/terms" className="text-gold hover:underline">
+          Terms
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="text-gold hover:underline">
+          Privacy Policy
+        </Link>
+        {cameFromBuying ? null : (
+          <>
+            {" "}
+            — Artists also agree to the{" "}
+            <Link href="/artist-agreement" className="text-gold hover:underline">
+              Artist Agreement
+            </Link>
+          </>
+        )}
+        .
+      </p>
+
       <p className="font-mono text-xs text-paper/50 mt-6">
         Already have an account?{" "}
         <a

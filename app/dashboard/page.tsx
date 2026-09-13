@@ -83,12 +83,12 @@ export default async function DashboardPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
-      <header className="flex items-center justify-between mb-12">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-12">
         <div>
           <h1 className="font-display text-3xl text-gold">Artist Studio</h1>
           <p className="font-mono text-sm text-paper/60 mt-1">{profile.display_name}</p>
         </div>
-        <div className="flex items-center gap-4 font-mono text-sm">
+        <div className="flex flex-wrap items-center gap-4 font-mono text-sm">
           <NotificationBell notifications={notificationRows ?? []} />
           {artist?.id && (
             <Link href={`/artists/${artist.id}`} className="hover:text-gold">
