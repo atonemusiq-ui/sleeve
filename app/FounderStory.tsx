@@ -2,9 +2,11 @@
 // it works" and before the trust footer per the Phase 5 landing-page brief.
 // Static, hardcoded copy — this doesn't change per artist, so there's no
 // database read behind it, just the founder's own story in his own words.
+// The id lets other pages (e.g. app/login/page.tsx's founder-quote nod)
+// deep-link straight to this section with /#why-i-built-this.
 export default function FounderStory() {
   return (
-    <section className="mb-16 border-t border-paper/15 pt-12">
+    <section id="why-i-built-this" className="mb-16 border-t border-paper/15 pt-12 scroll-mt-8">
       <h2 className="font-display text-2xl mb-6">Why I Built This</h2>
       <div className="max-w-2xl font-body text-paper/80 leading-relaxed flex flex-col gap-4">
         <p>

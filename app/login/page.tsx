@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { login } from "@/app/actions/auth";
+import FybyLogo from "@/app/FybyLogo";
 
 export default function LoginPage({
   searchParams,
@@ -7,7 +9,15 @@ export default function LoginPage({
 }) {
   return (
     <main className="max-w-md mx-auto px-6 py-16">
-      <h1 className="font-display text-3xl text-gold mb-8">Log in</h1>
+      <Link href="/" className="flex items-center justify-center gap-2.5 mb-8">
+        <FybyLogo className="h-9 w-9" />
+        <span className="font-display text-3xl text-gold leading-none">Fyby</span>
+      </Link>
+
+      <h1 className="font-display text-2xl text-paper text-center mb-2">Welcome back</h1>
+      <p className="font-mono text-xs text-paper/50 text-center mb-8">
+        Log in to keep selling — or keep supporting the artists you love.
+      </p>
 
       {searchParams.message && (
         <p className="font-mono text-sm text-forest mb-6">{searchParams.message}</p>
@@ -62,6 +72,23 @@ export default function LoginPage({
         <a href="/forgot-password" className="text-gold">
           Forgot your password?
         </a>
+      </p>
+
+      {/* A small nod to the founder story rather than the full essay — this
+          page's job is to get someone back in quickly, so we link to the
+          full "Why I Built This" section on the homepage instead of
+          reproducing it here. */}
+      <div className="ticket-divider my-10" />
+
+      <p className="font-body text-paper/70 text-sm leading-relaxed italic">
+        &quot;I built Fyby so independent artists can sell directly to the people who actually
+        want to support them — no label taking a cut, no algorithm deciding who gets heard.&quot;
+      </p>
+      <p className="font-mono text-xs text-gold mt-2">
+        — Anthony &quot;A-Tone&quot; Bryant, Founder ·{" "}
+        <Link href="/#why-i-built-this" className="underline hover:text-gold/80">
+          Read the full story
+        </Link>
       </p>
     </main>
   );

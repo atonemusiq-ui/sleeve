@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { signup } from "@/app/actions/auth";
+import FybyLogo from "@/app/FybyLogo";
 
 export default function SignupPage({
   searchParams,
@@ -14,7 +16,15 @@ export default function SignupPage({
 
   return (
     <main className="max-w-md mx-auto px-6 py-16">
-      <h1 className="font-display text-3xl text-gold mb-8">Create your account</h1>
+      <Link href="/" className="flex items-center justify-center gap-2.5 mb-8">
+        <FybyLogo className="h-9 w-9" />
+        <span className="font-display text-3xl text-gold leading-none">Fyby</span>
+      </Link>
+
+      <h1 className="font-display text-2xl text-paper text-center mb-2">Create your account</h1>
+      <p className="font-mono text-xs text-paper/50 text-center mb-8">
+        Join Fyby to start selling your music, or supporting the artists you love.
+      </p>
 
       {searchParams.error && (
         <p className="font-mono text-sm text-rust mb-6">{searchParams.error}</p>
