@@ -26,7 +26,7 @@ export default function BookingForm({ artistId }: { artistId: string }) {
 
   if (sent) {
     return (
-      <div className="border border-forest/40 rounded-lg p-6 bg-forest/10">
+      <div className="border border-forest/40 rounded-lg p-4 bg-forest/10">
         <p className="font-mono text-sm text-forest">
           Thanks — your booking request has been sent. The artist will follow up at the email you
           provided.
@@ -36,15 +36,7 @@ export default function BookingForm({ artistId }: { artistId: string }) {
   }
 
   return (
-    <form action={handleSubmit} className="border border-paper/15 rounded-lg p-6 flex flex-col gap-4">
-      <div>
-        <h2 className="font-display text-xl">Book this artist</h2>
-        <p className="font-mono text-xs text-paper/60 mt-1">
-          Send a booking inquiry straight to the artist — they'll reach out at the email you give
-          below.
-        </p>
-      </div>
-
+    <form action={handleSubmit} className="flex flex-col gap-4">
       {error && <p className="text-rust font-mono text-sm">{error}</p>}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

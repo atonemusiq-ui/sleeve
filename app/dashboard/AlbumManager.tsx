@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createAlbum, updateAlbum, deleteAlbum } from "@/app/actions/albums";
-import CollapsibleSection from "./CollapsibleSection";
+import CollapsibleSection from "@/app/CollapsibleSection";
 
 export type AlbumTrackRef = { id: string; title: string };
 export type Album = {

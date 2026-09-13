@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 
 // A native <details>/<summary> disclosure panel — no client JS required, so
-// it works fine wrapped around either a server component (most of the
-// dashboard) or a client one (AlbumManager). Every dashboard panel goes
-// through this so an artist can collapse whatever they're not actively
-// using instead of scrolling past a wall of empty/rarely-touched sections.
+// it works fine wrapped around either a server component (most dashboard
+// panels, the public artist page) or a client one (AlbumManager). Shared
+// between the Artist Studio dashboard and the public artist page so both
+// can collapse sections a visitor isn't actively using instead of piling up
+// a wall of always-expanded boxes.
 // `open` (not React's `defaultOpen`, which doesn't apply to <details>) sets
 // only the *initial* state — with no onToggle handler this stays fully
 // uncontrolled afterward, so a click just toggles it like any native

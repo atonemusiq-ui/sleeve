@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import BookingForm from "./BookingForm";
 import ReportVideoButton from "./ReportVideoButton";
 import VideoEmbed from "@/app/VideoEmbed";
+import CollapsibleSection from "@/app/CollapsibleSection";
 
 export default async function ArtistPage({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -176,7 +177,12 @@ export default async function ArtistPage({ params }: { params: { id: string } })
 
       <div className="ticket-divider my-10" />
 
-      <BookingForm artistId={artist.id} />
+      <CollapsibleSection
+        title="Book this artist"
+        description="Send a booking inquiry straight to the artist — they'll reach out at the email you give below."
+      >
+        <BookingForm artistId={artist.id} />
+      </CollapsibleSection>
     </main>
   );
 }

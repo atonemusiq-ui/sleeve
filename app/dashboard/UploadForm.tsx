@@ -11,7 +11,7 @@ import { MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE, subgenresFor, MAX_GENRE_SUGGESTION
 import { AI_DISCLOSURE_LEVELS, RIGHTS_ATTESTATION_TEXT, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 import { extractEmbeddedArtwork, type EmbeddedArtwork } from "@/lib/extractEmbeddedArtwork";
 import { DEFAULT_TRACK_COVER_URL } from "@/lib/defaultCover";
-import CollapsibleSection from "./CollapsibleSection";
+import CollapsibleSection from "@/app/CollapsibleSection";
 
 // Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
 // app/actions/tracks.ts, which is what actually enforces this server-side.
