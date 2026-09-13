@@ -17,6 +17,8 @@ export type Contributor = {
   publishing_info: string | null;
   percentage: number;
   owedCents: number;
+  stripe_account_id: string | null;
+  onboarding_token: string;
 };
 
 export default function ContributorManager({
@@ -31,7 +33,26 @@ export default function ContributorManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const router = useRouter();
+
+  // Contributors don't have a Fyby login, so there's no in-app way to send
+  // them this — the artist copies it and shares it themselves (text, email,
+  // whatever). It's a durable link (see supabase/schema.sql's
+  // onboarding_token comment): safe to send once and reuse if they don't
+  // finish in one sitting.
+  async function handleCopyPayoutLink(contributorId: string, token: string) {
+    const url = `${window.location.origin}/contributor-onboard/${token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(contributorId);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      // Clipboard access can be denied by the browser — nothing else to do
+      // here short of showing the raw URL, which isn't worth the UI clutter
+      // for what should be a rare failure.
+    }
+  }
 
   const totalPercentage = contributors.reduce((sum, c) => sum + Number(c.percentage), 0);
 
@@ -96,6 +117,10 @@ export default function ContributorManager({
 
       {open && (
         <div className="mt-3 flex flex-col gap-2">
+          <p className="font-mono text-[11px] text-paper/40">
+            Send a contributor their payout link and future sales pay them directly via Stripe —
+            no more manual &quot;mark as paid&quot;.
+          </p>
           {error && <p className="text-rust font-mono text-xs">{error}</p>}
 
           {contributors.map((c) =>
@@ -135,6 +160,21 @@ export default function ContributorManager({
                   {c.email && <span className="font-mono text-xs text-paper/50 ml-2">{c.email}</span>}
                   <div className="font-mono text-xs text-paper/50 mt-0.5">
                     Owed: ${(c.owedCents / 100).toFixed(2)}
+                  </div>
+                  <div className="mt-1">
+                    {c.stripe_account_id ? (
+                      <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border border-forest/40 text-forest">
+                        Paid automatically via Stripe
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPayoutLink(c.id, c.onboarding_token)}
+                        className="font-mono text-[10px] px-2 py-0.5 rounded-full border border-gold/40 text-gold hover:bg-gold/10"
+                      >
+                        {copiedId === c.id ? "Link copied!" : "Copy payout link"}
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">

@@ -46,6 +46,9 @@ export default async function GenreSuggestionsPage() {
           <Link href="/admin/videos" className="hover:text-gold">
             Reported videos
           </Link>
+          <Link href="/admin/verifications" className="hover:text-gold">
+            Verified Human+AI
+          </Link>
           <Link href="/dashboard" className="hover:text-gold">
             Back to dashboard
           </Link>

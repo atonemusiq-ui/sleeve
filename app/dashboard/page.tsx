@@ -9,6 +9,7 @@ import ShareCard from "./ShareCard";
 import GalleryManager from "./GalleryManager";
 import VideoManager from "./VideoManager";
 import CollapsibleSection from "@/app/CollapsibleSection";
+import NotificationBell from "@/app/NotificationBell";
 import type { VideoTier } from "@/lib/videoTiers";
 
 export default async function DashboardPage() {
@@ -64,6 +65,16 @@ export default async function DashboardPage() {
 
   const bookingRequests: BookingRequest[] = (bookingRows ?? []) as BookingRequest[];
 
+  // New sale / booking / refund alerts (app/api/webhooks/stripe/route.ts,
+  // app/actions/booking.ts) — most recent first, capped since this is a
+  // dropdown, not its own page.
+  const { data: notificationRows } = await supabase
+    .from("notifications")
+    .select("id, title, body, link, read, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
   // Small status hints shown in each collapsed section's header, and used to
   // decide what should greet the artist already open vs. tucked away.
   const galleryUrls: string[] = (artist as any)?.gallery_urls ?? [];
@@ -78,6 +89,7 @@ export default async function DashboardPage() {
           <p className="font-mono text-sm text-paper/60 mt-1">{profile.display_name}</p>
         </div>
         <div className="flex items-center gap-4 font-mono text-sm">
+          <NotificationBell notifications={notificationRows ?? []} />
           {artist?.id && (
             <Link href={`/artists/${artist.id}`} className="hover:text-gold">
               View public profile

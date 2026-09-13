@@ -93,3 +93,38 @@ export async function rejectGenreSuggestion(formData: FormData) {
   await admin.from("genre_suggestions").update({ status: "rejected" }).eq("id", id);
   revalidatePath("/admin/genres");
 }
+
+// "Verified Human+AI" review queue (see app/actions/verification.ts's
+// startVerificationCheckout, which is what moves a track to 'pending' after
+// the review fee is paid, and app/admin/verifications/page.tsx). Approving
+// or rejecting doesn't touch payment — the fee already covers the review
+// itself, not a guaranteed outcome (see that file's comment).
+export async function approveTrackVerification(formData: FormData) {
+  await requireAdmin();
+  const id = formData.get("id") as string;
+  const admin = createServiceRoleClient();
+
+  await admin
+    .from("tracks")
+    .update({ verification_status: "approved", verification_decided_at: new Date().toISOString() })
+    .eq("id", id);
+
+  revalidatePath("/admin/verifications");
+  revalidatePath("/");
+  revalidatePath("/ai-music");
+  revalidatePath("/dashboard/catalog");
+}
+
+export async function rejectTrackVerification(formData: FormData) {
+  await requireAdmin();
+  const id = formData.get("id") as string;
+  const admin = createServiceRoleClient();
+
+  await admin
+    .from("tracks")
+    .update({ verification_status: "rejected", verification_decided_at: new Date().toISOString() })
+    .eq("id", id);
+
+  revalidatePath("/admin/verifications");
+  revalidatePath("/dashboard/catalog");
+}

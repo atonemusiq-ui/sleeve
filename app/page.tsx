@@ -6,8 +6,10 @@ import Link from "next/link";
 import StorefrontGrid from "./StorefrontGrid";
 import HeroSection from "./HeroSection";
 import HowItWorks from "./HowItWorks";
-import FounderStory from "./FounderStory";
 import TrustFooter from "./TrustFooter";
+import FounderStory from "./FounderStory";
+import FeaturedTracks from "./FeaturedTracks";
+import FybyLogo from "./FybyLogo";
 
 export default async function StorefrontPage() {
   const supabase = createClient();
@@ -15,7 +17,7 @@ export default async function StorefrontPage() {
   const { data: tracks, error } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, created_at, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, artists ( id, bio, user_id, profiles ( display_name ) )"
+      "id, title, price_cents, created_at, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, verification_status, artists ( id, bio, user_id, profiles ( display_name ) )"
     )
     .order("created_at", { ascending: false });
 
@@ -84,10 +86,16 @@ export default async function StorefrontPage() {
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
       <header className="flex items-center justify-between mb-12">
-        <h1 className="font-display text-3xl text-gold">Fyby</h1>
+        <div className="flex items-center gap-2.5">
+          <FybyLogo className="h-8 w-8" />
+          <h1 className="font-display text-3xl text-gold leading-none">Fyby</h1>
+        </div>
         <nav className="font-mono text-sm">
           {user ? (
             <div className="flex gap-4">
+              <Link href="/ai-music" className="hover:text-gold">
+                AI Music
+              </Link>
               <Link href="/library" className="hover:text-gold">
                 My Music
               </Link>
@@ -99,6 +107,9 @@ export default async function StorefrontPage() {
             </div>
           ) : (
             <div className="flex gap-4">
+              <Link href="/ai-music" className="hover:text-gold">
+                AI Music
+              </Link>
               <Link href="/login" className="hover:text-gold">
                 Log in
               </Link>
@@ -115,10 +126,22 @@ export default async function StorefrontPage() {
           users (fans and artists alike) go straight to browsing below. */}
       {!user && <HeroSection />}
 
+      {!user && normalizedTracks.length > 0 && (
+        <FeaturedTracks
+          tracks={normalizedTracks.slice(0, 3)}
+          startCheckout={startCheckout}
+          isLoggedIn={Boolean(user)}
+        />
+      )}
+
       <p className="text-paper/40 font-mono text-xs mb-10 max-w-xl">
         Artists disclose it themselves when a track involves AI-generated vocals, instrumentation,
-        or production — look for the "AI-Assisted"/"Fully AI-Generated" label on those tracks, or
-        browse the AI Music row below.
+        or production — look for the &quot;AI-Assisted&quot;/&quot;Fully AI-Generated&quot; label
+        on those tracks, browse the AI Music row below, or visit the{" "}
+        <Link href="/ai-music" className="text-gold">
+          dedicated AI Music marketplace
+        </Link>{" "}
+        for tracks that are 100% AI-generated.
       </p>
 
       <div className="ticket-divider mb-10" />

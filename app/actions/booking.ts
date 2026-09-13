@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { createNotification } from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
 
 export type BookingActionResult = { error?: string; success?: boolean };
@@ -32,7 +34,9 @@ export async function submitBookingRequest(formData: FormData): Promise<BookingA
 
   const supabase = createClient();
 
-  const { data: artist } = await supabase.from("artists").select("id").eq("id", artistId).maybeSingle();
+  // user_id (not just id) so a successful insert below can notify the
+  // artist without a second round trip.
+  const { data: artist } = await supabase.from("artists").select("id, user_id").eq("id", artistId).maybeSingle();
   if (!artist) return { error: "Could not find that artist." };
 
   const { error } = await supabase.from("booking_requests").insert({
@@ -46,6 +50,19 @@ export async function submitBookingRequest(formData: FormData): Promise<BookingA
   });
 
   if (error) return { error: error.message };
+
+  // Best-effort — a fan's booking request is what matters here, not this.
+  // Notifications has no insert policy at all (see supabase/schema.sql) —
+  // deliberately, so no client role can write one for an arbitrary user —
+  // so this one write uses the service-role client rather than the
+  // anonymous fan-facing one above, same as the Stripe webhook does.
+  await createNotification(createServiceRoleClient(), {
+    userId: artist.user_id,
+    type: "booking",
+    title: `New booking request from ${fanName}`,
+    body: eventDate ? `For ${eventDate}` : undefined,
+    link: "/dashboard",
+  });
 
   return { success: true };
 }

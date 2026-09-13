@@ -42,7 +42,7 @@ export default async function CatalogPage() {
   const { data: tracks, error } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, created_at, audio_path, audio_url, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure"
+      "id, title, price_cents, created_at, audio_path, audio_url, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, verification_status, verification_note"
     )
     .eq("artist_id", artist?.id)
     .order("created_at", { ascending: false });
@@ -79,7 +79,7 @@ export default async function CatalogPage() {
   const { data: contributorRows } = trackIds.length
     ? await supabase
         .from("contributors")
-        .select("id, track_id, name, email, phone, publishing_info, percentage")
+        .select("id, track_id, name, email, phone, publishing_info, percentage, stripe_account_id, onboarding_token")
         .in("track_id", trackIds)
     : { data: [] as any[] };
 

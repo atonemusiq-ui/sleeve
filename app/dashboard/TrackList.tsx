@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { updateTrack } from "@/app/actions/tracks";
 import { MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE, subgenresFor } from "@/lib/genres";
 import { AI_DISCLOSURE_LEVELS, aiDisclosureBadge, type AiDisclosureLevel } from "@/lib/aiDisclosure";
+import { startVerificationCheckout } from "@/app/actions/verification";
+import { VERIFICATION_FEE_CENTS, verificationBadgeLabel } from "@/lib/verification";
 import ContributorManager, { type Contributor } from "./ContributorManager";
 
 // Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
@@ -24,6 +26,8 @@ type Track = {
   subgenre: string | null;
   custom_tag: string | null;
   ai_disclosure: AiDisclosureLevel;
+  verification_status: string;
+  verification_note: string | null;
 };
 
 export default function TrackList({
@@ -77,6 +81,8 @@ function TrackRow({
   const [error, setError] = useState<string | null>(null);
   const [showEmbed, setShowEmbed] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showVerifyForm, setShowVerifyForm] = useState(false);
+  const [verifyNote, setVerifyNote] = useState(track.verification_note ?? "");
   const router = useRouter();
 
   const subgenreOptions = useMemo(() => subgenresFor(genre), [genre]);
@@ -387,7 +393,7 @@ function TrackRow({
           </button>
         </div>
       )}
-      {(track.genre || track.custom_tag || aiDisclosureBadge(track.ai_disclosure)) && (
+      {(track.genre || track.custom_tag || aiDisclosureBadge(track.ai_disclosure) || verificationBadgeLabel(track.verification_status)) && (
         <div className="flex flex-wrap gap-1.5">
           {track.genre && (
             <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-paper/20 text-paper/60">
@@ -404,12 +410,75 @@ function TrackRow({
               {aiDisclosureBadge(track.ai_disclosure)}
             </span>
           )}
+          {verificationBadgeLabel(track.verification_status) && (
+            <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-forest/50 bg-forest/10 text-forest">
+              ✓ {verificationBadgeLabel(track.verification_status)}
+            </span>
+          )}
         </div>
       )}
       {track.playUrl && <audio controls src={track.playUrl} className="w-full h-10" />}
       {!track.preview_url && (
         <p className="font-mono text-xs text-rust mt-1">Preview unavailable, fans won't hear a sample until this is fixed.</p>
       )}
+
+      {/* Verified Human+AI: a paid ($9.99) application reviewed by hand (see
+          app/admin/verifications/page.tsx) — status lives on the track row
+          itself (verification_status), separate from the free, self-declared
+          ai_disclosure field above. "pending" and "approved" can't re-apply
+          (enforced again server-side in app/actions/verification.ts); a
+          fresh rejection can. */}
+      {track.verification_status === "pending" && (
+        <p className="font-mono text-xs text-gold bg-gold/10 border border-gold/30 rounded px-3 py-2">
+          Verification pending review — you'll see the badge here once it's approved.
+        </p>
+      )}
+      {track.verification_status === "rejected" && (
+        <p className="font-mono text-xs text-rust bg-rust/10 border border-rust/30 rounded px-3 py-2">
+          Your last verification request wasn't approved. You can apply again below.
+        </p>
+      )}
+      {(track.verification_status === "none" || track.verification_status === "rejected") && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowVerifyForm((v) => !v)}
+            className="font-mono text-xs px-2 py-1 rounded border border-forest/40 text-forest hover:bg-forest/10"
+          >
+            {showVerifyForm ? "Cancel" : "Apply for Verified Human+AI"}
+          </button>
+          {showVerifyForm && (
+            <form
+              action={startVerificationCheckout}
+              className="flex flex-col gap-2 border border-paper/15 rounded px-3 py-2 bg-paper/5 mt-2"
+            >
+              <input type="hidden" name="trackId" value={track.id} />
+              <p className="font-mono text-xs text-paper/60">
+                Describe the human involvement in this track (writing, performance, production —
+                whatever makes it more than pure AI generation). Reviewed by hand for a one-time $
+                {(VERIFICATION_FEE_CENTS / 100).toFixed(2)} fee, charged on submit; it isn't
+                refunded if the application is rejected.
+              </p>
+              <textarea
+                name="note"
+                required
+                value={verifyNote}
+                onChange={(e) => setVerifyNote(e.target.value)}
+                rows={3}
+                placeholder="e.g. I wrote the lyrics and performed the vocals; AI handled the instrumental."
+                className="w-full bg-ink border border-paper/20 rounded px-2 py-1 text-paper font-mono text-xs"
+              />
+              <button
+                type="submit"
+                className="self-start font-mono text-xs px-3 py-1.5 rounded bg-forest text-paper font-medium hover:opacity-90"
+              >
+                Continue to payment (${(VERIFICATION_FEE_CENTS / 100).toFixed(2)})
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
       <ContributorManager trackId={track.id} contributors={contributors} />
     </div>
   );

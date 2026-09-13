@@ -1,5 +1,6 @@
 import { stripe } from "@/lib/stripe/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { createNotification } from "@/lib/notifications";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
@@ -35,35 +36,75 @@ function splitProportionally(totalCents: number, weights: number[]): number[] {
   return shares;
 }
 
-// Best-effort contributor royalty split for one purchase row — identical to
-// what the single-track path already did, just factored out so the album
-// path (which does this once per track) can reuse it. A failure here
-// shouldn't block the purchase record or the artist's transfer, so callers
-// wrap this in try/catch and just log.
-async function recordContributorPayouts(
+// Splits a track's contributor royalties out of the artist's payout for one
+// purchase. A contributor who has connected Stripe (see
+// app/contributor-onboard/[token] and app/actions/contributor-connect.ts)
+// gets paid directly out of the same charge as the artist's own transfer
+// (Stripe's "separate charges and transfers" pattern, same as
+// transferArtistPayout below) — their contributor_payouts row is recorded
+// 'paid' immediately, with the transfer id attached so a refund can reverse
+// it later. A contributor who hasn't connected yet still gets the original
+// bookkeeping-only 'owed' row, unchanged from before this feature — the
+// artist settles that one by hand, and keeps receiving that contributor's
+// share themselves. Returns the total cents actually diverted to onboarded
+// contributors, so the caller pays the artist only the remainder.
+async function payContributorsAndRecordPayouts(
   supabase: Supabase,
+  paymentIntentId: string | null,
   trackId: string,
   purchaseId: string,
   artistPayoutCents: number
-) {
+): Promise<number> {
   const { data: contributors } = await supabase
     .from("contributors")
-    .select("id, percentage")
+    .select("id, percentage, stripe_account_id")
     .eq("track_id", trackId);
 
-  if (!contributors || contributors.length === 0) return;
+  if (!contributors || contributors.length === 0) return 0;
 
-  const payoutRows = contributors.map((contributor) => ({
-    contributor_id: contributor.id,
-    purchase_id: purchaseId,
-    amount_owed_cents: Math.round((artistPayoutCents * Number(contributor.percentage)) / 100),
-    status: "owed" as const,
-  }));
+  let divertedCents = 0;
 
-  const { error: payoutError } = await supabase.from("contributor_payouts").insert(payoutRows);
-  if (payoutError) {
-    console.error("Failed to record contributor payouts:", payoutError.message);
+  for (const contributor of contributors) {
+    const amountCents = Math.round((artistPayoutCents * Number(contributor.percentage)) / 100);
+    if (amountCents <= 0) continue;
+
+    if (contributor.stripe_account_id && paymentIntentId) {
+      try {
+        const transfer = await transferArtistPayout(
+          paymentIntentId,
+          amountCents,
+          contributor.stripe_account_id,
+          purchaseId
+        );
+        divertedCents += amountCents;
+        const { error: payoutError } = await supabase.from("contributor_payouts").insert({
+          contributor_id: contributor.id,
+          purchase_id: purchaseId,
+          amount_owed_cents: amountCents,
+          status: "paid",
+          paid_at: new Date().toISOString(),
+          stripe_transfer_id: transfer.id,
+        });
+        if (payoutError) console.error("Failed to record paid contributor payout:", payoutError.message);
+        continue;
+      } catch (transferErr: any) {
+        // Falls through to the manual-pay ledger below — better to owe them
+        // visibly than to silently drop their share because their connected
+        // account couldn't yet receive a transfer for some reason.
+        console.error(`Failed to pay contributor ${contributor.id} directly:`, transferErr.message);
+      }
+    }
+
+    const { error: payoutError } = await supabase.from("contributor_payouts").insert({
+      contributor_id: contributor.id,
+      purchase_id: purchaseId,
+      amount_owed_cents: amountCents,
+      status: "owed",
+    });
+    if (payoutError) console.error("Failed to record contributor payout:", payoutError.message);
   }
+
+  return divertedCents;
 }
 
 // Transfers `amountCents` to `stripeAccountId` out of the specific charge
@@ -71,7 +112,10 @@ async function recordContributorPayouts(
 // transfers" pattern), rather than drawing from the platform's general
 // available balance. Shared by both the single-track and album paths — an
 // album purchase still makes exactly one transfer, for the combined payout
-// across all its tracks, not one per track.
+// across all its tracks, not one per track. Returns the created Transfer so
+// callers can persist its id on the purchase row(s) — that id is what lets a
+// later refund/dispute reverse this exact transfer (see
+// reverseArtistPayoutsAndVoidContributors below) instead of guessing.
 async function transferArtistPayout(
   paymentIntentId: string,
   amountCents: number,
@@ -84,13 +128,89 @@ async function transferArtistPayout(
       ? paymentIntent.latest_charge
       : paymentIntent.latest_charge?.id;
 
-  await stripe.transfers.create({
+  return stripe.transfers.create({
     amount: amountCents,
     currency: "usd",
     destination: stripeAccountId,
     source_transaction: chargeId,
     transfer_group: transferGroup,
   });
+}
+
+// Claws back the artist's payout when a purchase is refunded or a dispute is
+// lost. Groups by transfer id first so an album's single combined transfer
+// (see transferArtistPayout above) is reversed once for its full amount
+// rather than once per track. A contributor payout still sitting at 'owed'
+// for one of these purchases is voided — that money was never actually sent
+// anywhere yet, so the ledger just drops it. A payout already 'paid' came
+// out of the artist's own pocket at that point, not the platform's Stripe
+// balance, so there's nothing here to claw back from the contributor; it's
+// left as-is and worth a manual look if it happens often.
+async function reverseArtistPayoutsAndVoidContributors(
+  supabase: Supabase,
+  purchases: {
+    id: string;
+    stripe_transfer_id: string | null;
+    artist_payout_cents: number | null;
+    artist_net_payout_cents?: number | null;
+  }[]
+) {
+  // Grouped by transfer id so an album's single combined transfer is
+  // reversed once for its full amount rather than once per track. Uses the
+  // net amount actually sent to the artist (artist_net_payout_cents) where
+  // it's set — a purchase made before this column existed, or one with no
+  // Stripe-onboarded contributors, falls back to the gross artist_payout_cents,
+  // which is the same number in that case anyway.
+  const byTransfer = new Map<string, number>();
+  for (const p of purchases) {
+    if (!p.stripe_transfer_id) continue;
+    const amount = p.artist_net_payout_cents ?? p.artist_payout_cents ?? 0;
+    byTransfer.set(p.stripe_transfer_id, (byTransfer.get(p.stripe_transfer_id) ?? 0) + amount);
+  }
+
+  for (const [transferId, amount] of byTransfer) {
+    if (amount <= 0) continue;
+    try {
+      await stripe.transfers.createReversal(transferId, { amount });
+    } catch (err: any) {
+      // Could mean it's already been reversed (e.g. a redelivered event), or
+      // the connected account can't cover it. Either way, log loudly instead
+      // of silently swallowing it — this is real money to reconcile by hand
+      // in the Stripe dashboard if the automatic path failed.
+      console.error(`Failed to reverse transfer ${transferId}:`, err.message);
+    }
+  }
+
+  const purchaseIds = purchases.map((p) => p.id);
+  if (!purchaseIds.length) return;
+
+  // A contributor share still sitting at 'owed' was never actually sent
+  // anywhere — void it outright.
+  await supabase
+    .from("contributor_payouts")
+    .update({ status: "voided" })
+    .in("purchase_id", purchaseIds)
+    .eq("status", "owed");
+
+  // A contributor share that WAS already paid directly via Stripe (see
+  // payContributorsAndRecordPayouts) came out of the same charge as the
+  // artist's own cut, so it needs the same reversal treatment, not just a
+  // status flip.
+  const { data: paidContributorPayouts } = await supabase
+    .from("contributor_payouts")
+    .select("id, stripe_transfer_id")
+    .in("purchase_id", purchaseIds)
+    .eq("status", "paid")
+    .not("stripe_transfer_id", "is", null);
+
+  for (const payout of paidContributorPayouts ?? []) {
+    try {
+      await stripe.transfers.createReversal(payout.stripe_transfer_id as string);
+      await supabase.from("contributor_payouts").update({ status: "voided" }).eq("id", payout.id);
+    } catch (err: any) {
+      console.error(`Failed to reverse contributor transfer ${payout.stripe_transfer_id}:`, err.message);
+    }
+  }
 }
 
 export async function POST(req: Request) {
@@ -145,6 +265,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ received: true });
     }
 
+    // Same shape as the video_unlock branch above: a flat Fyby review fee,
+    // not a fan purchase — no artist payout transfer. Moves the track into
+    // the admin review queue (app/admin/verifications/page.tsx) now that
+    // payment is actually confirmed; the note itself was already saved by
+    // app/actions/verification.ts's startVerificationCheckout ahead of
+    // checkout.
+    if (session.metadata?.type === "track_verification") {
+      const verifyTrackId = session.metadata?.track_id ?? null;
+
+      if (!verifyTrackId) {
+        console.error("Verification webhook missing expected metadata:", session.metadata);
+        return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
+      }
+
+      const supabase = createServiceRoleClient();
+      const { error } = await supabase
+        .from("tracks")
+        .update({ verification_status: "pending", verification_requested_at: new Date().toISOString() })
+        .eq("id", verifyTrackId);
+
+      if (error) {
+        console.error("Failed to record verification request:", error.message);
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+
+      return NextResponse.json({ received: true });
+    }
+
     const trackId = session.metadata?.track_id ?? null;
     const albumId = session.metadata?.album_id ?? null;
     const fanId = session.metadata?.fan_id ?? null;
@@ -187,7 +335,7 @@ export async function POST(req: Request) {
       // transfer for the whole album's artist payout. ----
       const { data: album, error: albumError } = await supabase
         .from("albums")
-        .select("id, artists ( id, stripe_account_id )")
+        .select("id, title, artists ( id, user_id, stripe_account_id )")
         .eq("id", albumId)
         .single();
 
@@ -249,33 +397,70 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Database error" }, { status: 500 });
       }
 
-      // Contributor royalty split, per track — bookkeeping only, doesn't
-      // move any money on its own. Best-effort: log and move on.
+      // Contributor royalty split, per track — pays any Stripe-onboarded
+      // contributor directly, bookkeeps the rest. Best-effort: log and move
+      // on. Tracked per-purchase-row so each row's own net (gross minus what
+      // was diverted for that specific track) can be stored below — an
+      // album's tracks don't necessarily have the same contributors.
+      const divertedByPurchase = new Map<string, number>();
+      let totalDivertedCents = 0;
       try {
         for (const purchase of insertedPurchases ?? []) {
-          await recordContributorPayouts(supabase, purchase.track_id, purchase.id, purchase.artist_payout_cents);
+          const diverted = await payContributorsAndRecordPayouts(
+            supabase,
+            paymentIntentId,
+            purchase.track_id,
+            purchase.id,
+            purchase.artist_payout_cents
+          );
+          divertedByPurchase.set(purchase.id, diverted);
+          totalDivertedCents += diverted;
         }
       } catch (contributorErr: any) {
         console.error("Contributor payout lookup failed:", contributorErr.message);
       }
 
       const artistStripeAccountId = (album as any).artists?.stripe_account_id;
+      const artistUserId = (album as any).artists?.user_id ?? null;
       const totalArtistPayoutCents = (insertedPurchases ?? []).reduce(
         (sum, p) => sum + p.artist_payout_cents,
         0
       );
+      const totalArtistNetPayoutCents = totalArtistPayoutCents - totalDivertedCents;
 
       if (!artistStripeAccountId) {
         console.error(
           "No connected Stripe account found for this album's artist — purchase recorded but artist was not paid:",
           `album ${albumId} has no linked stripe_account_id`
         );
-      } else if (paymentIntentId) {
+      } else if (paymentIntentId && totalArtistNetPayoutCents > 0) {
         try {
-          await transferArtistPayout(paymentIntentId, totalArtistPayoutCents, artistStripeAccountId, albumId);
+          const transfer = await transferArtistPayout(
+            paymentIntentId,
+            totalArtistNetPayoutCents,
+            artistStripeAccountId,
+            albumId
+          );
+          for (const purchase of insertedPurchases ?? []) {
+            const net = purchase.artist_payout_cents - (divertedByPurchase.get(purchase.id) ?? 0);
+            await supabase
+              .from("purchases")
+              .update({ stripe_transfer_id: transfer.id, artist_net_payout_cents: net })
+              .eq("id", purchase.id);
+          }
         } catch (transferError: any) {
           console.error("Failed to transfer artist payout:", transferError.message);
         }
+      }
+
+      if (artistUserId) {
+        await createNotification(supabase, {
+          userId: artistUserId,
+          type: "sale",
+          title: `New sale: ${(album as any).title ?? "an album"}`,
+          body: `$${(totalArtistPayoutCents / 100).toFixed(2)} from a fan.`,
+          link: "/dashboard/catalog",
+        });
       }
 
       return NextResponse.json({ received: true });
@@ -317,8 +502,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Database error" }, { status: 500 });
     }
 
+    let divertedCents = 0;
     try {
-      await recordContributorPayouts(supabase, trackId as string, insertedPurchase.id, Number(artistPayoutCents));
+      divertedCents = await payContributorsAndRecordPayouts(
+        supabase,
+        paymentIntentId,
+        trackId as string,
+        insertedPurchase.id,
+        Number(artistPayoutCents)
+      );
     } catch (contributorErr: any) {
       console.error("Contributor payout lookup failed:", contributorErr.message);
     }
@@ -326,14 +518,17 @@ export async function POST(req: Request) {
     // The purchase is recorded, but the payment itself landed entirely in
     // this platform's own Stripe balance — nothing above has paid the
     // artist their share yet. Look up the artist's connected account for
-    // this track and transfer their cut over now.
+    // this track and transfer their cut over now, net of anything just paid
+    // straight to a Stripe-onboarded contributor above.
     const { data: track, error: trackError } = await supabase
       .from("tracks")
-      .select("artists ( stripe_account_id )")
+      .select("title, artists ( user_id, stripe_account_id )")
       .eq("id", trackId)
       .single();
 
     const artistStripeAccountId = (track as any)?.artists?.stripe_account_id;
+    const artistUserId = (track as any)?.artists?.user_id ?? null;
+    const artistNetPayoutCents = Number(artistPayoutCents) - divertedCents;
 
     if (trackError || !artistStripeAccountId) {
       // Don't fail the webhook over this — the purchase is already
@@ -344,20 +539,202 @@ export async function POST(req: Request) {
         "No connected Stripe account found for this track's artist — purchase recorded but artist was not paid:",
         trackError?.message ?? `track ${trackId} has no linked stripe_account_id`
       );
-    } else if (paymentIntentId) {
+    } else if (paymentIntentId && artistNetPayoutCents > 0) {
       try {
-        await transferArtistPayout(
+        const transfer = await transferArtistPayout(
           paymentIntentId,
-          Number(artistPayoutCents),
+          artistNetPayoutCents,
           artistStripeAccountId,
           trackId as string
         );
+        await supabase
+          .from("purchases")
+          .update({ stripe_transfer_id: transfer.id, artist_net_payout_cents: artistNetPayoutCents })
+          .eq("id", insertedPurchase.id);
       } catch (transferError: any) {
         // Same reasoning as above: log and move on rather than 500'ing and
         // triggering a retry that would try to insert a duplicate purchase.
         console.error("Failed to transfer artist payout:", transferError.message);
       }
     }
+
+    if (artistUserId) {
+      await createNotification(supabase, {
+        userId: artistUserId,
+        type: "sale",
+        title: `New sale: ${(track as any)?.title ?? "a track"}`,
+        body: `$${(Number(artistPayoutCents) / 100).toFixed(2)} from a fan.`,
+        link: "/dashboard/catalog",
+      });
+    }
+
+    return NextResponse.json({ received: true });
+  }
+
+  // A fan getting their money back — full refunds only get automatic
+  // treatment (see the partial-refund branch below for why). Access
+  // (library + /api/stream, both already gated on status='complete') drops
+  // the instant the purchase row flips to 'refunded', and the artist's
+  // payout is clawed back via reverseArtistPayoutsAndVoidContributors.
+  //
+  // Requires "charge.refunded" to be added to this webhook endpoint's
+  // subscribed events in the Stripe Dashboard — it isn't sent by default.
+  if (event.type === "charge.refunded") {
+    const charge = event.data.object as Stripe.Charge;
+    const paymentIntentId =
+      typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id ?? null;
+
+    if (!paymentIntentId) {
+      return NextResponse.json({ received: true });
+    }
+
+    const supabase = createServiceRoleClient();
+    const { data: purchases } = await supabase
+      .from("purchases")
+      .select(
+        "id, status, amount_cents, artist_payout_cents, artist_net_payout_cents, stripe_transfer_id, tracks ( artists ( user_id ) )"
+      )
+      .eq("stripe_payment_intent_id", paymentIntentId);
+
+    if (!purchases || purchases.length === 0) {
+      return NextResponse.json({ received: true });
+    }
+
+    const totalPurchasedCents = purchases.reduce((sum, p) => sum + (p.amount_cents ?? 0), 0);
+    const isFullRefund = charge.amount_refunded >= totalPurchasedCents;
+
+    if (!isFullRefund) {
+      // A partial refund doesn't cleanly map onto "which track(s) in this
+      // album lost access" and a fan given a partial goodwill refund
+      // usually still keeps what they bought — flagged for manual review
+      // rather than guessing which access/payout to revoke.
+      console.error(
+        `Partial refund on payment_intent ${paymentIntentId} (${charge.amount_refunded} of ${totalPurchasedCents} cents) — needs manual review, no automatic access/payout changes made.`
+      );
+      return NextResponse.json({ received: true, note: "partial refund flagged for manual review" });
+    }
+
+    const stillActive = purchases.filter((p) => p.status === "complete");
+    if (stillActive.length === 0) {
+      // Already handled — e.g. a dispute-lost event on this same
+      // payment_intent already reversed things before this event arrived.
+      return NextResponse.json({ received: true, note: "already processed" });
+    }
+
+    await supabase
+      .from("purchases")
+      .update({ status: "refunded" })
+      .in("id", stillActive.map((p) => p.id));
+
+    await reverseArtistPayoutsAndVoidContributors(supabase, stillActive as any);
+
+    const artistUserId = (stillActive[0] as any)?.tracks?.artists?.user_id ?? null;
+    if (artistUserId) {
+      await createNotification(supabase, {
+        userId: artistUserId,
+        type: "refund",
+        title: "A sale was refunded",
+        body: `$${(charge.amount_refunded / 100).toFixed(2)} was refunded to the buyer.`,
+        link: "/dashboard/catalog",
+      });
+    }
+
+    return NextResponse.json({ received: true });
+  }
+
+  // A chargeback has been opened. Suspend access right away rather than
+  // waiting for the outcome — this is exactly the situation where the money
+  // might get pulled back out of the platform's balance, so a fan shouldn't
+  // keep streaming/downloading while it's unresolved. Restored to 'complete'
+  // below if the dispute is later won.
+  //
+  // Requires "charge.dispute.created" in this webhook's subscribed events.
+  if (event.type === "charge.dispute.created") {
+    const dispute = event.data.object as Stripe.Dispute;
+    const paymentIntentId =
+      typeof dispute.payment_intent === "string" ? dispute.payment_intent : dispute.payment_intent?.id ?? null;
+
+    if (!paymentIntentId) {
+      return NextResponse.json({ received: true });
+    }
+
+    const supabase = createServiceRoleClient();
+    const { data: disputed } = await supabase
+      .from("purchases")
+      .update({ status: "disputed" })
+      .eq("stripe_payment_intent_id", paymentIntentId)
+      .eq("status", "complete")
+      .select("tracks ( artists ( user_id ) )");
+
+    console.error(`Dispute opened on payment_intent ${paymentIntentId} — access suspended pending resolution.`);
+
+    const artistUserId = (disputed?.[0] as any)?.tracks?.artists?.user_id ?? null;
+    if (artistUserId) {
+      await createNotification(supabase, {
+        userId: artistUserId,
+        type: "dispute",
+        title: "A chargeback was opened",
+        body: `$${(dispute.amount / 100).toFixed(2)} is being disputed — access is suspended until it's resolved.`,
+        link: "/dashboard/catalog",
+      });
+    }
+
+    return NextResponse.json({ received: true });
+  }
+
+  // The dispute has a final outcome. Won: give access back. Lost (or any
+  // other closed-and-not-won outcome, e.g. "warning_closed" — treated the
+  // same, conservatively) — the funds are gone for good, so this gets the
+  // same refund/payout-reversal/contributor-voiding treatment as a full
+  // refund above.
+  //
+  // Requires "charge.dispute.closed" in this webhook's subscribed events.
+  if (event.type === "charge.dispute.closed") {
+    const dispute = event.data.object as Stripe.Dispute;
+    const paymentIntentId =
+      typeof dispute.payment_intent === "string" ? dispute.payment_intent : dispute.payment_intent?.id ?? null;
+
+    if (!paymentIntentId) {
+      return NextResponse.json({ received: true });
+    }
+
+    const supabase = createServiceRoleClient();
+
+    if (dispute.status === "won") {
+      await supabase
+        .from("purchases")
+        .update({ status: "complete" })
+        .eq("stripe_payment_intent_id", paymentIntentId)
+        .eq("status", "disputed");
+      return NextResponse.json({ received: true });
+    }
+
+    const { data: purchases } = await supabase
+      .from("purchases")
+      .select("id, artist_payout_cents, artist_net_payout_cents, stripe_transfer_id, tracks ( artists ( user_id ) )")
+      .eq("stripe_payment_intent_id", paymentIntentId)
+      .eq("status", "disputed");
+
+    if (purchases && purchases.length > 0) {
+      await supabase
+        .from("purchases")
+        .update({ status: "refunded" })
+        .in("id", purchases.map((p) => p.id));
+      await reverseArtistPayoutsAndVoidContributors(supabase, purchases as any);
+
+      const artistUserId = (purchases[0] as any)?.tracks?.artists?.user_id ?? null;
+      if (artistUserId) {
+        await createNotification(supabase, {
+          userId: artistUserId,
+          type: "dispute",
+          title: "A chargeback was lost",
+          body: `$${(dispute.amount / 100).toFixed(2)} has been refunded to the buyer.`,
+          link: "/dashboard/catalog",
+        });
+      }
+    }
+
+    return NextResponse.json({ received: true });
   }
 
   return NextResponse.json({ received: true });

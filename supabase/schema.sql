@@ -705,3 +705,107 @@ drop policy if exists "approved genres are publicly readable" on approved_genres
 create policy "approved genres are publicly readable"
   on approved_genres for select
   using (true);
+
+-- ============================================================================
+-- Phase 5: "Verified Human+AI" certification — a paid, admin-reviewed badge
+-- distinct from the self-reported ai_disclosure 3-way choice above. An
+-- artist pays a flat review fee (lib/verification.ts, app/actions/
+-- verification.ts) and writes a note about their own human involvement; an
+-- admin approves or rejects it at /admin/verifications
+-- (app/actions/admin.ts). No RLS changes needed — tracks is already publicly
+-- readable and only the owning artist can already update their own tracks
+-- (see the policies above); the admin actions use the service-role client,
+-- same as every other moderation queue in this file.
+-- ============================================================================
+alter table tracks add column if not exists verification_status text not null default 'none';
+alter table tracks drop constraint if exists tracks_verification_status_check;
+alter table tracks add constraint tracks_verification_status_check
+  check (verification_status in ('none', 'pending', 'approved', 'rejected'));
+alter table tracks add column if not exists verification_note text;
+alter table tracks add column if not exists verification_requested_at timestamptz;
+alter table tracks add column if not exists verification_decided_at timestamptz;
+
+-- ============================================================================
+-- Refunds & disputes (app/api/webhooks/stripe/route.ts). stripe_transfer_id
+-- records which Stripe Transfer paid the artist for a purchase (an album's
+-- tracks share one, since they're paid out in a single combined transfer) —
+-- that id is what lets a refund/dispute reverse the exact transfer instead of
+-- guessing. 'disputed' is a third status alongside 'refunded': app/library/
+-- page.tsx and app/api/stream/[trackId]/route.ts already gate access on
+-- status = 'complete', so a purchase landing on either one drops access
+-- automatically with no separate check needed.
+-- ============================================================================
+alter table purchases add column if not exists stripe_transfer_id text;
+
+alter table purchases drop constraint if exists purchases_status_check;
+alter table purchases add constraint purchases_status_check
+  check (status in ('pending', 'complete', 'refunded', 'disputed'));
+
+-- A contributor payout already flipped to 'paid' came out of the artist's
+-- own pocket, not the platform's Stripe balance — a refund can't claw that
+-- back automatically, so only a still-'owed' row can become 'voided'.
+alter table contributor_payouts drop constraint if exists contributor_payouts_status_check;
+alter table contributor_payouts add constraint contributor_payouts_status_check
+  check (status in ('owed', 'paid', 'voided'));
+
+-- Which specific Stripe transfer paid the artist for this purchase, net of
+-- anything diverted straight to Stripe-onboarded contributors (see the next
+-- section) — kept separate from the gross artist_payout_cents (the whole
+-- 80% share before any contributor split) so a refund/dispute reverses the
+-- exact amount actually sent, not the gross figure.
+alter table purchases add column if not exists artist_net_payout_cents integer;
+
+-- ============================================================================
+-- Contributor payouts via Stripe: a contributor doesn't have a Fyby login,
+-- so getting them connected to receive direct payouts happens through a
+-- durable, unguessable link (app/contributor-onboard/[token]) instead of an
+-- authenticated flow — onboarding_token is that link's only credential. The
+-- artist copies/sends the link to the contributor themselves (see
+-- app/dashboard/ContributorManager.tsx); there's no email-sending
+-- infrastructure in this app to deliver it automatically.
+--
+-- Once a contributor has stripe_account_id set, the webhook
+-- (app/api/webhooks/stripe/route.ts's payContributorsAndRecordPayouts) pays
+-- their share directly out of the same charge as the artist's own transfer,
+-- and only the remainder goes to the artist — instead of the old
+-- bookkeeping-only "owed" ledger the artist had to settle by hand. A
+-- contributor who never connects keeps working exactly the old way.
+-- ============================================================================
+alter table contributors add column if not exists stripe_account_id text;
+alter table contributors add column if not exists onboarding_token uuid not null default gen_random_uuid();
+create unique index if not exists contributors_onboarding_token_key on contributors (onboarding_token);
+
+-- Lets a refund/dispute reverse a contributor's direct Stripe payout the
+-- same way it reverses the artist's own transfer.
+alter table contributor_payouts add column if not exists stripe_transfer_id text;
+
+-- ============================================================================
+-- In-app notifications: a lightweight per-user feed (new sale, new booking
+-- request, a sale getting refunded/disputed) shown via the bell in the
+-- dashboard header (app/NotificationBell.tsx). Only ever written by
+-- server-side code using the service-role client (the webhook, server
+-- actions) — there's deliberately no insert policy, so no client role can
+-- write one for themselves.
+-- ============================================================================
+create table if not exists notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  type text not null,
+  title text not null,
+  body text,
+  link text,
+  read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table notifications enable row level security;
+
+drop policy if exists "users read their own notifications" on notifications;
+create policy "users read their own notifications"
+  on notifications for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "users update their own notifications" on notifications;
+create policy "users update their own notifications"
+  on notifications for update
+  using (auth.uid() = user_id);

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { aiDisclosureBadge, isAiMusic, type AiDisclosureLevel } from "@/lib/aiDisclosure";
+import { verificationBadgeLabel } from "@/lib/verification";
 
 type Track = {
   id: string;
@@ -14,6 +15,9 @@ type Track = {
   subgenre: string | null;
   custom_tag: string | null;
   ai_disclosure: AiDisclosureLevel;
+  // Optional because not every caller's select() includes it (e.g. embed
+  // pages that don't need it) — treated as "none" wherever it's absent.
+  verification_status?: string | null;
   artists: {
     id: string;
     profiles: { display_name: string } | null;
@@ -31,6 +35,7 @@ export default function StorefrontGrid({
   albumTrackCounts,
   blockedTrackIds,
   allGenres,
+  hideAiRow,
 }: {
   tracks: Track[];
   startCheckout: (formData: FormData) => void;
@@ -46,6 +51,11 @@ export default function StorefrontGrid({
   // app/actions/genres.ts) — determines row order/presence the same way the
   // fixed list alone used to.
   allGenres: string[];
+  // Set by app/ai-music/page.tsx, whose `tracks` are already scoped to
+  // ai_disclosure = 'ai_generated' — the standing "AI Music" row below would
+  // just be a word-for-word duplicate of "New Releases" on that page, so it
+  // skips rendering it entirely rather than showing the same tracks twice.
+  hideAiRow?: boolean;
 }) {
   const [query, setQuery] = useState("");
 
@@ -99,9 +109,9 @@ export default function StorefrontGrid({
   // Pulls in regardless of genre — an "AI-Assisted" or "Fully AI-Generated"
   // track shows up here even if it's already in one of the rows above.
   const aiMusicTracks = useMemo(() => {
-    if (q) return [];
+    if (q || hideAiRow) return [];
     return tracks.filter((t) => isAiMusic(t.ai_disclosure));
-  }, [tracks, q]);
+  }, [tracks, q, hideAiRow]);
 
   const tileProps = {
     startCheckout,
@@ -247,6 +257,7 @@ function TrackTile({
   const trackBlocked = blockedSet.has(track.id);
   const albumBlocked = album ? blockedAlbumIds.has(album.id) : false;
   const aiBadge = aiDisclosureBadge(track.ai_disclosure);
+  const verifiedBadge = verificationBadgeLabel(track.verification_status);
 
   return (
     <div className="h-full border border-paper/15 rounded-lg p-5 bg-paper/5 flex flex-col justify-between">
@@ -273,7 +284,7 @@ function TrackTile({
           <p className="text-paper/60 text-sm mt-1">Unknown artist</p>
         )}
 
-        {(track.genre || track.custom_tag || aiBadge) && (
+        {(track.genre || track.custom_tag || aiBadge || verifiedBadge) && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {track.genre && (
               <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-paper/20 text-paper/50">
@@ -288,6 +299,11 @@ function TrackTile({
             {aiBadge && (
               <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-gold/40 text-gold">
                 {aiBadge}
+              </span>
+            )}
+            {verifiedBadge && (
+              <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-forest/50 bg-forest/10 text-forest">
+                ✓ {verifiedBadge}
               </span>
             )}
           </div>

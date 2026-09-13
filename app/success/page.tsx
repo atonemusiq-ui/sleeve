@@ -1,6 +1,7 @@
 import { stripe } from "@/lib/stripe/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { formatPresentmentAmount } from "@/lib/currency";
 import Link from "next/link";
 
 // One hour is plenty for a single sitting (stream + download), and keeps
@@ -41,6 +42,30 @@ async function resolveDownloadUrl(
     return signed?.signedUrl ?? null;
   }
   return track.audio_url ?? null;
+}
+
+// Only rendered when Stripe Adaptive Pricing (a Dashboard-only toggle — see
+// lib/currency.ts) actually converted this specific session for the fan,
+// i.e. presentment_currency differs from the currency Fyby itself charged
+// in. Most fans (anyone who paid in USD, or on a session from before
+// Adaptive Pricing was enabled) never see this at all.
+function LocalCurrencyNote({
+  presentmentAmount,
+  presentmentCurrency,
+  chargedAmount,
+  chargedCurrency,
+}: {
+  presentmentAmount: number;
+  presentmentCurrency: string;
+  chargedAmount: number;
+  chargedCurrency: string;
+}) {
+  return (
+    <p className="font-mono text-xs text-paper/50 mb-6">
+      You paid {formatPresentmentAmount(presentmentAmount, presentmentCurrency)} in your local
+      currency (charged to Fyby as {formatPresentmentAmount(chargedAmount, chargedCurrency)}).
+    </p>
+  );
 }
 
 function AccountPrompt({ buyerEmail }: { buyerEmail: string | null }) {
@@ -90,6 +115,21 @@ export default async function SuccessPage({
       <ErrorState message="This purchase hasn't gone through yet. If you completed payment, give it a moment and refresh." />
     );
   }
+
+  // presentment_details is only populated on a session Stripe Adaptive
+  // Pricing actually converted for the buyer — the Stripe SDK's types don't
+  // model it yet, hence the cast. No webhook/schema changes needed: this
+  // reads straight off the live-retrieved session object above, and Fyby's
+  // own charge currency/amount (session.currency/amount_total) and revenue
+  // split are unaffected either way (see lib/currency.ts).
+  const presentmentDetails = (session as any).presentment_details as
+    | { presentment_amount: number; presentment_currency: string }
+    | null
+    | undefined;
+  const chargedCurrency = session.currency ?? "usd";
+  const paidInLocalCurrency = Boolean(
+    presentmentDetails && presentmentDetails.presentment_currency.toLowerCase() !== chargedCurrency.toLowerCase()
+  );
 
   const trackId = session.metadata?.track_id;
   const albumId = session.metadata?.album_id;
@@ -156,6 +196,15 @@ export default async function SuccessPage({
           <br />
           by {artistName}
         </p>
+
+        {paidInLocalCurrency && presentmentDetails && (
+          <LocalCurrencyNote
+            presentmentAmount={presentmentDetails.presentment_amount}
+            presentmentCurrency={presentmentDetails.presentment_currency}
+            chargedAmount={session.amount_total ?? 0}
+            chargedCurrency={chargedCurrency}
+          />
+        )}
 
         <div className="flex flex-col gap-4 mb-10">
           {tracks.map((track) => (
@@ -225,6 +274,15 @@ export default async function SuccessPage({
         <br />
         by {artistName}
       </p>
+
+      {paidInLocalCurrency && presentmentDetails && (
+        <LocalCurrencyNote
+          presentmentAmount={presentmentDetails.presentment_amount}
+          presentmentCurrency={presentmentDetails.presentment_currency}
+          chargedAmount={session.amount_total ?? 0}
+          chargedCurrency={chargedCurrency}
+        />
+      )}
 
       {downloadUrl ? (
         <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col items-center gap-4 bg-paper/5">
