@@ -221,16 +221,36 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
-  let event: Stripe.Event;
+  // Two Stripe event destinations point at this same URL: the original
+  // "Fyby production" one (checkout.session.completed, etc.) and a second
+  // "Fyby production - refunds & disputes" one added for charge.refunded /
+  // charge.dispute.created / charge.dispute.closed — Stripe's dashboard
+  // rejected adding those three events to the original destination because
+  // it uses the newer "thin" payload style, which those classic events
+  // don't support ("This event is not compatible with this destination"),
+  // so a second, "Snapshot"-style destination was the only way to receive
+  // them. Each destination signs with its own secret, so a signature that
+  // fails against the primary secret is tried against the second one before
+  // being rejected outright.
+  const webhookSecrets = [
+    process.env.STRIPE_WEBHOOK_SECRET,
+    process.env.STRIPE_WEBHOOK_SECRET_REFUNDS,
+  ].filter((s): s is string => Boolean(s));
 
-  try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET as string
-    );
-  } catch (err: any) {
-    console.error("Webhook signature verification failed:", err.message);
+  let event: Stripe.Event | null = null;
+  let verificationError: any = null;
+  for (const secret of webhookSecrets) {
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, secret);
+      verificationError = null;
+      break;
+    } catch (err: any) {
+      verificationError = err;
+    }
+  }
+
+  if (!event) {
+    console.error("Webhook signature verification failed:", verificationError?.message);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
