@@ -16,6 +16,11 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 // whichever surface it shows up on.
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
+// See the matching comment in app/artists/[id]/share-card/route.tsx — without
+// this, a track's first-ever social-preview render gets stuck serving that
+// same image forever, even after the track's title/cover/artist name change
+// or this file's own code is redeployed.
+export const dynamic = "force-dynamic";
 
 export default async function Image({ params }: { params: { trackId: string } }) {
   const admin = createServiceRoleClient();

@@ -2,6 +2,16 @@ import { ImageResponse } from "next/og";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const runtime = "nodejs";
+// Without this, Next.js treats a dynamic-segment route handler with no
+// cookies()/headers() calls as eligible for its on-demand-then-cache-forever
+// behavior — the FIRST request for a given artist id gets cached (server
+// side, independent of the CDN's own Cache-Control-driven caching below) and
+// every later request, even from a brand-new deployment with changed code,
+// keeps serving that first render. Confirmed live: after redesigning the mic
+// graphic, this route kept returning the old circle-badge PNG for an artist
+// id that had already been hit once, even though the new code was verifiably
+// deployed. force-dynamic makes every request re-render from current code.
+export const dynamic = "force-dynamic";
 
 // A downloadable, mic-branded PNG artists can post directly on Instagram,
 // TikTok, or Snapchat — platforms that (unlike Facebook/Twitter, see
