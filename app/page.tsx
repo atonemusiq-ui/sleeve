@@ -92,7 +92,10 @@ export default async function StorefrontPage() {
         </div>
         <nav className="font-mono text-sm">
           {user ? (
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-4">
+              <Link href="/artists" className="hover:text-gold">
+                Artists
+              </Link>
               <Link href="/ai-music" className="hover:text-gold">
                 AI Music
               </Link>
@@ -106,7 +109,10 @@ export default async function StorefrontPage() {
               )}
             </div>
           ) : (
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-4">
+              <Link href="/artists" className="hover:text-gold">
+                Artists
+              </Link>
               <Link href="/ai-music" className="hover:text-gold">
                 AI Music
               </Link>
