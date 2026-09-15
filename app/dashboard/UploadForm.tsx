@@ -34,6 +34,7 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
   const [suggestingGenre, setSuggestingGenre] = useState(false);
   const [suggestGenreMessage, setSuggestGenreMessage] = useState<string | null>(null);
   const [aiDisclosure, setAiDisclosure] = useState<AiDisclosureLevel>("human");
+  const [explicit, setExplicit] = useState(false);
   const [rightsAttested, setRightsAttested] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -207,6 +208,7 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
         subgenre: subgenre || null,
         customTag: customTag || null,
         aiDisclosure,
+        explicit,
         rightsAttested,
       });
 
@@ -226,6 +228,7 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
       setSubgenre("");
       setCustomTag("");
       setAiDisclosure("human");
+      setExplicit(false);
       setRightsAttested(false);
       setAudioFile(null);
       setCoverFile(null);
@@ -377,6 +380,20 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
         </p>
       </div>
 
+      <label className="flex items-start gap-2 font-mono text-xs text-paper/70 border border-paper/15 rounded-lg px-3 py-2.5">
+        <input
+          type="checkbox"
+          checked={explicit}
+          onChange={(e) => setExplicit(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span>
+          This track contains explicit or vulgar language. Checking this shows an{" "}
+          <span className="text-rust">Explicit</span> label on the storefront, your artist page,
+          and anywhere else this track is listed, so listeners know before they hit play.
+        </span>
+      </label>
+
       <label className="flex items-start gap-2 font-mono text-xs text-paper/70">
         <input
           type="checkbox"
@@ -416,7 +433,7 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
             <p className="font-mono text-xs text-paper">
               We found artwork already attached to this song file — use it as the cover?
             </p>
-            <div className="flex flex-wrap gap-3 mt-2">
+            <div className="flex gap-3 mt-2">
               <button
                 type="button"
                 onClick={acceptEmbeddedArtwork}

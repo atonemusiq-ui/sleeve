@@ -45,9 +45,9 @@ export default async function FlaggedUploadsPage() {
 
   return (
     <main className="max-w-4xl mx-auto px-6 py-12">
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-12">
+      <header className="flex items-center justify-between mb-12">
         <h1 className="font-display text-3xl text-gold">Flagged uploads</h1>
-        <div className="flex flex-wrap items-center gap-4 font-mono text-sm">
+        <div className="flex items-center gap-4 font-mono text-sm">
           <Link href="/admin/videos" className="hover:text-gold">
             Reported videos
           </Link>
@@ -56,6 +56,9 @@ export default async function FlaggedUploadsPage() {
           </Link>
           <Link href="/admin/verifications" className="hover:text-gold">
             Verified Human+AI
+          </Link>
+          <Link href="/admin/moderation" className="hover:text-gold">
+            Content moderation
           </Link>
           <Link href="/dashboard" className="hover:text-gold">
             Back to dashboard

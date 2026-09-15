@@ -62,12 +62,18 @@ export default async function EmbedTrackPage({
   const { data: track } = await admin
     .from("tracks")
     .select(
-      "id, title, price_cents, cover_url, preview_url, genre, ai_disclosure, artists ( id, profiles ( display_name ) )"
+      "id, title, price_cents, cover_url, preview_url, genre, ai_disclosure, explicit, frozen, artists ( id, is_active, profiles ( display_name ) )"
     )
     .eq("id", params.trackId)
     .maybeSingle();
 
-  if (!track) {
+  // Reads with the service-role client (see the comment above), so this
+  // doesn't get RLS's help hiding a canceled artist's track — checked
+  // explicitly instead. A widget already embedded on someone else's site
+  // from before the artist canceled (or the track got frozen for a policy
+  // violation — app/admin/moderation/page.tsx) just needs to start showing
+  // this instead of the buy flow; nothing to delete or clean up on their end.
+  if (!track || (track as any).artists?.is_active === false || track.frozen) {
     return (
       <EmbedShell>
         <p className="text-sm text-paper/70">This track isn't available.</p>
@@ -98,6 +104,11 @@ export default async function EmbedTrackPage({
         {badge && (
           <span className="inline-block mt-1 text-[10px] font-mono uppercase tracking-wide text-gold/80 border border-gold/30 rounded px-1.5 py-0.5">
             {badge}
+          </span>
+        )}
+        {track.explicit && (
+          <span className="inline-block mt-1 ml-1 text-[10px] font-mono uppercase tracking-wide text-rust border border-rust/40 rounded px-1.5 py-0.5">
+            Explicit
           </span>
         )}
       </div>

@@ -42,7 +42,7 @@ export default async function CatalogPage() {
   const { data: tracks, error } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, created_at, audio_path, audio_url, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, verification_status, verification_note"
+      "id, title, price_cents, created_at, audio_path, audio_url, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, explicit, verification_status, verification_note, frozen, frozen_reason"
     )
     .eq("artist_id", artist?.id)
     .order("created_at", { ascending: false });

@@ -30,6 +30,14 @@ create table if not exists artists (
 -- Stripe Connect account id for payouts (added in the Stripe Connect phase).
 alter table artists add column if not exists stripe_account_id text;
 
+-- Lets an artist "cancel"/pause their page without deleting anything: the
+-- account, bio, tracks, sales history, and payout setup all stay exactly as
+-- they are — only public visibility toggles off. Defaults true so every
+-- existing artist stays visible with no backfill needed. See
+-- app/actions/artist.ts (setArtistActive) for the toggle, and
+-- app/dashboard/ArtistVisibilityManager.tsx for the dashboard control.
+alter table artists add column if not exists is_active boolean not null default true;
+
 -- ============================================================================
 -- 3. tracks
 -- ============================================================================
@@ -121,11 +129,15 @@ create policy "users can update their own profile"
   using (auth.uid() = id);
 
 -- artists: publicly readable (storefront + artist pages need names/bios),
--- but only the owning user can create/edit their artist row
+-- but only the owning user can create/edit their artist row. Restricted to
+-- is_active = true so a "canceled"/hidden artist page's row can't be read
+-- anonymously either, even if some app-level query forgets to filter it out
+-- — the owner can still always read their own row (needed for their own
+-- dashboard while hidden, and to reactivate).
 drop policy if exists "artists are publicly readable" on artists;
 create policy "artists are publicly readable"
   on artists for select
-  using (true);
+  using (is_active = true or auth.uid() = user_id);
 
 drop policy if exists "users can insert their own artist row" on artists;
 create policy "users can insert their own artist row"
@@ -809,3 +821,34 @@ drop policy if exists "users update their own notifications" on notifications;
 create policy "users update their own notifications"
   on notifications for update
   using (auth.uid() = user_id);
+
+-- ============================================================================
+-- Content moderation: an admin (app/admin/moderation/page.tsx,
+-- app/actions/admin.ts's freezeTrack/unfreezeTrack) can pull an inappropriate
+-- track down without deleting it — same "hide, don't destroy" idea as
+-- artists.is_active. A frozen track disappears from the storefront, AI Music
+-- page, the artist's public page, and the embed widget, and can't be bought
+-- (even via a stale link) — but a fan who already bought it keeps their
+-- download, same as a canceled artist's past sales. The reason is stored so
+-- it can be shown back to the artist, both in their catalog and in the
+-- notification freezing sends them (see createNotification in
+-- app/actions/admin.ts).
+-- ============================================================================
+alter table tracks add column if not exists frozen boolean not null default false;
+alter table tracks add column if not exists frozen_reason text;
+alter table tracks add column if not exists frozen_at timestamptz;
+
+-- Self-declared at upload (UploadForm.tsx), shown as a badge everywhere a
+-- track is listed (storefront, artist page, embed widget) so a listener
+-- knows before they hit play — same spirit as the AI disclosure badge, just
+-- a plain boolean instead of a 3-way choice.
+alter table tracks add column if not exists explicit boolean not null default false;
+
+-- A fan reaching out from an artist's page (BookingForm.tsx) might mean a
+-- live-performance booking, a collaboration request, or both — inquiry_type
+-- records which, so the artist's dashboard can show it and the notification
+-- copy can say the right thing instead of assuming every request is a gig.
+alter table booking_requests add column if not exists inquiry_type text not null default 'booking';
+alter table booking_requests drop constraint if exists booking_requests_inquiry_type_check;
+alter table booking_requests add constraint booking_requests_inquiry_type_check
+  check (inquiry_type in ('booking', 'collaboration', 'both'));

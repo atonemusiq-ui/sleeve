@@ -18,6 +18,9 @@ type Track = {
   // Optional because not every caller's select() includes it (e.g. embed
   // pages that don't need it) — treated as "none" wherever it's absent.
   verification_status?: string | null;
+  // Self-declared at upload (UploadForm.tsx) — shown as a plain badge so a
+  // listener knows before they hit play, not gated behind anything else.
+  explicit?: boolean | null;
   artists: {
     id: string;
     profiles: { display_name: string } | null;
@@ -284,7 +287,7 @@ function TrackTile({
           <p className="text-paper/60 text-sm mt-1">Unknown artist</p>
         )}
 
-        {(track.genre || track.custom_tag || aiBadge || verifiedBadge) && (
+        {(track.genre || track.custom_tag || aiBadge || verifiedBadge || track.explicit) && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {track.genre && (
               <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-paper/20 text-paper/50">
@@ -304,6 +307,11 @@ function TrackTile({
             {verifiedBadge && (
               <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-forest/50 bg-forest/10 text-forest">
                 ✓ {verifiedBadge}
+              </span>
+            )}
+            {track.explicit && (
+              <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-rust/50 text-rust">
+                Explicit
               </span>
             )}
           </div>

@@ -68,7 +68,7 @@ export async function startAlbumCheckout(formData: FormData) {
 
   const { data: album, error } = await supabase
     .from("albums")
-    .select("id, title, price_cents, artists ( profiles ( display_name ) )")
+    .select("id, title, price_cents, artists ( is_active, profiles ( display_name ) )")
     .eq("id", albumId)
     .single();
 
@@ -76,9 +76,16 @@ export async function startAlbumCheckout(formData: FormData) {
     throw new Error("Could not find that album.");
   }
 
+  // See the matching check in lib/checkoutSession.ts — a canceled artist
+  // (app/actions/artist.ts's setArtistActive) shouldn't be buyable via a
+  // stale link even though the storefront already hides them.
+  if ((album as any).artists?.is_active === false) {
+    throw new Error("This album isn't available for purchase right now.");
+  }
+
   const { data: albumTrackRows } = await supabase
     .from("album_tracks")
-    .select("tracks ( id, title, genre )")
+    .select("tracks ( id, title, genre, frozen )")
     .eq("album_id", albumId);
 
   if (!albumTrackRows || albumTrackRows.length === 0) {
@@ -89,9 +96,15 @@ export async function startAlbumCheckout(formData: FormData) {
   // Same cover-song gate as a single-track purchase (see
   // app/actions/checkout.ts's startCheckout and lib/coverCompliance.ts),
   // applied to every track in the bundle — one uncredited cover blocks the
-  // whole album purchase rather than silently selling it anyway.
+  // whole album purchase rather than silently selling it anyway. Same idea
+  // for a frozen track (app/admin/moderation/page.tsx's freezeTrack) — one
+  // frozen track blocks the whole bundle rather than quietly selling the
+  // rest around it.
   for (const row of albumTrackRows) {
     const track = row.tracks as any;
+    if (track?.frozen) {
+      throw new Error(`This album isn't available for purchase right now — "${track.title}" was removed.`);
+    }
     if (track && (await trackNeedsCoverCredit(track.id, track.genre))) {
       throw new Error(
         `This album can't be purchased yet — "${track.title}" is a cover and still needs the original songwriter/producer credited before it can go on sale.`
@@ -112,11 +125,16 @@ export async function startAlbumCheckout(formData: FormData) {
     phone_number_collection: {
       enabled: true,
     },
+    // See the matching comment in lib/checkoutSession.ts's
+    // createTrackCheckoutSession — same Stripe Tax setup, same reasoning.
+    automatic_tax: { enabled: true },
+    billing_address_collection: "required",
     line_items: [
       {
         price_data: {
           currency: "usd",
           unit_amount: amountCents,
+          tax_behavior: "exclusive",
           product_data: {
             name: `${album.title} (full album, ${trackCount} tracks)`,
             description: `by ${artistName}`,

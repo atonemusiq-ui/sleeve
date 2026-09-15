@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { createNotification } from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
 
 // Same allowlist as app/admin/flagged/page.tsx — kept in one place would be
@@ -127,4 +128,94 @@ export async function rejectTrackVerification(formData: FormData) {
 
   revalidatePath("/admin/verifications");
   revalidatePath("/dashboard/catalog");
+}
+
+// Content moderation (app/admin/moderation/page.tsx) — pulling a track down
+// for a policy violation. Freezing, not deleting: the row, its sales
+// history, and everything else about it stays exactly as it is, it just
+// stops showing up anywhere public and stops being buyable (see the
+// `frozen` filters added to app/page.tsx, app/ai-music/page.tsx,
+// app/artists/[id]/page.tsx, app/embed/[trackId]/page.tsx,
+// lib/checkoutSession.ts, and app/actions/checkout.ts's startAlbumCheckout).
+// A reason is required — it's shown back to the artist both in their
+// catalog (app/dashboard/TrackList.tsx) and in the notification this sends.
+export async function freezeTrack(formData: FormData) {
+  await requireAdmin();
+  const id = formData.get("id") as string;
+  const reason = (formData.get("reason") as string)?.trim();
+
+  if (!reason) {
+    throw new Error("A reason is required so the artist knows what to fix.");
+  }
+
+  const admin = createServiceRoleClient();
+
+  const { data: track } = await admin
+    .from("tracks")
+    .select("id, title, artist_id, artists ( user_id )")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!track) {
+    throw new Error("Track not found.");
+  }
+
+  await admin
+    .from("tracks")
+    .update({ frozen: true, frozen_reason: reason, frozen_at: new Date().toISOString() })
+    .eq("id", id);
+
+  const artistUserId = (track as any).artists?.user_id;
+  if (artistUserId) {
+    await createNotification(admin, {
+      userId: artistUserId,
+      type: "track_frozen",
+      title: `Your track "${track.title}" was removed from Fyby`,
+      body: reason,
+      link: "/dashboard/catalog",
+    });
+  }
+
+  revalidatePath("/admin/moderation");
+  revalidatePath("/dashboard/catalog");
+  revalidatePath("/");
+  revalidatePath("/ai-music");
+  revalidatePath(`/artists/${track.artist_id}`);
+}
+
+export async function unfreezeTrack(formData: FormData) {
+  await requireAdmin();
+  const id = formData.get("id") as string;
+  const admin = createServiceRoleClient();
+
+  const { data: track } = await admin
+    .from("tracks")
+    .select("id, title, artist_id, artists ( user_id )")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!track) {
+    throw new Error("Track not found.");
+  }
+
+  await admin
+    .from("tracks")
+    .update({ frozen: false, frozen_reason: null, frozen_at: null })
+    .eq("id", id);
+
+  const artistUserId = (track as any).artists?.user_id;
+  if (artistUserId) {
+    await createNotification(admin, {
+      userId: artistUserId,
+      type: "track_unfrozen",
+      title: `Your track "${track.title}" is back up on Fyby`,
+      link: "/dashboard/catalog",
+    });
+  }
+
+  revalidatePath("/admin/moderation");
+  revalidatePath("/dashboard/catalog");
+  revalidatePath("/");
+  revalidatePath("/ai-music");
+  revalidatePath(`/artists/${track.artist_id}`);
 }

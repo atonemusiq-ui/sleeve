@@ -44,7 +44,9 @@ export default async function ArtistPage({ params }: { params: { id: string } })
 
   const { data: artist } = await supabase
     .from("artists")
-    .select("id, bio, bio_photo_url, gallery_urls, bio_video_url, bio_video_type, profiles ( display_name )")
+    .select(
+      "id, user_id, is_active, bio, bio_photo_url, gallery_urls, bio_video_url, bio_video_type, profiles ( display_name )"
+    )
     .eq("id", params.id)
     .single();
 
@@ -52,15 +54,36 @@ export default async function ArtistPage({ params }: { params: { id: string } })
     notFound();
   }
 
-  const { data: tracks } = await supabase
-    .from("tracks")
-    .select("id, title, price_cents, cover_url, preview_url, created_at, genre, custom_tag, ai_disclosure")
-    .eq("artist_id", artist.id)
-    .order("created_at", { ascending: false });
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  const isOwner = user?.id === (artist as any).user_id;
+
+  // A canceled artist page (is_active = false — see app/actions/artist.ts's
+  // setArtistActive) is meant to disappear for everyone except the artist
+  // themselves, who still needs to reach it to reactivate. RLS
+  // (supabase/schema.sql) already stops an anonymous/other-user request from
+  // reading this row at all once it's inactive, so a non-owner request
+  // reaches here with `artist` present only because they're either the
+  // owner or the row is active — this check is the belt to that RLS
+  // suspenders, and what actually decides whether to show the hidden banner.
+  if (!(artist as any).is_active && !isOwner) {
+    notFound();
+  }
+
+  const { data: tracks } = await supabase
+    .from("tracks")
+    .select(
+      "id, title, price_cents, cover_url, preview_url, created_at, genre, custom_tag, ai_disclosure, explicit"
+    )
+    // A frozen track (app/admin/moderation/page.tsx's freezeTrack) is hidden
+    // here for everyone, owner included — the artist already sees why in
+    // their own catalog (app/dashboard/TrackList.tsx) and the notification
+    // freezing sent them.
+    .eq("artist_id", artist.id)
+    .eq("frozen", false)
+    .order("created_at", { ascending: false });
 
   const artistName = (artist as any).profiles?.display_name ?? "Unknown artist";
   const galleryUrls: string[] = ((artist as any).gallery_urls ?? []).filter(Boolean);
@@ -89,6 +112,19 @@ export default async function ArtistPage({ params }: { params: { id: string } })
           )}
         </nav>
       </div>
+
+      {isOwner && !(artist as any).is_active && (
+        <div className="mb-8 border border-rust/40 rounded-lg p-4 bg-rust/5">
+          <p className="font-mono text-xs text-rust">
+            Your page is hidden — this is a preview only. Fans can&apos;t see this page or buy your
+            music right now.{" "}
+            <Link href="/dashboard" className="underline hover:text-gold">
+              Reactivate it from your dashboard
+            </Link>
+            .
+          </p>
+        </div>
+      )}
 
       <header className="mt-6 mb-10 flex items-start gap-5">
         {(artist as any).bio_photo_url && (
@@ -150,7 +186,10 @@ export default async function ArtistPage({ params }: { params: { id: string } })
                   )}
                 </div>
                 <h2 className="font-display text-xl">{track.title}</h2>
-                {(track.genre || track.custom_tag || aiDisclosureBadge(track.ai_disclosure)) && (
+                {(track.genre ||
+                  track.custom_tag ||
+                  aiDisclosureBadge(track.ai_disclosure) ||
+                  (track as any).explicit) && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {track.genre && (
                       <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-paper/20 text-paper/50">
@@ -165,6 +204,11 @@ export default async function ArtistPage({ params }: { params: { id: string } })
                     {aiDisclosureBadge(track.ai_disclosure) && (
                       <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-gold/40 text-gold">
                         {aiDisclosureBadge(track.ai_disclosure)}
+                      </span>
+                    )}
+                    {(track as any).explicit && (
+                      <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-rust/50 text-rust">
+                        Explicit
                       </span>
                     )}
                   </div>
@@ -183,6 +227,8 @@ export default async function ArtistPage({ params }: { params: { id: string } })
                   <p className="font-mono text-xs text-rust">
                     Pending original songwriter/producer credit — check back soon.
                   </p>
+                ) : !(artist as any).is_active ? (
+                  <p className="font-mono text-xs text-rust">Buying is off while your page is hidden.</p>
                 ) : (
                   <>
                     <span className="font-mono text-forest text-lg">
@@ -208,8 +254,8 @@ export default async function ArtistPage({ params }: { params: { id: string } })
       <div className="ticket-divider my-10" />
 
       <CollapsibleSection
-        title="Book this artist"
-        description="Send a booking inquiry straight to the artist — they'll reach out at the email you give below."
+        title="Book or collaborate with this artist"
+        description="Send a booking or collaboration inquiry straight to the artist — they'll reach out at the email you give below."
       >
         <BookingForm artistId={artist.id} />
       </CollapsibleSection>

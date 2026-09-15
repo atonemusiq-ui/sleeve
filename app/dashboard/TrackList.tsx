@@ -28,6 +28,12 @@ type Track = {
   ai_disclosure: AiDisclosureLevel;
   verification_status: string;
   verification_note: string | null;
+  explicit?: boolean | null;
+  // Set by an admin (app/admin/moderation/page.tsx's freezeTrack) for a
+  // policy violation — the artist also gets a notification when this
+  // happens, but it's shown here too so it's impossible to miss.
+  frozen?: boolean | null;
+  frozen_reason?: string | null;
 };
 
 export default function TrackList({
@@ -337,7 +343,7 @@ function TrackRow({
           songwriter/producer as a contributor below (with their royalty share).
         </p>
       )}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-4">
         <div className="w-12 h-12 rounded bg-paper/10 flex-shrink-0 overflow-hidden">
           {track.cover_url ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -348,9 +354,9 @@ function TrackRow({
             </div>
           )}
         </div>
-        <span className="font-display text-lg flex-1 min-w-[120px]">{track.title}</span>
+        <span className="font-display text-lg flex-1">{track.title}</span>
         <span className="font-mono text-forest">${(track.price_cents / 100).toFixed(2)}</span>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2">
           <button
             onClick={() => setEditing(true)}
             className="font-mono text-xs px-2 py-1 rounded border border-paper/20 hover:bg-paper/10"
@@ -393,7 +399,18 @@ function TrackRow({
           </button>
         </div>
       )}
-      {(track.genre || track.custom_tag || aiDisclosureBadge(track.ai_disclosure) || verificationBadgeLabel(track.verification_status)) && (
+      {track.frozen && (
+        <p className="font-mono text-xs text-rust bg-rust/10 border border-rust/30 rounded px-3 py-2">
+          This track was removed from Fyby by an admin
+          {track.frozen_reason ? `: ${track.frozen_reason}` : "."} It&apos;s no longer visible to
+          fans or buyable, but nothing else about it was touched.
+        </p>
+      )}
+      {(track.genre ||
+        track.custom_tag ||
+        aiDisclosureBadge(track.ai_disclosure) ||
+        verificationBadgeLabel(track.verification_status) ||
+        track.explicit) && (
         <div className="flex flex-wrap gap-1.5">
           {track.genre && (
             <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-paper/20 text-paper/60">
@@ -413,6 +430,11 @@ function TrackRow({
           {verificationBadgeLabel(track.verification_status) && (
             <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-forest/50 bg-forest/10 text-forest">
               ✓ {verificationBadgeLabel(track.verification_status)}
+            </span>
+          )}
+          {track.explicit && (
+            <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-rust/50 text-rust">
+              Explicit
             </span>
           )}
         </div>

@@ -8,6 +8,7 @@ import BioManager from "./BioManager";
 import ShareCard from "./ShareCard";
 import GalleryManager from "./GalleryManager";
 import VideoManager from "./VideoManager";
+import ArtistVisibilityManager from "./ArtistVisibilityManager";
 import CollapsibleSection from "@/app/CollapsibleSection";
 import NotificationBell from "@/app/NotificationBell";
 import type { VideoTier } from "@/lib/videoTiers";
@@ -35,7 +36,9 @@ export default async function DashboardPage() {
 
   const { data: artist } = await supabase
     .from("artists")
-    .select("id, stripe_account_id, bio, bio_photo_url, gallery_urls, video_tier, bio_video_url, bio_video_type")
+    .select(
+      "id, stripe_account_id, bio, bio_photo_url, gallery_urls, video_tier, bio_video_url, bio_video_type, is_active"
+    )
     .eq("user_id", user.id)
     .single();
 
@@ -58,7 +61,9 @@ export default async function DashboardPage() {
   const { data: bookingRows } = artist?.id
     ? await supabase
         .from("booking_requests")
-        .select("id, fan_name, fan_email, fan_phone, event_date, event_location, message, status, created_at")
+        .select(
+          "id, fan_name, fan_email, fan_phone, event_date, event_location, message, status, created_at, inquiry_type"
+        )
         .eq("artist_id", artist.id)
         .order("created_at", { ascending: false })
     : { data: [] as any[] };
@@ -227,7 +232,7 @@ export default async function DashboardPage() {
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Booking requests"
+        title="Booking & collaboration requests"
         defaultOpen={newBookingsCount > 0}
         badge={
           newBookingsCount > 0 && (
@@ -238,7 +243,8 @@ export default async function DashboardPage() {
         }
       >
         <p className="font-mono text-xs text-paper/60">
-          Fans can send these from your public artist page — {artist?.id ? (
+          Fans can send a booking inquiry, a collaboration request, or both from your public
+          artist page — {artist?.id ? (
             <Link href={`/artists/${artist.id}`} className="text-gold">
               preview it
             </Link>
@@ -247,6 +253,24 @@ export default async function DashboardPage() {
           )}.
         </p>
         <BookingRequestsList requests={bookingRequests} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Page visibility"
+        defaultOpen={(artist as any)?.is_active === false}
+        badge={
+          <span
+            className={`font-mono text-[10px] px-2 py-0.5 rounded-full border ${
+              (artist as any)?.is_active === false
+                ? "text-rust border-rust/40"
+                : "text-forest border-forest/40"
+            }`}
+          >
+            {(artist as any)?.is_active === false ? "Hidden" : "Active"}
+          </span>
+        }
+      >
+        <ArtistVisibilityManager isActive={(artist as any)?.is_active !== false} />
       </CollapsibleSection>
     </main>
   );

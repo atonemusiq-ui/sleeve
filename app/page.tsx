@@ -14,11 +14,21 @@ import FybyLogo from "./FybyLogo";
 export default async function StorefrontPage() {
   const supabase = createClient();
 
+  // artists!inner (rather than the plain artists(...) embed) turns the join
+  // into an inner join, which is what lets .eq("artists.is_active", ...)
+  // actually filter rows here — a plain left-embed can't be filtered by a
+  // column on the embedded table. This is what keeps a canceled artist's
+  // tracks (see app/actions/artist.ts's setArtistActive) off the storefront.
   const { data: tracks, error } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, created_at, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, verification_status, artists ( id, bio, user_id, profiles ( display_name ) )"
+      "id, title, price_cents, created_at, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, explicit, verification_status, artists!inner ( id, bio, user_id, profiles ( display_name ) )"
     )
+    .eq("artists.is_active", true)
+    // A frozen track (app/admin/moderation/page.tsx's freezeTrack) is pulled
+    // from every public listing the same way an inactive artist's tracks
+    // are — see the matching comment above.
+    .eq("frozen", false)
     .order("created_at", { ascending: false });
 
   // Admin-approved genre suggestions (see app/actions/genres.ts and
@@ -92,10 +102,7 @@ export default async function StorefrontPage() {
         </div>
         <nav className="font-mono text-sm">
           {user ? (
-            <div className="flex flex-wrap gap-4">
-              <Link href="/artists" className="hover:text-gold">
-                Artists
-              </Link>
+            <div className="flex gap-4">
               <Link href="/ai-music" className="hover:text-gold">
                 AI Music
               </Link>
@@ -109,10 +116,7 @@ export default async function StorefrontPage() {
               )}
             </div>
           ) : (
-            <div className="flex flex-wrap gap-4">
-              <Link href="/artists" className="hover:text-gold">
-                Artists
-              </Link>
+            <div className="flex gap-4">
               <Link href="/ai-music" className="hover:text-gold">
                 AI Music
               </Link>

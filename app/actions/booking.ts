@@ -7,8 +7,16 @@ import { revalidatePath } from "next/cache";
 
 export type BookingActionResult = { error?: string; success?: boolean };
 export type BookingStatus = "new" | "contacted" | "booked" | "declined";
+export type InquiryType = "booking" | "collaboration" | "both";
 
 const MAX_MESSAGE_LENGTH = 2000;
+const INQUIRY_TYPES: InquiryType[] = ["booking", "collaboration", "both"];
+
+const INQUIRY_TYPE_LABEL: Record<InquiryType, string> = {
+  booking: "booking",
+  collaboration: "collaboration",
+  both: "booking/collaboration",
+};
 
 // Public — no login required. A fan submits this straight from an artist's
 // page (app/artists/[id]/BookingForm.tsx); the insert policy in
@@ -23,11 +31,17 @@ export async function submitBookingRequest(formData: FormData): Promise<BookingA
   const eventDate = (formData.get("eventDate") as string) || null;
   const eventLocation = (formData.get("eventLocation") as string)?.trim() || null;
   const message = (formData.get("message") as string)?.trim();
+  // Which kind of inquiry this is (BookingForm.tsx's two checkboxes) —
+  // defaults to "booking" for any older/direct caller that doesn't send one.
+  const inquiryTypeRaw = (formData.get("inquiryType") as string) || "booking";
+  const inquiryType: InquiryType = INQUIRY_TYPES.includes(inquiryTypeRaw as InquiryType)
+    ? (inquiryTypeRaw as InquiryType)
+    : "booking";
 
   if (!artistId) return { error: "Missing artist." };
   if (!fanName) return { error: "Please enter your name." };
   if (!fanEmail || !fanEmail.includes("@")) return { error: "Please enter a valid email." };
-  if (!message) return { error: "Please add a short message about the event." };
+  if (!message) return { error: "Please add a short message about what you have in mind." };
   if (message.length > MAX_MESSAGE_LENGTH) {
     return { error: `Message is too long (max ${MAX_MESSAGE_LENGTH} characters).` };
   }
@@ -47,6 +61,7 @@ export async function submitBookingRequest(formData: FormData): Promise<BookingA
     event_date: eventDate,
     event_location: eventLocation,
     message,
+    inquiry_type: inquiryType,
   });
 
   if (error) return { error: error.message };
@@ -59,7 +74,7 @@ export async function submitBookingRequest(formData: FormData): Promise<BookingA
   await createNotification(createServiceRoleClient(), {
     userId: artist.user_id,
     type: "booking",
-    title: `New booking request from ${fanName}`,
+    title: `New ${INQUIRY_TYPE_LABEL[inquiryType]} request from ${fanName}`,
     body: eventDate ? `For ${eventDate}` : undefined,
     link: "/dashboard",
   });

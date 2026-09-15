@@ -22,6 +22,7 @@ export type PublishTrackInput = {
   subgenre: string | null;
   customTag: string | null;
   aiDisclosure: AiDisclosureLevel;
+  explicit: boolean;
   rightsAttested: boolean;
 };
 
@@ -140,6 +141,7 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
     subgenre: input.subgenre || null,
     custom_tag: customTag,
     ai_disclosure: input.aiDisclosure,
+    explicit: input.explicit,
   });
 
   if (error) {

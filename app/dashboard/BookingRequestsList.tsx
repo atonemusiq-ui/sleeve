@@ -14,6 +14,16 @@ export type BookingRequest = {
   message: string;
   status: BookingStatus;
   created_at: string;
+  // Which the fan checked on the artist page's form (BookingForm.tsx) —
+  // optional so an older row inserted before this column existed still
+  // renders fine (falls back to "booking" below).
+  inquiry_type?: "booking" | "collaboration" | "both" | null;
+};
+
+const INQUIRY_TYPE_LABEL: Record<string, string> = {
+  booking: "Booking",
+  collaboration: "Collaboration",
+  both: "Booking + Collaboration",
 };
 
 const STATUS_LABEL: Record<BookingStatus, string> = {
@@ -74,6 +84,9 @@ export default function BookingRequestsList({ requests }: { requests: BookingReq
                 className={`font-mono text-xs px-2 py-0.5 rounded-full border ml-2 ${STATUS_COLOR[r.status]}`}
               >
                 {STATUS_LABEL[r.status]}
+              </span>
+              <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-gold/40 text-gold ml-2">
+                {INQUIRY_TYPE_LABEL[r.inquiry_type ?? "booking"]}
               </span>
             </div>
             <span className="font-mono text-xs text-paper/40">

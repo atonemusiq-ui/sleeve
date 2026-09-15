@@ -22,12 +22,28 @@ export async function createTrackCheckoutSession(
 
   const { data: track, error } = await supabase
     .from("tracks")
-    .select("id, title, price_cents, genre, artists ( profiles ( display_name ) )")
+    .select("id, title, price_cents, genre, frozen, artists ( is_active, profiles ( display_name ) )")
     .eq("id", trackId)
     .single();
 
   if (error || !track) {
     return { error: "Could not find that track." };
+  }
+
+  // A canceled artist (is_active = false — app/actions/artist.ts's
+  // setArtistActive) shouldn't be buyable anywhere, including a stale embed
+  // widget or a bookmarked artist link a fan still has lying around, even
+  // though the storefront/artist-page queries already keep it from being
+  // discoverable in the first place.
+  if ((track as any).artists?.is_active === false) {
+    return { error: "This track isn't available for purchase right now." };
+  }
+
+  // Same idea for a track an admin froze for a policy violation
+  // (app/admin/moderation/page.tsx's freezeTrack) — the artist stays active,
+  // just this one track is off-limits.
+  if (track.frozen) {
+    return { error: "This track is no longer available for purchase." };
   }
 
   // Cover songs owe the original songwriter/producer a royalty — see
@@ -54,11 +70,24 @@ export async function createTrackCheckoutSession(
     phone_number_collection: {
       enabled: true,
     },
+    // Collects sales tax on top of the listed price wherever the platform
+    // has Stripe Tax registrations configured — requires Stripe Tax to be
+    // turned on for this Stripe account first (Dashboard: Settings ->
+    // Tax), with at least one registration added, or session creation fails
+    // outright. billing_address_collection gives Stripe a real address to
+    // calculate tax from for a purely digital good (no shipping address to
+    // fall back on). tax_behavior: "exclusive" means amountCents (and this
+    // app's platform-fee/artist-payout split, computed from it) stays the
+    // pre-tax price — the tax Stripe adds rides on top of the charge, not
+    // out of it.
+    automatic_tax: { enabled: true },
+    billing_address_collection: "required",
     line_items: [
       {
         price_data: {
           currency: "usd",
           unit_amount: amountCents,
+          tax_behavior: "exclusive",
           product_data: {
             name: track.title,
             description: `by ${artistName}`,

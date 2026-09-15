@@ -24,12 +24,16 @@ import StorefrontGrid from "@/app/StorefrontGrid";
 export default async function AiMusicPage() {
   const supabase = createClient();
 
+  // See the matching comment in app/page.tsx — artists!inner + .eq on the
+  // embedded column is what actually filters out a canceled artist's tracks.
   const { data: tracks, error } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, created_at, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, verification_status, artists ( id, bio, user_id, profiles ( display_name ) )"
+      "id, title, price_cents, created_at, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, explicit, verification_status, artists!inner ( id, bio, user_id, profiles ( display_name ) )"
     )
     .eq("ai_disclosure", "ai_generated")
+    .eq("artists.is_active", true)
+    .eq("frozen", false)
     .order("created_at", { ascending: false });
 
   // Admin-approved genre suggestions get their own row here too, same as
