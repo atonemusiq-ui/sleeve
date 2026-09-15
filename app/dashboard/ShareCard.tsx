@@ -11,7 +11,14 @@ import { useState } from "react";
 export default function ShareCard({ artistId, artistName }: { artistId: string; artistName: string }) {
   const [copied, setCopied] = useState(false);
 
-  const imageUrl = `/artists/${artistId}/share-card`;
+  // Cache-bust on every page load. Confirmed live: an artist id that got
+  // hit once under an older version of this graphic kept serving that exact
+  // cached image from an upstream cache even after the route's own
+  // Cache-Control was shortened — a fresh query string sidesteps that
+  // entirely by always asking for a URL no cache has seen before, so an
+  // artist previewing or downloading here always gets the current design.
+  const [cacheBust] = useState(() => Date.now());
+  const imageUrl = `/artists/${artistId}/share-card?v=${cacheBust}`;
   const caption = `🎤 New music is up — scan the mic to hear it on Fyby! ${
     typeof window !== "undefined" ? window.location.origin : ""
   }/artists/${artistId}`;

@@ -1,13 +1,43 @@
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { startCheckout } from "@/app/actions/checkout";
 import { tracksNeedingCoverCredit } from "@/lib/coverCompliance";
 import { aiDisclosureBadge } from "@/lib/aiDisclosure";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import BookingForm from "./BookingForm";
 import ReportVideoButton from "./ReportVideoButton";
 import VideoEmbed from "@/app/VideoEmbed";
 import CollapsibleSection from "@/app/CollapsibleSection";
+
+// Powers the og:title/og:description a crawler shows alongside the image
+// from this same folder's opengraph-image.tsx when a plain artist link is
+// pasted anywhere that unfurls it (iMessage, WhatsApp, Twitter/X, Facebook,
+// Discord, Slack, email — see that file's comment for the full list).
+// Instagram/TikTok/Snapchat don't unfurl links in a post at all, which is
+// why there's a separate downloadable QR sticker for those
+// (app/artists/[id]/share-card/route.tsx).
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const admin = createServiceRoleClient();
+  const { data: artist } = await admin
+    .from("artists")
+    .select("bio, profiles ( display_name )")
+    .eq("id", params.id)
+    .maybeSingle();
+
+  const artistName = (artist as any)?.profiles?.display_name ?? "an artist on Fyby";
+  const description =
+    (artist as any)?.bio ??
+    `Hear ${artistName}'s music and buy it directly — no label, no streaming middleman.`;
+
+  return {
+    title: `${artistName} | Fyby`,
+    description,
+    openGraph: { title: artistName, description, type: "profile" },
+    twitter: { card: "summary_large_image", title: artistName, description },
+  };
+}
 
 export default async function ArtistPage({ params }: { params: { id: string } }) {
   const supabase = createClient();

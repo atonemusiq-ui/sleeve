@@ -40,6 +40,15 @@ export const dynamic = "force-dynamic";
 // dependency safely, and that service is free, widely used, and has no
 // artist- or fan-identifying data in the request (just the public artist
 // page URL).
+//
+// Sticker treatment: the whole card sits inside a thick-bordered, slightly
+// rotated panel with a soft drop shadow — meant to read like a physical
+// sticker you'd slap on a laptop, not a flat info card. The shadow is a
+// second copy of the panel's shape, offset behind it — Satori (next/og's
+// renderer) has patchy box-shadow support across versions, so a duplicate
+// offset shape is the reliable way to fake one. Both the shadow and the
+// panel share the same rotation so they move as one rigid sticker rather
+// than a card floating over a shadow at a different angle.
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const admin = createServiceRoleClient();
   const { data: artist } = await admin
@@ -55,6 +64,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     artistUrl
   )}`;
   const micCutoutUrl = `${siteUrl}/images/mic-cutout.png`;
+  const stickerRotation = "rotate(-3deg)";
+  const stickerSize = 900;
 
   return new ImageResponse(
     (
@@ -63,41 +74,76 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
           width: "100%",
           height: "100%",
           display: "flex",
-          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
           background: "#16121a",
-          gap: 26,
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={micCutoutUrl} width={300} height={492} style={{ objectFit: "contain" }} />
+        <div style={{ display: "flex", position: "relative", width: stickerSize, height: stickerSize }}>
+          {/* Drop shadow — a dark, slightly larger copy of the sticker panel
+              offset down-right, painted first so the panel itself layers on
+              top of it. */}
+          <div
+            style={{
+              display: "flex",
+              position: "absolute",
+              top: 18,
+              left: 18,
+              width: stickerSize,
+              height: stickerSize,
+              borderRadius: 56,
+              background: "rgba(0,0,0,0.45)",
+              transform: stickerRotation,
+            }}
+          />
 
-        {/* QR sits below the mic rather than composited onto it — a photo
-            cutout's edges aren't clean/uniform enough behind a QR code to
-            guarantee it keeps scanning reliably. */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 280,
-            height: 280,
-            background: "#e8e1d3",
-            borderRadius: 20,
-            border: "4px solid #d4a537",
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={qrUrl} width={240} height={240} />
-        </div>
+          {/* The sticker panel itself — thick gold border + rounded corners
+              is what reads as "sticker" rather than "poster". */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              width: stickerSize,
+              height: stickerSize,
+              borderRadius: 56,
+              background: "#16121a",
+              border: "14px solid #d4a537",
+              gap: 26,
+              transform: stickerRotation,
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={micCutoutUrl} width={280} height={459} style={{ objectFit: "contain" }} />
 
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <div style={{ display: "flex", fontSize: 44, fontWeight: 700, color: "#e8e1d3" }}>
-            {artistName}
-          </div>
-          <div style={{ display: "flex", fontSize: 26, color: "#d4a537", marginTop: 10 }}>
-            Scan the mic to hear my music on Fyby
+            {/* QR sits below the mic rather than composited onto it — a photo
+                cutout's edges aren't clean/uniform enough behind a QR code to
+                guarantee it keeps scanning reliably. */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 260,
+                height: 260,
+                background: "#e8e1d3",
+                borderRadius: 18,
+                border: "3px solid #d4a537",
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qrUrl} width={224} height={224} />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ display: "flex", fontSize: 42, fontWeight: 700, color: "#e8e1d3" }}>
+                {artistName}
+              </div>
+              <div style={{ display: "flex", fontSize: 24, color: "#d4a537", marginTop: 10 }}>
+                Scan the mic to hear my music on Fyby
+              </div>
+            </div>
           </div>
         </div>
       </div>
