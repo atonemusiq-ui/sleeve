@@ -114,3 +114,56 @@ export async function updateGallery(formData: FormData): Promise<UpdateGalleryRe
   revalidatePath(`/artists/${artist.id}`);
   return {};
 }
+
+export type SetArtistActiveResult = { error?: string };
+
+// "Cancel my artist page" (deactivate) and "Reactivate my page" both go
+// through this one action — same effect either way, just flipping is_active
+// (supabase/schema.sql). Nothing is deleted: the artist row, bio, tracks,
+// past sales, and Stripe Connect setup are all untouched. Deactivating just
+// removes the artist from public discovery —
+//   - app/artists/page.tsx (the artist directory)
+//   - app/page.tsx and app/ai-music/page.tsx (storefront/browse rows)
+//   - app/artists/[id]/page.tsx itself, for anyone who isn't the artist
+//   - new purchases (lib/checkoutSession.ts, startAlbumCheckout) and the
+//     embed widget (app/embed/[trackId]/page.tsx)
+// Fans who already bought something keep their downloads either way — that
+// lives in the separate `purchases`/library tables and was never gated on
+// is_active.
+export async function setArtistActive(isActive: boolean): Promise<SetArtistActiveResult> {
+  const supabase = createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "You must be logged in." };
+  }
+
+  const { data: artist, error: fetchError } = await supabase
+    .from("artists")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (fetchError || !artist) {
+    return { error: "Could not find your artist profile." };
+  }
+
+  const { error } = await supabase.from("artists").update({ is_active: isActive }).eq("id", artist.id);
+
+  if (error) {
+    return { error: `${isActive ? "Reactivating" : "Canceling"} your page failed: ${error.message}` };
+  }
+
+  // Every public surface that lists artists/tracks reads through these same
+  // paths — revalidate broadly so the change (in either direction) takes
+  // effect immediately instead of waiting on Next's normal cache window.
+  revalidatePath("/dashboard");
+  revalidatePath(`/artists/${artist.id}`);
+  revalidatePath("/artists");
+  revalidatePath("/");
+  revalidatePath("/ai-music");
+  return {};
+}
