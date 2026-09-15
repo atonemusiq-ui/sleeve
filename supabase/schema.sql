@@ -852,3 +852,15 @@ alter table booking_requests add column if not exists inquiry_type text not null
 alter table booking_requests drop constraint if exists booking_requests_inquiry_type_check;
 alter table booking_requests add constraint booking_requests_inquiry_type_check
   check (inquiry_type in ('booking', 'collaboration', 'both'));
+
+-- ============================================================================
+-- Artist social links: shown on the public artist page (app/artists/[id]/
+-- page.tsx) so fans can follow the artist on other platforms. Each is
+-- optional free-text (validated as a URL at the app layer in
+-- app/actions/artist.ts's updateSocialLinks), rather than a JSON blob,
+-- since there's a small fixed set of platforms for now.
+-- ============================================================================
+alter table artists add column if not exists facebook_url text;
+alter table artists add column if not exists tiktok_url text;
+alter table artists add column if not exists instagram_url text;
+alter table artists add column if not exists twitter_url text;
