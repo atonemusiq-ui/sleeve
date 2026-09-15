@@ -7,7 +7,7 @@ import Link from "next/link";
 // review — see the message accompanying this page in chat.
 export default function PrivacyPage() {
   return (
-    <main className="max-w-3xl mx-auto px-6 py-16">
+    <main className="max-w-3xl mx-auto x-6 py-16">
       <h1 className="font-display text-3xl text-gold mb-2">Privacy Policy</h1>
       <p className="font-mono text-xs text-paper/40 mb-8">Last updated: {LAST_UPDATED}</p>
 
@@ -124,8 +124,8 @@ export default function PrivacyPage() {
         <section>
           <h2>8. International use</h2>
           <p>
-            Fyby can display and, where supported, charge in your local currency at checkout.
-            Your information may be processed in the United States, where Fyby and its service
+              Fyby currently processes all purchases in US dollars (USD). Your
+              information may be processed in the United States, where Fyby and its service
             providers operate.
           </p>
         </section>
