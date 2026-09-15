@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import GlobalAudioManager from "./GlobalAudioManager";
 
 export const metadata: Metadata = {
   title: "Fyby",
@@ -15,7 +16,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body className="bg-ink text-paper font-body min-h-screen">{children}</body>
+      <body className="bg-ink text-paper font-body min-h-screen">
+        {/* Enforces "only one song plays at a time" across the whole site —
+            see GlobalAudioManager.tsx for how. Renders nothing itself. */}
+        <GlobalAudioManager />
+        {children}
+      </body>
     </html>
   );
 }
