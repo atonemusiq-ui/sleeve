@@ -124,8 +124,8 @@ export default function PrivacyPage() {
         <section>
           <h2>8. International use</h2>
           <p>
-              Fyby currently processes all purchases in US dollars (USD). Your
-              information may be processed in the United States, where Fyby and its service
+              Fyby can display, and where supported (via Stripe&apos;s Adaptive Pricing) let you pay in, your local currency at checkout — Fyby&apos;s own pricing and payouts are still set in US dollars.
+                          Your information may be processed in the United States, where Fyby and its service
             providers operate.
           </p>
         </section>
