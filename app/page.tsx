@@ -109,6 +109,7 @@ export default async function StorefrontPage() {
               <Link href="/library" className="hover:text-gold">
                 My Music
               </Link>
+                          <Link href="/artists" className="hover:text-gold">Artists</Link>
               {role === "artist" && (
                 <Link href="/dashboard" className="hover:text-gold">
                   Dashboard
@@ -120,6 +121,7 @@ export default async function StorefrontPage() {
               <Link href="/ai-music" className="hover:text-gold">
                 AI Music
               </Link>
+                          <Link href="/artists" className="hover:text-gold">Artists</Link>
               <Link href="/login" className="hover:text-gold">
                 Log in
               </Link>
