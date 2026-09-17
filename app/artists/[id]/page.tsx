@@ -7,6 +7,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import BookingForm from "./BookingForm";
+import SupportArtist from "./SupportArtist";
 import ReportVideoButton from "./ReportVideoButton";
 import VideoEmbed from "@/app/VideoEmbed";
 import CollapsibleSection from "@/app/CollapsibleSection";
@@ -39,7 +40,13 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   };
 }
 
-export default async function ArtistPage({ params }: { params: { id: string } }) {
+export default async function ArtistPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { superfan?: string; gift?: string; ref?: string };
+}) {
   const supabase = createClient();
 
   const { data: artist } = await supabase
@@ -88,6 +95,32 @@ export default async function ArtistPage({ params }: { params: { id: string } })
   const artistName = (artist as any).profiles?.display_name ?? "Unknown artist";
   const galleryUrls: string[] = ((artist as any).gallery_urls ?? []).filter(Boolean);
 
+  // Whether the logged-in fan is already a Super Fan of this artist, so the
+  // panel can say so instead of offering a subscription that
+  // startSuperFanCheckout would just reject. Gated by the "Fans can view
+  // their own super fan subscriptions" RLS policy (supabase/schema.sql), so
+  // this only ever sees the viewer's own row.
+  let isSuperFan = false;
+  if (user) {
+    const { data: subscription } = await supabase
+      .from("artist_subscriptions")
+      .select("id")
+      .eq("fan_id", user.id)
+      .eq("artist_id", artist.id)
+      .eq("status", "active")
+      .maybeSingle();
+
+    isSuperFan = Boolean(subscription);
+  }
+
+  // A fan who arrived from another fan's referral link — logged against the
+  // subscription so credit can be paid out once reward logic exists (see
+  // artist_subscriptions.referred_by_fan_id in supabase/schema.sql). Ignored
+  // if it points at the viewer themselves, so a fan can't refer themselves
+  // by editing their own link.
+  const referredByFanId =
+    searchParams.ref && searchParams.ref !== user?.id ? searchParams.ref : null;
+
   // Cover songs (see lib/coverCompliance.ts) can't be sold until the artist
   // has credited the original songwriter/producer as a contributor.
   const blockedTrackIds = await tracksNeedingCoverCredit(
@@ -122,6 +155,27 @@ export default async function ArtistPage({ params }: { params: { id: string } })
               Reactivate it from your dashboard
             </Link>
             .
+          </p>
+        </div>
+      )}
+
+      {/* Stripe sends the fan back here after checkout — see the success_url
+          in app/actions/superfan.ts. The subscription/gift row itself is
+          written by the webhook, which may land a moment later, so these
+          confirm the payment rather than reading back the new row. */}
+      {searchParams.superfan === "success" && (
+        <div className="mb-8 border border-forest/40 rounded-lg p-4 bg-forest/10">
+          <p className="font-mono text-sm text-forest">
+            You&apos;re a Super Fan of {artistName} — thank you. Your first month is paid,
+            and {artistName} has been notified.
+          </p>
+        </div>
+      )}
+
+      {searchParams.gift === "success" && (
+        <div className="mb-8 border border-forest/40 rounded-lg p-4 bg-forest/10">
+          <p className="font-mono text-sm text-forest">
+            Your gift is on its way to {artistName} — thank you.
           </p>
         </div>
       )}
@@ -252,6 +306,27 @@ export default async function ArtistPage({ params }: { params: { id: string } })
       )}
 
       <div className="ticket-divider my-10" />
+
+      {/* Hidden while the artist's page is deactivated, for the same reason
+          the Buy buttons are: nothing should be able to take money for an
+          artist who has switched their page off. */}
+      {(artist as any).is_active && (
+        <section className="mb-10">
+          <h2 className="font-display text-2xl mb-2">Support {artistName}</h2>
+          <p className="font-mono text-xs text-paper/60 mb-6 max-w-2xl">
+            Buying a track pays {artistName} directly. These go further — a monthly
+            subscription, or a one-off gift.
+          </p>
+          <SupportArtist
+            artistId={artist.id}
+            artistName={artistName}
+            isOwner={isOwner}
+            isLoggedIn={Boolean(user)}
+            isSuperFan={isSuperFan}
+            referredByFanId={referredByFanId}
+          />
+        </section>
+      )}
 
       <CollapsibleSection
         title="Book or collaborate with this artist"
