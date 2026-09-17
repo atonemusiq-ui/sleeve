@@ -926,6 +926,13 @@ alter table gifts add column if not exists platform_fee_cents integer;
 alter table gifts add column if not exists artist_payout_cents integer;
 alter table gifts add column if not exists stripe_transfer_id text;
 
+-- Set when a gift's charge is refunded or its dispute is lost, at which point
+-- the artist's transfer is reversed (see reverseNonPurchasePayouts in
+-- app/api/webhooks/stripe/route.ts). Also what stops that reversal running
+-- twice when charge.refunded and charge.dispute.closed both fire for the
+-- same payment intent.
+alter table gifts add column if not exists refunded_at timestamptz;
+
 alter table gifts enable row level security;
 
 drop policy if exists "Fans can view their own gifts" on gifts;

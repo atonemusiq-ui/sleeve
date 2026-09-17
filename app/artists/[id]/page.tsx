@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { startCheckout } from "@/app/actions/checkout";
 import { tracksNeedingCoverCredit } from "@/lib/coverCompliance";
 import { aiDisclosureBadge } from "@/lib/aiDisclosure";
+import { isUuid } from "@/lib/uuid";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -118,8 +119,13 @@ export default async function ArtistPage({
   // artist_subscriptions.referred_by_fan_id in supabase/schema.sql). Ignored
   // if it points at the viewer themselves, so a fan can't refer themselves
   // by editing their own link.
+  // Shape-checked before it goes anywhere near the hidden input: this value
+  // ends up in a `uuid references profiles(id)` column, and `?ref=anything`
+  // in a shared link would otherwise fail that insert inside the webhook and
+  // leave a paying fan with no subscription row. startSuperFanCheckout checks
+  // it again, since the form post is not the only way to reach the action.
   const referredByFanId =
-    searchParams.ref && searchParams.ref !== user?.id ? searchParams.ref : null;
+    isUuid(searchParams.ref) && searchParams.ref !== user?.id ? searchParams.ref : null;
 
   // Cover songs (see lib/coverCompliance.ts) can't be sold until the artist
   // has credited the original songwriter/producer as a contributor.

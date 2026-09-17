@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/server";
 import { redirect } from "next/navigation";
+import { isUuid } from "@/lib/uuid";
 
 // $9/month Super Fan subscription for one specific artist. Same inline
 // price_data pattern as app/actions/checkout.ts's startAlbumCheckout, just
@@ -14,7 +15,7 @@ import { redirect } from "next/navigation";
 // checkout.ts/the main webhook for one-time purchases.
 export async function startSuperFanCheckout(formData: FormData) {
   const artistId = formData.get("artistId") as string;
-  const referredByFanId = (formData.get("referredByFanId") as string) || null;
+  const rawReferredByFanId = (formData.get("referredByFanId") as string) || null;
 
   const supabase = createClient();
 
@@ -29,6 +30,17 @@ export async function startSuperFanCheckout(formData: FormData) {
       )}&next=${encodeURIComponent(`/artists/${artistId}`)}`
     );
   }
+
+  // The referral arrives from a `?ref=` link anyone can edit, and lands in a
+  // `uuid references profiles(id)` column. A malformed value would fail the
+  // insert inside the webhook, 500 the event, and leave this fan paying with
+  // no artist_subscriptions row at all -- so anything that isn't a UUID is
+  // dropped here rather than carried into Stripe metadata. Self-referral is
+  // rejected for the same reason the page ignores it: credit is meant to be
+  // paid out on this column, so a fan must not be able to name themselves by
+  // posting to this action directly.
+  const referredByFanId =
+    isUuid(rawReferredByFanId) && rawReferredByFanId !== user.id ? rawReferredByFanId : null;
 
   const { data: artist, error } = await supabase
     .from("artists")
@@ -106,6 +118,8 @@ export async function startSuperFanCheckout(formData: FormData) {
   redirect(session.url);
 }
 
+const MAX_GIFT_DOLLARS = 10000;
+
 // A one-time monetary gift straight to the artist, separate from buying a
 // track/album or subscribing. Same shape as startCheckout in checkout.ts,
 // but the amount is fan-chosen rather than one of the fixed track/album
@@ -117,8 +131,17 @@ export async function startGiftCheckout(formData: FormData) {
   const amountDollars = Number(formData.get("amount"));
   const message = (formData.get("message") as string) || null;
 
-  if (!amountDollars || amountDollars < 1) {
+  if (!Number.isFinite(amountDollars) || amountDollars < 1) {
     throw new Error("Enter a gift amount of at least $1.");
+  }
+
+  // A gift is transferred out to the artist's connected account as soon as
+  // the charge lands, and a later refund or lost dispute can only claw it
+  // back if that account still holds the funds. A ceiling keeps the worst
+  // case bounded -- a stolen card sending one enormous gift to an account
+  // that cashes out before the chargeback arrives.
+  if (amountDollars > MAX_GIFT_DOLLARS) {
+    throw new Error(`The most you can send in one gift is $${MAX_GIFT_DOLLARS.toLocaleString()}.`);
   }
 
   const supabase = createClient();
@@ -137,7 +160,7 @@ export async function startGiftCheckout(formData: FormData) {
 
   const { data: artist, error } = await supabase
     .from("artists")
-    .select("id, is_active, profiles ( display_name )")
+    .select("id, user_id, is_active, profiles ( display_name )")
     .eq("id", artistId)
     .single();
 
@@ -147,6 +170,15 @@ export async function startGiftCheckout(formData: FormData) {
 
   if ((artist as any).is_active === false) {
     throw new Error("This artist isn't available to receive gifts right now.");
+  }
+
+  // SupportArtist.tsx hides the form from the artist themselves, but that is
+  // a render-time choice and this is a plain POST endpoint anyone can call.
+  // Gifting yourself would move platform money into your own connected
+  // account on a card you can later dispute, so the rule is enforced here
+  // too.
+  if ((artist as any).user_id === user.id) {
+    throw new Error("You can't send yourself a gift.");
   }
 
   const artistName = (artist as any).profiles?.display_name ?? "this artist";

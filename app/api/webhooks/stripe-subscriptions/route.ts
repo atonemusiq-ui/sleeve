@@ -135,7 +135,38 @@ export async function POST(req: Request) {
         { onConflict: "fan_id,artist_id" }
       );
 
-    if (error) {
+    // referred_by_fan_id is the one column here fed by a value from outside:
+    // a `?ref=` link. startSuperFanCheckout drops anything that isn't a UUID,
+    // but a well-formed id pointing at no profile still fails the foreign key
+    // (23503), and an older in-flight subscription may carry a malformed one
+    // (22P02). Either would 500 this event and leave the fan paying with no
+    // subscription row at all, so the referrer -- which nothing pays out on
+    // yet -- is dropped and the subscription recorded without it.
+    if (error && ((error as any).code === "23503" || (error as any).code === "22P02")) {
+      console.error(
+        `Super Fan subscription ${subscription.id} had an unusable referred_by_fan_id (${referredByFanId}); recording without it.`
+      );
+
+      const { error: retryError } = await supabase
+        .from("artist_subscriptions")
+        .upsert(
+          {
+            fan_id: fanId,
+            artist_id: artistId,
+            stripe_subscription_id: subscription.id,
+            stripe_customer_id: customerId,
+            status: subscription.status,
+            current_period_end: currentPeriodEnd(subscription),
+            referred_by_fan_id: null,
+          },
+          { onConflict: "fan_id,artist_id" }
+        );
+
+      if (retryError) {
+        console.error("Failed to record Super Fan subscription:", retryError.message);
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+    } else if (error) {
       console.error("Failed to record Super Fan subscription:", error.message);
       return NextResponse.json({ error: "Database error" }, { status: 500 });
     }

@@ -117,6 +117,70 @@ async function payContributorsAndRecordPayouts(
 // callers can persist its id on the purchase row(s) — that id is what lets a
 // later refund/dispute reverse this exact transfer (see
 // reverseArtistPayoutsAndVoidContributors below) instead of guessing.
+// Claws back a gift or a Super Fan subscription payout when its charge is
+// refunded or its dispute is lost. Neither lives in `purchases`, so the two
+// branches that handle those events -- which look the payment intent up there
+// and return early when they find nothing -- would leave the artist's
+// transfer sitting in their connected account while the platform absorbs the
+// full reversal out of its own balance, with nothing recording that it
+// happened.
+//
+// Full reversals only. A gift or a month's subscription is one indivisible
+// amount, so there is none of the per-track apportioning
+// reverseArtistPayoutsAndVoidContributors has to do for an album.
+//
+// The row is marked whether or not the reversal call succeeds, so a
+// redelivered event (charge.refunded and charge.dispute.closed can both fire
+// for one payment intent) doesn't try again forever. A failure is logged
+// loudly instead -- same call as the transfer paths above, where a failed
+// reversal is real money to reconcile by hand in the Stripe dashboard.
+async function reverseNonPurchasePayouts(supabase: Supabase, paymentIntentId: string) {
+  const { data: gifts } = await supabase
+    .from("gifts")
+    .select("id, stripe_transfer_id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .is("refunded_at", null);
+
+  for (const gift of gifts ?? []) {
+    if (gift.stripe_transfer_id) {
+      try {
+        await stripe.transfers.createReversal(gift.stripe_transfer_id);
+      } catch (err: any) {
+        console.error(`Failed to reverse gift transfer ${gift.stripe_transfer_id}:`, err.message);
+      }
+    }
+
+    await supabase
+      .from("gifts")
+      .update({ refunded_at: new Date().toISOString() })
+      .eq("id", gift.id);
+  }
+
+  const { data: payouts } = await supabase
+    .from("subscription_payouts")
+    .select("id, stripe_transfer_id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .eq("status", "paid");
+
+  for (const payout of payouts ?? []) {
+    if (payout.stripe_transfer_id) {
+      try {
+        await stripe.transfers.createReversal(payout.stripe_transfer_id);
+      } catch (err: any) {
+        console.error(
+          `Failed to reverse Super Fan payout transfer ${payout.stripe_transfer_id}:`,
+          err.message
+        );
+      }
+    }
+
+    await supabase
+      .from("subscription_payouts")
+      .update({ status: "reversed" })
+      .eq("id", payout.id);
+  }
+}
+
 // Claws back the artist's payout when a purchase is refunded or a dispute is
 // lost. Groups by transfer id first so an album's single combined transfer
 // (see transferArtistPayout in lib/stripe/payouts.ts) is reversed once for
@@ -705,6 +769,15 @@ export async function POST(req: Request) {
     }
 
     const supabase = createServiceRoleClient();
+
+    // Gifts and Super Fan payouts first: they have no `purchases` row, so the
+    // early return below would skip their reversal entirely. Only on a fully
+    // refunded charge — a partial refund gets the same manual-review
+    // treatment the purchase path gives it further down.
+    if (charge.amount_refunded >= charge.amount) {
+      await reverseNonPurchasePayouts(supabase, paymentIntentId);
+    }
+
     const { data: purchases } = await supabase
       .from("purchases")
       .select(
@@ -824,6 +897,13 @@ export async function POST(req: Request) {
         .eq("status", "disputed");
       return NextResponse.json({ received: true });
     }
+
+    // Dispute lost: the money is gone from the platform's balance either way,
+    // so any gift or Super Fan payout on this charge has to come back out of
+    // the artist's connected account too. Same reasoning as the
+    // charge.refunded branch — neither has a `purchases` row to be found by
+    // the query below.
+    await reverseNonPurchasePayouts(supabase, paymentIntentId);
 
     const { data: purchases } = await supabase
       .from("purchases")

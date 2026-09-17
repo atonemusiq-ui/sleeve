@@ -124,10 +124,13 @@ revisiting the plan tier once real tracks (not test uploads) are live.
 - A subscription payout whose artist has no connected Stripe account (or whose transfer
   errored) is recorded in `subscription_payouts` as `unpaid`/`failed` rather than retried
   — that table is the list of what's owed, and settling it is manual for now
-- Neither a refunded subscription invoice nor a refunded gift is clawed back
-  automatically — the `charge.refunded` handler only looks at `purchases`. Both tables
-  record their `stripe_transfer_id`, so a reversal can be done by hand in the Stripe
-  dashboard.
+- A gift or subscription payout is clawed back automatically on a full refund or a lost
+  dispute, but a *partial* refund of either is only logged for manual review — same
+  treatment a partially refunded purchase gets, since there's no sensible way to guess
+  what share to reverse
+- A gift is capped at $10,000 and can't be sent to yourself. Both exist because a gift is
+  transferred out to the artist's connected account as soon as the charge lands, so a
+  chargeback can only recover it while that account still holds the funds.
 - `artist_subscriptions.referred_by_fan_id` is logged from a `?ref=<fan_id>` link on the
   artist page, but no reward logic reads it
 - The README's feature list above is behind the code — albums, the admin/moderation
