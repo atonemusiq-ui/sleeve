@@ -864,3 +864,66 @@ alter table artists add column if not exists facebook_url text;
 alter table artists add column if not exists tiktok_url text;
 alter table artists add column if not exists instagram_url text;
 alter table artists add column if not exists twitter_url text;
+
+-- ============================================================================
+-- Super Fan subscriptions: $9/month recurring support for a specific artist
+-- (see app/actions/superfan.ts's startSuperFanCheckout). Status mirrors the
+-- Stripe subscription's own status rather than duplicating its logic, kept
+-- in sync by a dedicated webhook destination at
+-- app/api/webhooks/stripe-subscriptions/route.ts -- separate from the main
+-- one-time-purchase webhook, same pattern as the existing refunds/disputes
+-- destination above. referred_by_fan_id is set at checkout time when the
+-- fan arrived via another fan's referral link (?ref=<fan_id> on the artist
+-- page) -- reward logic isn't built yet, this just logs who gets credit.
+-- ============================================================================
+create table if not exists artist_subscriptions (
+    id uuid primary key default gen_random_uuid(),
+    fan_id uuid references profiles(id) not null,
+    artist_id uuid references artists(id) not null,
+    stripe_subscription_id text unique not null,
+    stripe_customer_id text not null,
+    status text not null default 'active',
+    current_period_end timestamptz,
+    referred_by_fan_id uuid references profiles(id),
+    created_at timestamptz default now(),
+    unique (fan_id, artist_id)
+  );
+alter table artist_subscriptions enable row level security;
+
+drop policy if exists "Fans can view their own super fan subscriptions" on artist_subscriptions;
+create policy "Fans can view their own super fan subscriptions"
+  on artist_subscriptions for select
+  using (fan_id = auth.uid());
+
+drop policy if exists "Artists can view their own super fan subscribers" on artist_subscriptions;
+create policy "Artists can view their own super fan subscribers"
+  on artist_subscriptions for select
+  using (artist_id in (select id from artists where user_id = auth.uid()));
+
+-- One-time monetary gifts a fan sends directly to an artist, separate from
+-- buying a track/album or subscribing. Recorded once Stripe confirms
+-- payment -- see app/actions/superfan.ts's startGiftCheckout and the
+-- matching checkout.session.completed branch in
+-- app/api/webhooks/stripe/route.ts (a gift is a one-time payment, so it
+-- rides the existing one-time-purchase webhook rather than the new
+-- subscriptions one).
+create table if not exists gifts (
+    id uuid primary key default gen_random_uuid(),
+    fan_id uuid references profiles(id),
+    artist_id uuid references artists(id) not null,
+    amount_cents integer not null,
+    message text,
+    stripe_payment_intent_id text unique,
+    created_at timestamptz default now()
+  );
+alter table gifts enable row level security;
+
+drop policy if exists "Fans can view their own gifts" on gifts;
+create policy "Fans can view their own gifts"
+  on gifts for select
+  using (fan_id = auth.uid());
+
+drop policy if exists "Artists can view gifts sent to them" on gifts;
+create policy "Artists can view gifts sent to them"
+  on gifts for select
+  using (artist_id in (select id from artists where user_id = auth.uid()));
