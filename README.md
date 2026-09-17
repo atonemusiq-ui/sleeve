@@ -29,9 +29,8 @@ fraction of a cent per stream.
   in-app player (signed URL, minted server-side, ownership checked via RLS on
   `purchases.fan_id`) — no downloading-and-figuring-out-playback required
 - Two ways to back an artist beyond buying a track, both on the public artist page:
-  **Super Fan** ($9/month subscription per artist — exclusive content, shoutouts, private
-  show videos, the two-way video exchange) and a one-off **gift** of any amount with an
-  optional message. Both take the same 20% platform cut as a sale and transfer the
+  **Super Fan** ($9/month subscription per artist) and a one-off **gift** of any amount
+  with an optional message. Both take the same 20% platform cut as a sale and transfer the
   artist's share to their connected account — a gift on payment, a subscription on each
   paid invoice, logged to `subscription_payouts`
 - Stripe webhook (`app/api/webhooks/stripe/route.ts`) records the purchase (including
@@ -117,11 +116,11 @@ revisiting the plan tier once real tracks (not test uploads) are live.
 
 ## Known gaps
 
-- **The Super Fan perks are sold but not built.** Checkout promises exclusive content,
-  shoutouts, private show videos and the two-way video exchange, and nothing reads
-  `artist_subscriptions` to gate any of it. Fans are being charged $9/month for something
-  that doesn't exist yet — worth softening the copy or building a perk before promoting
-  this.
+- **The Super Fan perks aren't built.** Exclusive content, shoutouts, private show videos
+  and the two-way video exchange are all planned, and nothing reads `artist_subscriptions`
+  to gate any of them. The artist page and the Stripe checkout description both say so
+  rather than promising them — Super Fan currently sells direct monthly support and
+  nothing more. Update both when a perk ships.
 - A subscription payout whose artist has no connected Stripe account (or whose transfer
   errored) is recorded in `subscription_payouts` as `unpaid`/`failed` rather than retried
   — that table is the list of what's owed, and settling it is manual for now

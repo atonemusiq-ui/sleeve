@@ -70,8 +70,13 @@ export async function startSuperFanCheckout(formData: FormData) {
           recurring: { interval: "month" },
           product_data: {
             name: `Super Fan -- ${artistName}`,
+            // Shown to the fan on Stripe's own checkout page, so it carries
+            // the same promise the artist page makes. Kept to what Fyby
+            // actually delivers today: the perks aren't built, so they aren't
+            // sold here either. See the matching note in
+            // app/artists/[id]/SupportArtist.tsx.
             description:
-              "Monthly support with exclusive content, shoutouts, private show videos, and the two-way video exchange.",
+              "Direct monthly support for this artist — they keep 80%. Member perks are still being built and aren't included yet. Cancel any time.",
           },
         },
         quantity: 1,

@@ -34,12 +34,21 @@ export default function SupportArtist({
           <span className="font-mono text-sm text-forest whitespace-nowrap">$9/month</span>
         </div>
 
-        <ul className="font-mono text-xs text-paper/70 space-y-1.5 mb-5">
-          <li>— Exclusive content from {artistName}</li>
-          <li>— Shoutouts</li>
-          <li>— Private show videos</li>
-          <li>— The two-way video exchange</li>
-        </ul>
+        <p className="font-mono text-xs text-paper/70 mb-3">
+          $9 a month straight to {artistName}, on top of anything you buy. They keep 80%
+          — the same split as a track sale. Cancel any time.
+        </p>
+
+        {/* Deliberately does not list member perks. Exclusive content,
+            shoutouts, private show videos and the two-way video exchange are
+            planned but not built — nothing reads artist_subscriptions to gate
+            any of them yet — so promising them here would be charging $9/month
+            for something that doesn't exist. Sell the support, not the perks,
+            until the perks are real. */}
+        <p className="font-mono text-xs text-paper/50 mb-5">
+          Member perks are on the way. Subscribing today is direct monthly support, not
+          access to them yet.
+        </p>
 
         <div className="mt-auto">
           {isOwner ? (
