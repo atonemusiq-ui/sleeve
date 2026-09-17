@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/server";
+import { DEFAULT_PLAN, commissionCents, payoutCents } from "@/lib/plans";
 import { trackNeedsCoverCredit } from "@/lib/coverCompliance";
 
 export type CheckoutSessionResult = { url: string } | { error: string };
@@ -60,8 +61,12 @@ export async function createTrackCheckoutSession(
   const artistName = (track as any).artists?.profiles?.display_name ?? "Unknown artist";
 
   const amountCents = track.price_cents;
-  const platformFeeCents = Math.round(amountCents * 0.2);
-  const artistPayoutCents = amountCents - platformFeeCents;
+  // Phase 0 of plans: the rate now comes from lib/plans.ts instead of a
+  // hardcoded 0.2. Every artist is on DEFAULT_PLAN until the artists.plan
+  // column lands, so this computes exactly what it did before.
+  const plan = DEFAULT_PLAN;
+  const platformFeeCents = commissionCents(amountCents, plan);
+  const artistPayoutCents = payoutCents(amountCents, plan);
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 

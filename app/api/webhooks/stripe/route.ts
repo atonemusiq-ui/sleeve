@@ -1,5 +1,6 @@
 import { stripe } from "@/lib/stripe/server";
 import { transferArtistPayout } from "@/lib/stripe/payouts";
+import { DEFAULT_PLAN, commissionCents, payoutCents } from "@/lib/plans";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createNotification } from "@/lib/notifications";
 import { headers } from "next/headers";
@@ -395,11 +396,12 @@ export async function POST(req: Request) {
         }
       }
 
-      // Same 20% cut as a track or album sale — kept in step with
-      // app/actions/checkout.ts, which computes the fee for those before
-      // checkout rather than here.
-      const giftPlatformFeeCents = Math.round(giftAmountCents * 0.2);
-      const giftArtistPayoutCents = giftAmountCents - giftPlatformFeeCents;
+      // Same cut as a track or album sale, from the same table — a gift is
+      // ordinary artist revenue, so it moves with the artist's plan rather
+      // than sitting on its own rate.
+      const giftPlan = DEFAULT_PLAN;
+      const giftPlatformFeeCents = commissionCents(giftAmountCents, giftPlan);
+      const giftArtistPayoutCents = payoutCents(giftAmountCents, giftPlan);
 
       const { data: insertedGift, error: giftError } = await supabase
         .from("gifts")
@@ -544,8 +546,8 @@ export async function POST(req: Request) {
 
       const rows = trackIds.map((id, i) => {
         const rowAmountCents = amountShares[i];
-        const rowPlatformFeeCents = Math.round(rowAmountCents * 0.2);
-        const rowArtistPayoutCents = rowAmountCents - rowPlatformFeeCents;
+        const rowPlatformFeeCents = commissionCents(rowAmountCents, DEFAULT_PLAN);
+        const rowArtistPayoutCents = payoutCents(rowAmountCents, DEFAULT_PLAN);
         return {
           track_id: id,
           album_id: albumId,
