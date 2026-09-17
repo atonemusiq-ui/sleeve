@@ -916,6 +916,16 @@ create table if not exists gifts (
     stripe_payment_intent_id text unique,
     created_at timestamptz default now()
   );
+-- The platform's cut and the artist's share of a gift, plus the Stripe
+-- transfer that actually moved the artist's share to their connected
+-- account. Recorded by the gift branch in app/api/webhooks/stripe/route.ts,
+-- which applies the same 20% platform fee a track or album sale takes.
+-- Added as alters rather than baked into the create above so re-running this
+-- file on a project that already has a gifts table picks them up too.
+alter table gifts add column if not exists platform_fee_cents integer;
+alter table gifts add column if not exists artist_payout_cents integer;
+alter table gifts add column if not exists stripe_transfer_id text;
+
 alter table gifts enable row level security;
 
 drop policy if exists "Fans can view their own gifts" on gifts;

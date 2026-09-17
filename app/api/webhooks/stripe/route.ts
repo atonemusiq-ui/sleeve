@@ -313,6 +313,122 @@ export async function POST(req: Request) {
       return NextResponse.json({ received: true });
     }
 
+    // A one-time monetary gift from a fan straight to an artist (see
+    // app/actions/superfan.ts's startGiftCheckout). Handled up here with the
+    // two branches above because it carries neither track_id nor album_id —
+    // but unlike them it's a real fan payment that owes the artist money, so
+    // it takes the same 20% platform cut and the same Stripe transfer as a
+    // track sale rather than staying in the platform's balance.
+    if (session.metadata?.type === "gift") {
+      const giftArtistId = session.metadata?.artist_id ?? null;
+      const giftFanId = session.metadata?.fan_id ?? null;
+      const giftAmountCents = Number(session.metadata?.amount_cents);
+      const giftMessage = session.metadata?.gift_message ?? null;
+      const giftPaymentIntentId =
+        typeof session.payment_intent === "string" ? session.payment_intent : null;
+
+      if (!giftArtistId || !giftAmountCents) {
+        console.error("Gift webhook missing expected metadata:", session.metadata);
+        return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
+      }
+
+      const supabase = createServiceRoleClient();
+
+      // Same redelivery reasoning as the purchase branch below: the unique
+      // stripe_payment_intent_id on gifts (supabase/schema.sql) already stops
+      // a redelivered event inserting a second row, but on its own it
+      // wouldn't stop a second transfer going out — so bail before touching
+      // Stripe at all.
+      if (giftPaymentIntentId) {
+        const { data: existingGift } = await supabase
+          .from("gifts")
+          .select("id")
+          .eq("stripe_payment_intent_id", giftPaymentIntentId)
+          .limit(1);
+
+        if (existingGift && existingGift.length > 0) {
+          return NextResponse.json({ received: true, note: "already processed" });
+        }
+      }
+
+      // Same 20% cut as a track or album sale — kept in step with
+      // app/actions/checkout.ts, which computes the fee for those before
+      // checkout rather than here.
+      const giftPlatformFeeCents = Math.round(giftAmountCents * 0.2);
+      const giftArtistPayoutCents = giftAmountCents - giftPlatformFeeCents;
+
+      const { data: insertedGift, error: giftError } = await supabase
+        .from("gifts")
+        .insert({
+          fan_id: giftFanId,
+          artist_id: giftArtistId,
+          amount_cents: giftAmountCents,
+          message: giftMessage,
+          stripe_payment_intent_id: giftPaymentIntentId,
+          platform_fee_cents: giftPlatformFeeCents,
+          artist_payout_cents: giftArtistPayoutCents,
+        })
+        .select("id")
+        .single();
+
+      if (giftError) {
+        if ((giftError as any).code === "23505") {
+          return NextResponse.json({ received: true, note: "already processed" });
+        }
+        console.error("Failed to record gift:", giftError.message);
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+
+      const { data: giftArtist, error: giftArtistError } = await supabase
+        .from("artists")
+        .select("user_id, stripe_account_id")
+        .eq("id", giftArtistId)
+        .single();
+
+      const giftArtistStripeAccountId = (giftArtist as any)?.stripe_account_id;
+      const giftArtistUserId = (giftArtist as any)?.user_id ?? null;
+
+      if (giftArtistError || !giftArtistStripeAccountId) {
+        // Same judgment call as the track branch below: the gift is already
+        // recorded and a Stripe retry can't fix a missing connected account,
+        // so log it loudly for a manual payout instead of 500'ing into a
+        // redelivery loop.
+        console.error(
+          "No connected Stripe account found for this gift's artist — gift recorded but artist was not paid:",
+          giftArtistError?.message ?? `artist ${giftArtistId} has no linked stripe_account_id`
+        );
+      } else if (giftPaymentIntentId && giftArtistPayoutCents > 0) {
+        try {
+          const transfer = await transferArtistPayout(
+            giftPaymentIntentId,
+            giftArtistPayoutCents,
+            giftArtistStripeAccountId,
+            `gift_${giftArtistId}`
+          );
+          await supabase
+            .from("gifts")
+            .update({ stripe_transfer_id: transfer.id })
+            .eq("id", insertedGift.id);
+        } catch (transferError: any) {
+          console.error("Failed to transfer gift payout:", transferError.message);
+        }
+      }
+
+      if (giftArtistUserId) {
+        await createNotification(supabase, {
+          userId: giftArtistUserId,
+          type: "gift",
+          title: "You received a gift!",
+          body: `$${(giftArtistPayoutCents / 100).toFixed(2)} from a fan.${
+            giftMessage ? ` They said: "${giftMessage}"` : ""
+          }`,
+          link: "/dashboard",
+        });
+      }
+
+      return NextResponse.json({ received: true });
+    }
+
     const trackId = session.metadata?.track_id ?? null;
     const albumId = session.metadata?.album_id ?? null;
     const fanId = session.metadata?.fan_id ?? null;
