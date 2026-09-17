@@ -860,6 +860,20 @@ alter table booking_requests add constraint booking_requests_inquiry_type_check
 -- app/actions/artist.ts's updateSocialLinks), rather than a JSON blob,
 -- since there's a small fixed set of platforms for now.
 -- ============================================================================
+-- Which subscription plan the artist is on, and so what cut Fyby takes from
+-- their sales. The rates live in lib/plans.ts (Free 20%, Artist 10%, Pro 5%);
+-- a plan buys that cut down rather than adding features on top of it.
+--
+-- Defaults to 'free' so every existing artist keeps exactly the deal they
+-- have today with no backfill, and the check constraint keeps the column in
+-- step with lib/plans.ts's Plan type. plan_subscription_id is the Stripe
+-- subscription behind a paid plan -- the artist paying Fyby, which is a
+-- different thing from artist_subscriptions (a fan paying an artist).
+alter table artists add column if not exists plan text not null default 'free'
+  check (plan in ('free', 'artist', 'pro'));
+alter table artists add column if not exists plan_updated_at timestamptz;
+alter table artists add column if not exists plan_subscription_id text;
+
 alter table artists add column if not exists facebook_url text;
 alter table artists add column if not exists tiktok_url text;
 alter table artists add column if not exists instagram_url text;

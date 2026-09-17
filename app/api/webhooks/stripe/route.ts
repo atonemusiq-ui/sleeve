@@ -1,6 +1,6 @@
 import { stripe } from "@/lib/stripe/server";
 import { transferArtistPayout } from "@/lib/stripe/payouts";
-import { DEFAULT_PLAN, commissionCents, payoutCents } from "@/lib/plans";
+import { commissionCents, payoutCents, planOf } from "@/lib/plans";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createNotification } from "@/lib/notifications";
 import { headers } from "next/headers";
@@ -396,10 +396,17 @@ export async function POST(req: Request) {
         }
       }
 
-      // Same cut as a track or album sale, from the same table — a gift is
-      // ordinary artist revenue, so it moves with the artist's plan rather
-      // than sitting on its own rate.
-      const giftPlan = DEFAULT_PLAN;
+      const { data: giftArtist, error: giftArtistError } = await supabase
+        .from("artists")
+        .select("user_id, stripe_account_id, plan")
+        .eq("id", giftArtistId)
+        .single();
+
+      // Same cut as a track or album sale — a gift is ordinary artist
+      // revenue, so it moves with the artist's plan rather than sitting on
+      // its own rate. Looked up live rather than snapshotted at checkout
+      // because, unlike an album, the split is computed once and only here.
+      const giftPlan = planOf((giftArtist as any)?.plan);
       const giftPlatformFeeCents = commissionCents(giftAmountCents, giftPlan);
       const giftArtistPayoutCents = payoutCents(giftAmountCents, giftPlan);
 
@@ -424,12 +431,6 @@ export async function POST(req: Request) {
         console.error("Failed to record gift:", giftError.message);
         return NextResponse.json({ error: "Database error" }, { status: 500 });
       }
-
-      const { data: giftArtist, error: giftArtistError } = await supabase
-        .from("artists")
-        .select("user_id, stripe_account_id")
-        .eq("id", giftArtistId)
-        .single();
 
       const giftArtistStripeAccountId = (giftArtist as any)?.stripe_account_id;
       const giftArtistUserId = (giftArtist as any)?.user_id ?? null;
@@ -479,6 +480,13 @@ export async function POST(req: Request) {
     const albumId = session.metadata?.album_id ?? null;
     const fanId = session.metadata?.fan_id ?? null;
     const amountCents = session.metadata?.amount_cents;
+    // The artist's plan as it stood when the fan paid, snapshotted into the
+    // session by app/actions/checkout.ts / lib/checkoutSession.ts. Read back
+    // rather than looked up fresh so an album's per-track split uses the same
+    // rate its total was built from, even if the artist changed plan in
+    // between. A session created before plans shipped has none, and falls
+    // back to Free -- the rate every one of those was actually charged at.
+    const purchasePlan = planOf(session.metadata?.plan);
     const buyerEmail = session.customer_details?.email ?? null;
     const buyerPhone = session.customer_details?.phone ?? null;
     const paymentIntentId =
@@ -546,8 +554,8 @@ export async function POST(req: Request) {
 
       const rows = trackIds.map((id, i) => {
         const rowAmountCents = amountShares[i];
-        const rowPlatformFeeCents = commissionCents(rowAmountCents, DEFAULT_PLAN);
-        const rowArtistPayoutCents = payoutCents(rowAmountCents, DEFAULT_PLAN);
+        const rowPlatformFeeCents = commissionCents(rowAmountCents, purchasePlan);
+        const rowArtistPayoutCents = payoutCents(rowAmountCents, purchasePlan);
         return {
           track_id: id,
           album_id: albumId,

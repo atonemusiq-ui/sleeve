@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/server";
-import { DEFAULT_PLAN, commissionCents, payoutCents } from "@/lib/plans";
+import { commissionCents, payoutCents, planOf } from "@/lib/plans";
 import { trackNeedsCoverCredit } from "@/lib/coverCompliance";
 import { createTrackCheckoutSession } from "@/lib/checkoutSession";
 import { redirect } from "next/navigation";
@@ -69,7 +69,7 @@ export async function startAlbumCheckout(formData: FormData) {
 
   const { data: album, error } = await supabase
     .from("albums")
-    .select("id, title, price_cents, artists ( is_active, profiles ( display_name ) )")
+    .select("id, title, price_cents, artists ( is_active, plan, profiles ( display_name ) )")
     .eq("id", albumId)
     .single();
 
@@ -116,10 +116,10 @@ export async function startAlbumCheckout(formData: FormData) {
   const artistName = (album as any).artists?.profiles?.display_name ?? "Unknown artist";
 
   const amountCents = album.price_cents;
-  // Phase 0 of plans: the rate now comes from lib/plans.ts instead of a
-  // hardcoded 0.2. Every artist is on DEFAULT_PLAN until the artists.plan
-  // column lands, so this computes exactly what it did before.
-  const plan = DEFAULT_PLAN;
+  // Same as the single-track path in lib/checkoutSession.ts: the artist's
+  // plan sets the cut, and it is snapshotted into metadata so the per-track
+  // split the webhook writes uses the same rate this total was built from.
+  const plan = planOf((album as any).artists?.plan);
   const platformFeeCents = commissionCents(amountCents, plan);
   const artistPayoutCents = payoutCents(amountCents, plan);
 
@@ -156,6 +156,7 @@ export async function startAlbumCheckout(formData: FormData) {
       amount_cents: String(amountCents),
       platform_fee_cents: String(platformFeeCents),
       artist_payout_cents: String(artistPayoutCents),
+      plan,
     },
   });
 

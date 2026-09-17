@@ -1,6 +1,6 @@
 import { stripe } from "@/lib/stripe/server";
 import { transferArtistPayout } from "@/lib/stripe/payouts";
-import { DEFAULT_PLAN, commissionCents, payoutCents } from "@/lib/plans";
+import { commissionCents, payoutCents, planOf } from "@/lib/plans";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createNotification } from "@/lib/notifications";
 import { headers } from "next/headers";
@@ -282,18 +282,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ received: true, note: "already processed" });
     }
 
+    const { data: artist } = await supabase
+      .from("artists")
+      .select("user_id, stripe_account_id, plan")
+      .eq("id", artistId)
+      .single();
+
     // Super Fan money is artist revenue like any sale, so it takes the
-    // artist's plan rate rather than a rate of its own.
-    const plan = DEFAULT_PLAN;
+    // artist's plan rate rather than a rate of its own. Read at the moment
+    // the invoice is paid, not when the fan first subscribed: a renewal
+    // twelve months in should settle at whatever plan the artist is on now.
+    const plan = planOf((artist as any)?.plan);
     const platformFeeCents = commissionCents(amountCents, plan);
     const artistPayoutCents = payoutCents(amountCents, plan);
     const paymentIntentId = await invoicePaymentIntentId(invoice);
-
-    const { data: artist } = await supabase
-      .from("artists")
-      .select("user_id, stripe_account_id")
-      .eq("id", artistId)
-      .single();
 
     const artistStripeAccountId = (artist as any)?.stripe_account_id ?? null;
     const artistUserId = (artist as any)?.user_id ?? null;
