@@ -1,4 +1,5 @@
 import { stripe } from "@/lib/stripe/server";
+import { transferArtistPayout } from "@/lib/stripe/payouts";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createNotification } from "@/lib/notifications";
 import { headers } from "next/headers";
@@ -41,9 +42,9 @@ function splitProportionally(totalCents: number, weights: number[]): number[] {
 // app/contributor-onboard/[token] and app/actions/contributor-connect.ts)
 // gets paid directly out of the same charge as the artist's own transfer
 // (Stripe's "separate charges and transfers" pattern, same as
-// transferArtistPayout below) — their contributor_payouts row is recorded
-// 'paid' immediately, with the transfer id attached so a refund can reverse
-// it later. A contributor who hasn't connected yet still gets the original
+// transferArtistPayout in lib/stripe/payouts.ts) — their contributor_payouts
+// row is recorded 'paid' immediately, with the transfer id attached so a
+// refund can reverse it later. A contributor who hasn't connected yet still gets the original
 // bookkeeping-only 'owed' row, unchanged from before this feature — the
 // artist settles that one by hand, and keeps receiving that contributor's
 // share themselves. Returns the total cents actually diverted to onboarded
@@ -116,31 +117,10 @@ async function payContributorsAndRecordPayouts(
 // callers can persist its id on the purchase row(s) — that id is what lets a
 // later refund/dispute reverse this exact transfer (see
 // reverseArtistPayoutsAndVoidContributors below) instead of guessing.
-async function transferArtistPayout(
-  paymentIntentId: string,
-  amountCents: number,
-  stripeAccountId: string,
-  transferGroup: string
-) {
-  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-  const chargeId =
-    typeof paymentIntent.latest_charge === "string"
-      ? paymentIntent.latest_charge
-      : paymentIntent.latest_charge?.id;
-
-  return stripe.transfers.create({
-    amount: amountCents,
-    currency: "usd",
-    destination: stripeAccountId,
-    source_transaction: chargeId,
-    transfer_group: transferGroup,
-  });
-}
-
 // Claws back the artist's payout when a purchase is refunded or a dispute is
 // lost. Groups by transfer id first so an album's single combined transfer
-// (see transferArtistPayout above) is reversed once for its full amount
-// rather than once per track. A contributor payout still sitting at 'owed'
+// (see transferArtistPayout in lib/stripe/payouts.ts) is reversed once for
+// its full amount rather than once per track. A contributor payout still sitting at 'owed'
 // for one of these purchases is voided — that money was never actually sent
 // anywhere yet, so the ledger just drops it. A payout already 'paid' came
 // out of the artist's own pocket at that point, not the platform's Stripe

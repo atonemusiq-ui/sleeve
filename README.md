@@ -31,9 +31,9 @@ fraction of a cent per stream.
 - Two ways to back an artist beyond buying a track, both on the public artist page:
   **Super Fan** ($9/month subscription per artist — exclusive content, shoutouts, private
   show videos, the two-way video exchange) and a one-off **gift** of any amount with an
-  optional message. A gift takes the same 20% platform cut as a sale and transfers the
-  artist's share immediately; Super Fan revenue currently collects in the platform's
-  Stripe balance (see Known gaps)
+  optional message. Both take the same 20% platform cut as a sale and transfer the
+  artist's share to their connected account — a gift on payment, a subscription on each
+  paid invoice, logged to `subscription_payouts`
 - Stripe webhook (`app/api/webhooks/stripe/route.ts`) records the purchase (including
   which fan bought it) and transfers the artist's cut to their connected account; guarded
   against duplicate delivery. Gifts ride the same destination; Super Fan subscription
@@ -66,10 +66,12 @@ which variable each one goes in:
 | --- | --- | --- |
 | `/api/webhooks/stripe` | `checkout.session.completed` | `STRIPE_WEBHOOK_SECRET` |
 | `/api/webhooks/stripe` | `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed` | `STRIPE_WEBHOOK_SECRET_REFUNDS` |
-| `/api/webhooks/stripe-subscriptions` | `customer.subscription.created`, `.updated`, `.deleted` | `STRIPE_WEBHOOK_SECRET_SUBSCRIPTIONS` |
+| `/api/webhooks/stripe-subscriptions` | `customer.subscription.created`, `.updated`, `.deleted`, `invoice.payment_succeeded` | `STRIPE_WEBHOOK_SECRET_SUBSCRIPTIONS` |
 
 The first two share a route, which tries both secrets in turn, so refunds and disputes can
-live in their own Dashboard destination. Locally, run `stripe listen --forward-to
+live in their own Dashboard destination. `invoice.payment_succeeded` is what pays artists
+their share of each month's subscription — without it subscribed, Super Fans are billed
+and the artist never sees the money. Locally, run `stripe listen --forward-to
 localhost:3000/<path>` per destination and use the secret each one prints.
 
 Payouts use Stripe Connect (v2 Core Accounts) — no extra setup beyond a Stripe account;
@@ -115,19 +117,20 @@ revisiting the plan tier once real tracks (not test uploads) are live.
 
 ## Known gaps
 
-- **Super Fan subscription revenue isn't paid out yet.** The subscription is recorded and
-  kept in sync (`artist_subscriptions`), but nothing transfers the artist's share of the
-  $9/month to their connected account — it collects in the platform's Stripe balance.
-  Needs an `invoice.payment_succeeded` handler and a per-invoice payout ledger; the
-  one-off gift path is the model to follow.
-- Nothing yet *reads* `artist_subscriptions` to gate anything — the Super Fan perks the
-  checkout page promises (exclusive content, shoutouts, private show videos, two-way video
-  exchange) have no implementation behind them yet
+- **The Super Fan perks are sold but not built.** Checkout promises exclusive content,
+  shoutouts, private show videos and the two-way video exchange, and nothing reads
+  `artist_subscriptions` to gate any of it. Fans are being charged $9/month for something
+  that doesn't exist yet — worth softening the copy or building a perk before promoting
+  this.
+- A subscription payout whose artist has no connected Stripe account (or whose transfer
+  errored) is recorded in `subscription_payouts` as `unpaid`/`failed` rather than retried
+  — that table is the list of what's owed, and settling it is manual for now
+- Neither a refunded subscription invoice nor a refunded gift is clawed back
+  automatically — the `charge.refunded` handler only looks at `purchases`. Both tables
+  record their `stripe_transfer_id`, so a reversal can be done by hand in the Stripe
+  dashboard.
 - `artist_subscriptions.referred_by_fan_id` is logged from a `?ref=<fan_id>` link on the
   artist page, but no reward logic reads it
-- A refunded gift isn't clawed back automatically — the `charge.refunded` handler only
-  looks at `purchases`. `gifts.stripe_transfer_id` is recorded, so a reversal can be done
-  by hand in the Stripe dashboard.
 - The README's feature list above is behind the code — albums, the admin/moderation
   section, bookings, contributor payouts, notifications, videos, and embeds all shipped
   without being written up here
