@@ -10,6 +10,7 @@ import BookingForm from "./BookingForm";
 import ReportVideoButton from "./ReportVideoButton";
 import VideoEmbed from "@/app/VideoEmbed";
 import CollapsibleSection from "@/app/CollapsibleSection";
+import SuperFanSection from "@/app/SuperFanSection";
 
 // Powers the og:title/og:description a crawler shows alongside the image
 // from this same folder's opengraph-image.tsx when a plain artist link is
@@ -39,7 +40,13 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   };
 }
 
-export default async function ArtistPage({ params }: { params: { id: string } }) {
+export default async function ArtistPage({
+    params,
+    searchParams,
+}: {
+    params: { id: string };
+    searchParams: { ref?: string };
+}) {
   const supabase = createClient();
 
   const { data: artist } = await supabase
@@ -93,6 +100,22 @@ export default async function ArtistPage({ params }: { params: { id: string } })
   const blockedTrackIds = await tracksNeedingCoverCredit(
     (tracks ?? []).map((t) => ({ id: t.id, genre: t.genre }))
   );
+
+    // Whether the logged-in fan already supports this artist at $9/month (see
+    // app/actions/superfan.ts and supabase/schema.sql's artist_subscriptions).
+    // An artist can't be their own Super Fan, so this is skipped for the owner.
+    const { data: superFanSub } = user
+      ? await supabase
+              .from("artist_subscriptions")
+              .select("id")
+              .eq("fan_id", user.id)
+              .eq("artist_id", artist.id)
+              .eq("status", "active")
+              .maybeSingle()
+          : { data: null };
+
+    const isSuperFan = Boolean(superFanSub);
+    const referralFanId = searchParams?.ref ?? null;
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
@@ -252,6 +275,18 @@ export default async function ArtistPage({ params }: { params: { id: string } })
       )}
 
       <div className="ticket-divider my-10" />
+
+      {!isOwner && (artist as any).is_active && (
+              <SuperFanSection
+                          artistId={artist.id}
+                          artistName={artistName}
+                          isLoggedIn={Boolean(user)}
+                          isSuperFan={isSuperFan}
+                          referralFanId={referralFanId}
+                        />
+            )}
+
+      {!isOwner && (artist as any).is_active && <div className="ticket-divider my-10" />}
 
       <CollapsibleSection
         title="Book or collaborate with this artist"
