@@ -1003,3 +1003,90 @@ drop policy if exists "Fans can view their own subscription payments" on subscri
 create policy "Fans can view their own subscription payments"
   on subscription_payouts for select
   using (fan_id = auth.uid());
+
+-- Two-way video exchange: private videos an artist and their Super Fans send
+-- back and forth (see app/actions/superfan.ts's sendExchangeVideo, and the
+-- private "superfan-videos" storage bucket below). Each row is one video,
+-- not a full thread object -- the thread for a given artist/fan pair is
+-- just "every row with that artist_id and fan_id", ordered by created_at.
+-- ============================================================================
+create table if not exists video_exchanges (
+    id uuid primary key default gen_random_uuid(),
+    artist_id uuid not null references artists(id) on delete cascade,
+    fan_id uuid not null references profiles(id) on delete cascade,
+    sender_role text not null check (sender_role in ('artist', 'fan')),
+    video_url text not null,
+    message text,
+    created_at timestamptz not null default now()
+  );
+
+alter table video_exchanges enable row level security;
+
+drop policy if exists "artists and fans can read their own video exchange thread" on video_exchanges;
+create policy "artists and fans can read their own video exchange thread"
+  on video_exchanges for select
+  using (
+      fan_id = auth.uid()
+      or artist_id in (select id from artists where user_id = auth.uid())
+    );
+
+-- A fan can only send a video while their $9/month subscription to that
+-- specific artist is active -- checked here, not just in the app layer, so
+-- a lapsed Super Fan genuinely loses the ability to send even if the UI
+-- somehow still shows the form.
+drop policy if exists "active super fans can send a video" on video_exchanges;
+create policy "active super fans can send a video"
+  on video_exchanges for insert
+  with check (
+      sender_role = 'fan'
+      and fan_id = auth.uid()
+      and artist_id in (
+        select artist_id from artist_subscriptions
+        where fan_id = auth.uid() and status = 'active'
+      )
+    );
+
+drop policy if exists "artists can send a video to their own super fans" on video_exchanges;
+create policy "artists can send a video to their own super fans"
+  on video_exchanges for insert
+  with check (
+      sender_role = 'artist'
+      and artist_id in (select id from artists where user_id = auth.uid())
+    );
+
+-- Private bucket -- unlike the public track-covers/artist-photos buckets
+-- above, these videos are meant for exactly two people. Path convention is
+-- "<artist_id>/<fan_id>/<filename>", which lets the policies below scope
+-- access by folder the same way the public buckets scope by artist_id
+-- alone, just one level deeper.
+insert into storage.buckets (id, name, public)
+values ('superfan-videos', 'superfan-videos', false)
+on conflict (id) do update set public = excluded.public;
+
+drop policy if exists "video exchange participants can read" on storage.objects;
+create policy "video exchange participants can read"
+  on storage.objects for select
+  using (
+      bucket_id = 'superfan-videos'
+      and (
+        (storage.foldername(name))[1] in (select id::text from artists where user_id = auth.uid())
+        or (storage.foldername(name))[2] = auth.uid()::text
+      )
+    );
+
+drop policy if exists "video exchange participants can upload" on storage.objects;
+create policy "video exchange participants can upload"
+  on storage.objects for insert
+  with check (
+      bucket_id = 'superfan-videos'
+      and (
+        (storage.foldername(name))[1] in (select id::text from artists where user_id = auth.uid())
+        or (
+          (storage.foldername(name))[2] = auth.uid()::text
+          and (storage.foldername(name))[1] in (
+            select artist_id::text from artist_subscriptions
+            where fan_id = auth.uid() and status = 'active'
+          )
+        )
+      )
+    );
