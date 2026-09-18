@@ -70,7 +70,7 @@ export async function POST(req: Request) {
                                 stripe_subscription_id: subscription.id,
                                 stripe_customer_id: customerId,
                                 status: subscription.status,
-                                current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+        current_period_end: new Date(subscription.items.data[0].current_period_end * 1000).toISOString(),
                                 referred_by_fan_id: referredByFanId,
                               },
                     { onConflict: "fan_id,artist_id" }
@@ -110,7 +110,7 @@ export async function POST(req: Request) {
           .from("artist_subscriptions")
           .update({
                     status: subscription.status,
-                    current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_end: new Date(subscription.items.data[0].current_period_end * 1000).toISOString(),
                   })
           .eq("stripe_subscription_id", subscription.id);
 
