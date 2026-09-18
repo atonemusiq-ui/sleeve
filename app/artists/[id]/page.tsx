@@ -8,10 +8,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import BookingForm from "./BookingForm";
-import SupportArtist from "./SupportArtist";
 import ReportVideoButton from "./ReportVideoButton";
 import VideoEmbed from "@/app/VideoEmbed";
 import CollapsibleSection from "@/app/CollapsibleSection";
+import SuperFanSection from "@/app/SuperFanSection";
 
 // Powers the og:title/og:description a crawler shows alongside the image
 // from this same folder's opengraph-image.tsx when a plain artist link is
@@ -114,12 +114,10 @@ export default async function ArtistPage({
     isSuperFan = Boolean(subscription);
   }
 
-  // A fan who arrived from another fan's referral link — logged against the
-  // subscription so credit can be paid out once reward logic exists (see
-  // artist_subscriptions.referred_by_fan_id in supabase/schema.sql). Ignored
-  // if it points at the viewer themselves, so a fan can't refer themselves
-  // by editing their own link.
-  // Shape-checked before it goes anywhere near the hidden input: this value
+  // A fan who arrived from another fan's referral link, for
+  // artist_subscriptions.referred_by_fan_id. Ignored if it points at the
+  // viewer themselves, so a fan can't refer themselves by editing their link.
+  // Shape-checked before it goes anywhere near a form: this value
   // ends up in a `uuid references profiles(id)` column, and `?ref=anything`
   // in a shared link would otherwise fail that insert inside the webhook and
   // leave a paying fan with no subscription row. startSuperFanCheckout checks
@@ -132,6 +130,11 @@ export default async function ArtistPage({
   const blockedTrackIds = await tracksNeedingCoverCredit(
     (tracks ?? []).map((t) => ({ id: t.id, genre: t.genre }))
   );
+
+  // What SuperFanSection builds its share link from. Deliberately the
+  // shape-checked value rather than the raw `?ref=` query param, so a junk
+  // value in a shared link can never reach the uuid column behind it.
+  const referralFanId = referredByFanId;
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
@@ -313,26 +316,17 @@ export default async function ArtistPage({
 
       <div className="ticket-divider my-10" />
 
-      {/* Hidden while the artist's page is deactivated, for the same reason
-          the Buy buttons are: nothing should be able to take money for an
-          artist who has switched their page off. */}
-      {(artist as any).is_active && (
-        <section className="mb-10">
-          <h2 className="font-display text-2xl mb-2">Support {artistName}</h2>
-          <p className="font-mono text-xs text-paper/60 mb-6 max-w-2xl">
-            Buying a track pays {artistName} directly. These go further — a monthly
-            subscription, or a one-off gift.
-          </p>
-          <SupportArtist
-            artistId={artist.id}
-            artistName={artistName}
-            isOwner={isOwner}
-            isLoggedIn={Boolean(user)}
-            isSuperFan={isSuperFan}
-            referredByFanId={referredByFanId}
-          />
-        </section>
-      )}
+      {!isOwner && (artist as any).is_active && (
+              <SuperFanSection
+                          artistId={artist.id}
+                          artistName={artistName}
+                          isLoggedIn={Boolean(user)}
+                          isSuperFan={isSuperFan}
+                          referralFanId={referralFanId}
+                        />
+            )}
+
+      {!isOwner && (artist as any).is_active && <div className="ticket-divider my-10" />}
 
       <CollapsibleSection
         title="Book or collaborate with this artist"
