@@ -120,6 +120,7 @@ export default function SuperFanSection({
                                           {copied ? "Copied!" : "Copy"}
                                         </button>                    
                   </div>
+                  </div>
               )}
         </section>
       );
