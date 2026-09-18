@@ -118,8 +118,8 @@ export default function SuperFanSection({
                                                         className="border border-paper/20 rounded px-3 py-2 text-sm text-paper hover:border-gold"
                                                       >
                                           {copied ? "Copied!" : "Copy"}
-                                        </button>                    
-                  </div>
+                                        </button>
+                                        </div>
                   </div>
               )}
         </section>

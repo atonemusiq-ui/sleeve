@@ -41,7 +41,7 @@ export default async function ArtistsIndexPage() {
   });
 
   return (
-    <main className="max-w-5xl mx-auto px-6 py-12">
+    <main className="max-w-5xl lg:max-w-6xl xl:max-w-7xl mx-auto px-6 lg:px-8 py-12">
       <header className="flex items-center justify-between mb-12">
         <Link href="/" className="font-mono text-xs text-paper/50 hover:text-gold">
           &larr; Back to Fyby
@@ -80,7 +80,7 @@ export default async function ArtistsIndexPage() {
       )}
 
       {!error && normalizedArtists.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
           {normalizedArtists.map((artist) => {
             const artistName = artist.profiles?.display_name ?? "Unknown artist";
             return (

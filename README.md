@@ -28,9 +28,15 @@ fraction of a cent per stream.
 - `/library` ("My Music"): every track a logged-in fan has bought, each with its own
   in-app player (signed URL, minted server-side, ownership checked via RLS on
   `purchases.fan_id`) — no downloading-and-figuring-out-playback required
+- Two ways to back an artist beyond buying a track, both on the public artist page:
+  **Super Fan** ($9/month subscription per artist) and a one-off **gift** of any amount
+  with an optional message. Both take the same 20% platform cut as a sale and transfer the
+  artist's share to their connected account — a gift on payment, a subscription on each
+  paid invoice, logged to `subscription_payouts`
 - Stripe webhook (`app/api/webhooks/stripe/route.ts`) records the purchase (including
   which fan bought it) and transfers the artist's cut to their connected account; guarded
-  against duplicate delivery
+  against duplicate delivery. Gifts ride the same destination; Super Fan subscription
+  lifecycle has its own (`app/api/webhooks/stripe-subscriptions/route.ts`)
 - Track audio lives in a **private** storage bucket — nobody can stream/download the full
   track without a signed URL minted after a verified purchase (or, for the artist, their
   own dashboard). Cover art lives in a separate public bucket.
@@ -51,11 +57,24 @@ Every statement in that file is idempotent — safe to paste and re-run any time
 changes, on a brand-new project or this one.
 
 ### 3. Create a Stripe account (test mode is fine)
-You need: a secret key (**Developers → API keys**), and a webhook signing secret for the
-`checkout.session.completed` event pointed at `/api/webhooks/stripe` (**Developers →
-Webhooks**, or run `stripe listen --forward-to localhost:3000/api/webhooks/stripe` locally
-and use the secret it prints). Payouts use Stripe Connect (v2 Core Accounts) — no extra
-setup beyond a Stripe account; each artist connects their own account from the dashboard.
+You need a secret key (**Developers → API keys**) and **three** webhook destinations
+(**Developers → Webhooks**), each with its own signing secret — `.env.local.example` lists
+which variable each one goes in:
+
+| Endpoint | Events | Secret |
+| --- | --- | --- |
+| `/api/webhooks/stripe` | `checkout.session.completed` | `STRIPE_WEBHOOK_SECRET` |
+| `/api/webhooks/stripe` | `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed` | `STRIPE_WEBHOOK_SECRET_REFUNDS` |
+| `/api/webhooks/stripe-subscriptions` | `customer.subscription.created`, `.updated`, `.deleted`, `invoice.payment_succeeded` | `STRIPE_WEBHOOK_SECRET_SUBSCRIPTIONS` |
+
+The first two share a route, which tries both secrets in turn, so refunds and disputes can
+live in their own Dashboard destination. `invoice.payment_succeeded` is what pays artists
+their share of each month's subscription — without it subscribed, Super Fans are billed
+and the artist never sees the money. Locally, run `stripe listen --forward-to
+localhost:3000/<path>` per destination and use the secret each one prints.
+
+Payouts use Stripe Connect (v2 Core Accounts) — no extra setup beyond a Stripe account;
+each artist connects their own account from the dashboard.
 
 ### 4. Configure environment variables
 ```
@@ -97,6 +116,26 @@ revisiting the plan tier once real tracks (not test uploads) are live.
 
 ## Known gaps
 
+- **The Super Fan perks aren't built.** Exclusive content, shoutouts, private show videos
+  and the two-way video exchange are all planned, and nothing reads `artist_subscriptions`
+  to gate any of them. The artist page and the Stripe checkout description both say so
+  rather than promising them — Super Fan currently sells direct monthly support and
+  nothing more. Update both when a perk ships.
+- A subscription payout whose artist has no connected Stripe account (or whose transfer
+  errored) is recorded in `subscription_payouts` as `unpaid`/`failed` rather than retried
+  — that table is the list of what's owed, and settling it is manual for now
+- A gift or subscription payout is clawed back automatically on a full refund or a lost
+  dispute, but a *partial* refund of either is only logged for manual review — same
+  treatment a partially refunded purchase gets, since there's no sensible way to guess
+  what share to reverse
+- A gift is capped at $10,000 and can't be sent to yourself. Both exist because a gift is
+  transferred out to the artist's connected account as soon as the charge lands, so a
+  chargeback can only recover it while that account still holds the funds.
+- `artist_subscriptions.referred_by_fan_id` is logged from a `?ref=<fan_id>` link on the
+  artist page, but no reward logic reads it
+- The README's feature list above is behind the code — albums, the admin/moderation
+  section, bookings, contributor payouts, notifications, videos, and embeds all shipped
+  without being written up here
 - Purchases made before the fan-library change (or by an anonymous/guest checkout, if one
   slips through) have no `fan_id` and won't show up in `/library` — only reachable via
   their original `/success` link

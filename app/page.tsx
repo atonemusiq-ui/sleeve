@@ -94,7 +94,7 @@ export default async function StorefrontPage() {
   }
 
   return (
-    <main className="max-w-5xl mx-auto px-6 py-12">
+    <main className="max-w-5xl lg:max-w-6xl xl:max-w-7xl mx-auto px-6 lg:px-8 py-12">
       <header className="flex items-center justify-between mb-12">
         <div className="flex items-center gap-2.5">
           <FybyLogo className="h-8 w-8" />

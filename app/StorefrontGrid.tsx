@@ -141,7 +141,7 @@ export default function StorefrontGrid({
         searchResults.length === 0 ? (
           <p className="text-paper/50 font-mono text-sm">No tracks match &quot;{query}&quot;.</p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
             {searchResults.map((track) => (
               <TrackTile key={track.id} track={track} {...tileProps} />
             ))}

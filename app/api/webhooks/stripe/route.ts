@@ -1,4 +1,5 @@
 import { stripe } from "@/lib/stripe/server";
+import { transferArtistPayout } from "@/lib/stripe/payouts";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createNotification } from "@/lib/notifications";
 import { headers } from "next/headers";
@@ -41,9 +42,9 @@ function splitProportionally(totalCents: number, weights: number[]): number[] {
 // app/contributor-onboard/[token] and app/actions/contributor-connect.ts)
 // gets paid directly out of the same charge as the artist's own transfer
 // (Stripe's "separate charges and transfers" pattern, same as
-// transferArtistPayout below) — their contributor_payouts row is recorded
-// 'paid' immediately, with the transfer id attached so a refund can reverse
-// it later. A contributor who hasn't connected yet still gets the original
+// transferArtistPayout in lib/stripe/payouts.ts) — their contributor_payouts
+// row is recorded 'paid' immediately, with the transfer id attached so a
+// refund can reverse it later. A contributor who hasn't connected yet still gets the original
 // bookkeeping-only 'owed' row, unchanged from before this feature — the
 // artist settles that one by hand, and keeps receiving that contributor's
 // share themselves. Returns the total cents actually diverted to onboarded
@@ -116,31 +117,74 @@ async function payContributorsAndRecordPayouts(
 // callers can persist its id on the purchase row(s) — that id is what lets a
 // later refund/dispute reverse this exact transfer (see
 // reverseArtistPayoutsAndVoidContributors below) instead of guessing.
-async function transferArtistPayout(
-  paymentIntentId: string,
-  amountCents: number,
-  stripeAccountId: string,
-  transferGroup: string
-) {
-  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-  const chargeId =
-    typeof paymentIntent.latest_charge === "string"
-      ? paymentIntent.latest_charge
-      : paymentIntent.latest_charge?.id;
+// Claws back a gift or a Super Fan subscription payout when its charge is
+// refunded or its dispute is lost. Neither lives in `purchases`, so the two
+// branches that handle those events -- which look the payment intent up there
+// and return early when they find nothing -- would leave the artist's
+// transfer sitting in their connected account while the platform absorbs the
+// full reversal out of its own balance, with nothing recording that it
+// happened.
+//
+// Full reversals only. A gift or a month's subscription is one indivisible
+// amount, so there is none of the per-track apportioning
+// reverseArtistPayoutsAndVoidContributors has to do for an album.
+//
+// The row is marked whether or not the reversal call succeeds, so a
+// redelivered event (charge.refunded and charge.dispute.closed can both fire
+// for one payment intent) doesn't try again forever. A failure is logged
+// loudly instead -- same call as the transfer paths above, where a failed
+// reversal is real money to reconcile by hand in the Stripe dashboard.
+async function reverseNonPurchasePayouts(supabase: Supabase, paymentIntentId: string) {
+  const { data: gifts } = await supabase
+    .from("gifts")
+    .select("id, stripe_transfer_id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .is("refunded_at", null);
 
-  return stripe.transfers.create({
-    amount: amountCents,
-    currency: "usd",
-    destination: stripeAccountId,
-    source_transaction: chargeId,
-    transfer_group: transferGroup,
-  });
+  for (const gift of gifts ?? []) {
+    if (gift.stripe_transfer_id) {
+      try {
+        await stripe.transfers.createReversal(gift.stripe_transfer_id);
+      } catch (err: any) {
+        console.error(`Failed to reverse gift transfer ${gift.stripe_transfer_id}:`, err.message);
+      }
+    }
+
+    await supabase
+      .from("gifts")
+      .update({ refunded_at: new Date().toISOString() })
+      .eq("id", gift.id);
+  }
+
+  const { data: payouts } = await supabase
+    .from("subscription_payouts")
+    .select("id, stripe_transfer_id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .eq("status", "paid");
+
+  for (const payout of payouts ?? []) {
+    if (payout.stripe_transfer_id) {
+      try {
+        await stripe.transfers.createReversal(payout.stripe_transfer_id);
+      } catch (err: any) {
+        console.error(
+          `Failed to reverse Super Fan payout transfer ${payout.stripe_transfer_id}:`,
+          err.message
+        );
+      }
+    }
+
+    await supabase
+      .from("subscription_payouts")
+      .update({ status: "reversed" })
+      .eq("id", payout.id);
+  }
 }
 
 // Claws back the artist's payout when a purchase is refunded or a dispute is
 // lost. Groups by transfer id first so an album's single combined transfer
-// (see transferArtistPayout above) is reversed once for its full amount
-// rather than once per track. A contributor payout still sitting at 'owed'
+// (see transferArtistPayout in lib/stripe/payouts.ts) is reversed once for
+// its full amount rather than once per track. A contributor payout still sitting at 'owed'
 // for one of these purchases is voided — that money was never actually sent
 // anywhere yet, so the ledger just drops it. A payout already 'paid' came
 // out of the artist's own pocket at that point, not the platform's Stripe
@@ -308,6 +352,122 @@ export async function POST(req: Request) {
       if (error) {
         console.error("Failed to record verification request:", error.message);
         return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+
+      return NextResponse.json({ received: true });
+    }
+
+    // A one-time monetary gift from a fan straight to an artist (see
+    // app/actions/superfan.ts's startGiftCheckout). Handled up here with the
+    // two branches above because it carries neither track_id nor album_id —
+    // but unlike them it's a real fan payment that owes the artist money, so
+    // it takes the same 20% platform cut and the same Stripe transfer as a
+    // track sale rather than staying in the platform's balance.
+    if (session.metadata?.type === "gift") {
+      const giftArtistId = session.metadata?.artist_id ?? null;
+      const giftFanId = session.metadata?.fan_id ?? null;
+      const giftAmountCents = Number(session.metadata?.amount_cents);
+      const giftMessage = session.metadata?.gift_message ?? null;
+      const giftPaymentIntentId =
+        typeof session.payment_intent === "string" ? session.payment_intent : null;
+
+      if (!giftArtistId || !giftAmountCents) {
+        console.error("Gift webhook missing expected metadata:", session.metadata);
+        return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
+      }
+
+      const supabase = createServiceRoleClient();
+
+      // Same redelivery reasoning as the purchase branch below: the unique
+      // stripe_payment_intent_id on gifts (supabase/schema.sql) already stops
+      // a redelivered event inserting a second row, but on its own it
+      // wouldn't stop a second transfer going out — so bail before touching
+      // Stripe at all.
+      if (giftPaymentIntentId) {
+        const { data: existingGift } = await supabase
+          .from("gifts")
+          .select("id")
+          .eq("stripe_payment_intent_id", giftPaymentIntentId)
+          .limit(1);
+
+        if (existingGift && existingGift.length > 0) {
+          return NextResponse.json({ received: true, note: "already processed" });
+        }
+      }
+
+      // Same 20% cut as a track or album sale — kept in step with
+      // app/actions/checkout.ts, which computes the fee for those before
+      // checkout rather than here.
+      const giftPlatformFeeCents = Math.round(giftAmountCents * 0.2);
+      const giftArtistPayoutCents = giftAmountCents - giftPlatformFeeCents;
+
+      const { data: insertedGift, error: giftError } = await supabase
+        .from("gifts")
+        .insert({
+          fan_id: giftFanId,
+          artist_id: giftArtistId,
+          amount_cents: giftAmountCents,
+          message: giftMessage,
+          stripe_payment_intent_id: giftPaymentIntentId,
+          platform_fee_cents: giftPlatformFeeCents,
+          artist_payout_cents: giftArtistPayoutCents,
+        })
+        .select("id")
+        .single();
+
+      if (giftError) {
+        if ((giftError as any).code === "23505") {
+          return NextResponse.json({ received: true, note: "already processed" });
+        }
+        console.error("Failed to record gift:", giftError.message);
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+
+      const { data: giftArtist, error: giftArtistError } = await supabase
+        .from("artists")
+        .select("user_id, stripe_account_id")
+        .eq("id", giftArtistId)
+        .single();
+
+      const giftArtistStripeAccountId = (giftArtist as any)?.stripe_account_id;
+      const giftArtistUserId = (giftArtist as any)?.user_id ?? null;
+
+      if (giftArtistError || !giftArtistStripeAccountId) {
+        // Same judgment call as the track branch below: the gift is already
+        // recorded and a Stripe retry can't fix a missing connected account,
+        // so log it loudly for a manual payout instead of 500'ing into a
+        // redelivery loop.
+        console.error(
+          "No connected Stripe account found for this gift's artist — gift recorded but artist was not paid:",
+          giftArtistError?.message ?? `artist ${giftArtistId} has no linked stripe_account_id`
+        );
+      } else if (giftPaymentIntentId && giftArtistPayoutCents > 0) {
+        try {
+          const transfer = await transferArtistPayout(
+            giftPaymentIntentId,
+            giftArtistPayoutCents,
+            giftArtistStripeAccountId,
+            `gift_${giftArtistId}`
+          );
+          await supabase
+            .from("gifts")
+            .update({ stripe_transfer_id: transfer.id })
+            .eq("id", insertedGift.id);
+        } catch (transferError: any) {
+          console.error("Failed to transfer gift payout:", transferError.message);
+        }
+      }
+
+      if (giftArtistUserId) {
+        await createNotification(supabase, {
+          userId: giftArtistUserId,
+          type: "gift",
+          title: "You received a gift!",
+          body: `$${(giftArtistPayoutCents / 100).toFixed(2)} from a fan.${
+            giftMessage ? ` They said: "${giftMessage}"` : ""
+          }`,
+          link: "/dashboard",
+        });
       }
 
       return NextResponse.json({ received: true });
@@ -609,6 +769,15 @@ export async function POST(req: Request) {
     }
 
     const supabase = createServiceRoleClient();
+
+    // Gifts and Super Fan payouts first: they have no `purchases` row, so the
+    // early return below would skip their reversal entirely. Only on a fully
+    // refunded charge — a partial refund gets the same manual-review
+    // treatment the purchase path gives it further down.
+    if (charge.amount_refunded >= charge.amount) {
+      await reverseNonPurchasePayouts(supabase, paymentIntentId);
+    }
+
     const { data: purchases } = await supabase
       .from("purchases")
       .select(
@@ -728,6 +897,13 @@ export async function POST(req: Request) {
         .eq("status", "disputed");
       return NextResponse.json({ received: true });
     }
+
+    // Dispute lost: the money is gone from the platform's balance either way,
+    // so any gift or Super Fan payout on this charge has to come back out of
+    // the artist's connected account too. Same reasoning as the
+    // charge.refunded branch — neither has a `purchases` row to be found by
+    // the query below.
+    await reverseNonPurchasePayouts(supabase, paymentIntentId);
 
     const { data: purchases } = await supabase
       .from("purchases")
