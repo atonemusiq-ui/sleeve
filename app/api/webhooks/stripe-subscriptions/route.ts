@@ -106,6 +106,32 @@ export async function POST(req: Request) {
     const subscription = event.data.object as Stripe.Subscription;
     const metadata = subscription.metadata ?? {};
 
+        if (metadata.type === "artist_plan_subscription") {
+                const artistId = metadata.artist_id;
+                const plan = metadata.plan;
+
+                if (!artistId || !plan) {
+                          console.error("Plan subscription webhook missing expected metadata:", metadata);
+                          return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
+                }
+
+                const { error } = await supabase
+                  .from("artists")
+                  .update({
+                              plan,
+                              plan_subscription_id: subscription.id,
+                              plan_updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", artistId);
+
+                if (error) {
+                          console.error("Failed to record artist plan subscription:", error.message);
+                          return NextResponse.json({ error: "Database error" }, { status: 500 });
+                }
+
+                return NextResponse.json({ received: true });
+        }
+
     if (metadata.type !== "superfan_subscription") {
       return NextResponse.json({ received: true });
     }
@@ -197,6 +223,13 @@ export async function POST(req: Request) {
   if (event.type === "customer.subscription.updated") {
     const subscription = event.data.object as Stripe.Subscription;
 
+        if ((subscription.metadata ?? {}).type === "artist_plan_subscription") {
+                // Held through past_due deliberately -- the plan only changes when
+                // Stripe actually ends the subscription (customer.subscription.deleted
+                // below), not on a payment hiccup that might still resolve.
+                return NextResponse.json({ received: true });
+        }
+
     const { error } = await supabase
       .from("artist_subscriptions")
       .update({
@@ -218,6 +251,24 @@ export async function POST(req: Request) {
   // history of the relationship (when it started, how long it lasted).
   if (event.type === "customer.subscription.deleted") {
     const subscription = event.data.object as Stripe.Subscription;
+
+        if ((subscription.metadata ?? {}).type === "artist_plan_subscription") {
+                const { error } = await supabase
+                  .from("artists")
+                  .update({
+                              plan: "free",
+                              plan_subscription_id: null,
+                              plan_updated_at: new Date().toISOString(),
+                  })
+                  .eq("plan_subscription_id", subscription.id);
+
+                if (error) {
+                          console.error("Failed to downgrade artist plan to free:", error.message);
+                          return NextResponse.json({ error: "Database error" }, { status: 500 });
+                }
+
+                return NextResponse.json({ received: true });
+        }
 
     const { error } = await supabase
       .from("artist_subscriptions")
