@@ -37,7 +37,7 @@ export default async function DashboardPage() {
   const { data: artist } = await supabase
     .from("artists")
     .select(
-      "id, stripe_account_id, bio, bio_photo_url, gallery_urls, video_tier, bio_video_url, bio_video_type, is_active"
+            "id, plan, stripe_account_id, bio, bio_photo_url, gallery_urls, video_tier, bio_video_url, bio_video_type, is_active"
     )
     .eq("user_id", user.id)
     .single();
@@ -125,6 +125,22 @@ export default async function DashboardPage() {
         <span className="font-mono text-xs text-gold flex-shrink-0">Open &rarr;</span>
       </Link>
 
+            <Link
+                      href="/dashboard/subscription"
+                      className="flex items-center justify-between gap-4 border border-paper/15 rounded-lg px-6 py-5 mb-10 bg-paper/5 hover:bg-paper/10"
+                    >
+        <div>
+                  <h2 className="font-display text-lg">Subscription</h2>
+                    <p className="font-mono text-xs text-paper/60 mt-1">
+                      {(artist as any)?.plan === "pro"
+                                      ? "Pro plan -- 5% commission on every sale."
+                                      : (artist as any)?.plan === "artist"
+                                      ? "Artist plan -- 10% commission on every sale."
+                                      : "Free plan -- 15% commission on every sale. Upgrade to lower it."}
+                    </p>
+        </div>
+                      <span className="font-mono text-xs text-gold flex-shrink-0">Manage &rarr;</span>
+            </Link>
       <CollapsibleSection
         title="Payouts"
         defaultOpen={!artist?.stripe_account_id}
