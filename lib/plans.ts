@@ -8,7 +8,7 @@
 // meant finding all five and getting the rounding identical in each.
 //
 // The model: a plan does not add features on top of the cut, it BUYS THE CUT
-// DOWN. An artist on Free pays 20% and nothing monthly; Artist and Pro trade a
+// DOWN. An artist on Free pays 15% and nothing monthly; Artist and Pro trade a
 // monthly fee for a smaller share of every sale, so each upgrade pays for
 // itself at a sales figure the artist can check against their own numbers
 // (breakEvenCentsPerMonth below). Everything an artist can do today stays on
@@ -16,13 +16,13 @@
 export type Plan = "free" | "artist" | "pro";
 
 // rateBps is the cut in BASIS POINTS (hundredths of a percent), not a float:
-// 2000 = 20%. Money must never be computed from a float percentage that can
+// 1500 = 15%. Money must never be computed from a float percentage that can
 // drift — the arithmetic below is integer multiply then one divide.
 export const PLANS = {
   free: {
     label: "Free",
     priceCents: 0,
-    rateBps: 2000,
+        rateBps: 1500,
   },
   artist: {
     label: "Artist",
