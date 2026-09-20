@@ -1088,5 +1088,13 @@ create policy "video exchange participants can upload"
             where fan_id = auth.uid() and status = 'active'
           )
         )
+
+  -- Optional lyrics an artist can add at upload time, shown alongside the
+  -- per-track contributor credits (contributors.name, filtered by track_id)
+  -- in a lyrics/credits dialog on the track (app/artists/[id]/page.tsx) --
+  -- same idea as Apple Music's lyrics+credits sheet, just names, no
+  -- percentages, since the split itself is private business between the
+  -- artist and their contributors.
+  alter table tracks add column if not exists lyrics text;
       )
     );
