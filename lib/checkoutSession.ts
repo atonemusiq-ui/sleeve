@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/server";
+import { commissionCents, payoutCents, planOf } from "@/lib/plans";
 import { trackNeedsCoverCredit } from "@/lib/coverCompliance";
 
 export type CheckoutSessionResult = { url: string } | { error: string };
@@ -22,7 +23,7 @@ export async function createTrackCheckoutSession(
 
   const { data: track, error } = await supabase
     .from("tracks")
-    .select("id, title, price_cents, genre, frozen, artists ( is_active, profiles ( display_name ) )")
+    .select("id, title, price_cents, genre, frozen, artists ( is_active, plan, profiles ( display_name ) )")
     .eq("id", trackId)
     .single();
 
@@ -60,8 +61,12 @@ export async function createTrackCheckoutSession(
   const artistName = (track as any).artists?.profiles?.display_name ?? "Unknown artist";
 
   const amountCents = track.price_cents;
-  const platformFeeCents = Math.round(amountCents * 0.2);
-  const artistPayoutCents = amountCents - platformFeeCents;
+  // The cut this artist's plan earns them (lib/plans.ts). Snapshotted into
+  // the session metadata below so the webhook records the split the fan
+  // actually agreed to, even if the artist changes plan before it arrives.
+  const plan = planOf((track as any).artists?.plan);
+  const platformFeeCents = commissionCents(amountCents, plan);
+  const artistPayoutCents = payoutCents(amountCents, plan);
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -104,6 +109,7 @@ export async function createTrackCheckoutSession(
       amount_cents: String(amountCents),
       platform_fee_cents: String(platformFeeCents),
       artist_payout_cents: String(artistPayoutCents),
+      plan,
     },
   });
 

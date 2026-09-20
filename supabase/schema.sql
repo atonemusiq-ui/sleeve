@@ -860,6 +860,20 @@ alter table booking_requests add constraint booking_requests_inquiry_type_check
 -- app/actions/artist.ts's updateSocialLinks), rather than a JSON blob,
 -- since there's a small fixed set of platforms for now.
 -- ============================================================================
+-- Which subscription plan the artist is on, and so what cut Fyby takes from
+-- their sales. The rates live in lib/plans.ts (Free 20%, Artist 10%, Pro 5%);
+-- a plan buys that cut down rather than adding features on top of it.
+--
+-- Defaults to 'free' so every existing artist keeps exactly the deal they
+-- have today with no backfill, and the check constraint keeps the column in
+-- step with lib/plans.ts's Plan type. plan_subscription_id is the Stripe
+-- subscription behind a paid plan -- the artist paying Fyby, which is a
+-- different thing from artist_subscriptions (a fan paying an artist).
+alter table artists add column if not exists plan text not null default 'free'
+  check (plan in ('free', 'artist', 'pro'));
+alter table artists add column if not exists plan_updated_at timestamptz;
+alter table artists add column if not exists plan_subscription_id text;
+
 alter table artists add column if not exists facebook_url text;
 alter table artists add column if not exists tiktok_url text;
 alter table artists add column if not exists instagram_url text;
@@ -916,6 +930,23 @@ create table if not exists gifts (
     stripe_payment_intent_id text unique,
     created_at timestamptz default now()
   );
+-- The platform's cut and the artist's share of a gift, plus the Stripe
+-- transfer that actually moved the artist's share to their connected
+-- account. Recorded by the gift branch in app/api/webhooks/stripe/route.ts,
+-- which applies the same 20% platform fee a track or album sale takes.
+-- Added as alters rather than baked into the create above so re-running this
+-- file on a project that already has a gifts table picks them up too.
+alter table gifts add column if not exists platform_fee_cents integer;
+alter table gifts add column if not exists artist_payout_cents integer;
+alter table gifts add column if not exists stripe_transfer_id text;
+
+-- Set when a gift's charge is refunded or its dispute is lost, at which point
+-- the artist's transfer is reversed (see reverseNonPurchasePayouts in
+-- app/api/webhooks/stripe/route.ts). Also what stops that reversal running
+-- twice when charge.refunded and charge.dispute.closed both fire for the
+-- same payment intent.
+alter table gifts add column if not exists refunded_at timestamptz;
+
 alter table gifts enable row level security;
 
 drop policy if exists "Fans can view their own gifts" on gifts;
@@ -929,6 +960,50 @@ create policy "Artists can view gifts sent to them"
   using (artist_id in (select id from artists where user_id = auth.uid()));
 
 -- ============================================================================
+-- Super Fan subscription payouts
+-- ============================================================================
+-- One row per paid subscription invoice, recording the artist's share of that
+-- month's $9 and the Stripe transfer that moved it to their connected
+-- account. Written by the invoice.payment_succeeded branch in
+-- app/api/webhooks/stripe-subscriptions/route.ts.
+--
+-- Deliberately keyed on stripe_subscription_id (text) rather than a foreign
+-- key to artist_subscriptions: Stripe does not guarantee that
+-- customer.subscription.created is delivered before the first invoice's
+-- payment_succeeded, so the artist_subscriptions row may not exist yet when
+-- the first payout is recorded. The unique stripe_invoice_id is what makes a
+-- redelivered invoice event safe -- one invoice can only ever be paid out
+-- once.
+--
+-- status: 'paid'   -- transferred to the artist's connected account
+--         'unpaid' -- artist has no connected account; owed, settle by hand
+--         'failed' -- the Stripe transfer itself errored; needs a look
+create table if not exists subscription_payouts (
+    id uuid primary key default gen_random_uuid(),
+    artist_id uuid references artists(id) not null,
+    fan_id uuid references profiles(id),
+    stripe_subscription_id text,
+    stripe_invoice_id text unique not null,
+    stripe_payment_intent_id text,
+    stripe_transfer_id text,
+    amount_cents integer not null,
+    platform_fee_cents integer not null,
+    artist_payout_cents integer not null,
+    status text not null default 'unpaid',
+    created_at timestamptz default now()
+  );
+alter table subscription_payouts enable row level security;
+
+drop policy if exists "Artists can view their own subscription payouts" on subscription_payouts;
+create policy "Artists can view their own subscription payouts"
+  on subscription_payouts for select
+  using (artist_id in (select id from artists where user_id = auth.uid()));
+
+drop policy if exists "Fans can view their own subscription payments" on subscription_payouts;
+create policy "Fans can view their own subscription payments"
+  on subscription_payouts for select
+  using (fan_id = auth.uid());
+
 -- Two-way video exchange: private videos an artist and their Super Fans send
 -- back and forth (see app/actions/superfan.ts's sendExchangeVideo, and the
 -- private "superfan-videos" storage bucket below). Each row is one video,

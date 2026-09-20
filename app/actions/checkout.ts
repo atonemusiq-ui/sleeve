@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/server";
+import { commissionCents, payoutCents, planOf } from "@/lib/plans";
 import { trackNeedsCoverCredit } from "@/lib/coverCompliance";
 import { createTrackCheckoutSession } from "@/lib/checkoutSession";
 import { redirect } from "next/navigation";
@@ -68,7 +69,7 @@ export async function startAlbumCheckout(formData: FormData) {
 
   const { data: album, error } = await supabase
     .from("albums")
-    .select("id, title, price_cents, artists ( is_active, profiles ( display_name ) )")
+    .select("id, title, price_cents, artists ( is_active, plan, profiles ( display_name ) )")
     .eq("id", albumId)
     .single();
 
@@ -115,8 +116,12 @@ export async function startAlbumCheckout(formData: FormData) {
   const artistName = (album as any).artists?.profiles?.display_name ?? "Unknown artist";
 
   const amountCents = album.price_cents;
-  const platformFeeCents = Math.round(amountCents * 0.2);
-  const artistPayoutCents = amountCents - platformFeeCents;
+  // Same as the single-track path in lib/checkoutSession.ts: the artist's
+  // plan sets the cut, and it is snapshotted into metadata so the per-track
+  // split the webhook writes uses the same rate this total was built from.
+  const plan = planOf((album as any).artists?.plan);
+  const platformFeeCents = commissionCents(amountCents, plan);
+  const artistPayoutCents = payoutCents(amountCents, plan);
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -151,6 +156,7 @@ export async function startAlbumCheckout(formData: FormData) {
       amount_cents: String(amountCents),
       platform_fee_cents: String(platformFeeCents),
       artist_payout_cents: String(artistPayoutCents),
+      plan,
     },
   });
 

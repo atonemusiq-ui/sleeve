@@ -261,7 +261,7 @@ function ContributorFields({ defaults }: { defaults?: Partial<Contributor> }) {
         required
         className="w-full bg-paper/5 border border-paper/20 rounded px-2 py-1.5 text-paper text-sm"
       />
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <input
           name="email"
           type="email"

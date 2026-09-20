@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { startCheckout } from "@/app/actions/checkout";
 import { tracksNeedingCoverCredit } from "@/lib/coverCompliance";
 import { aiDisclosureBadge } from "@/lib/aiDisclosure";
+import { isUuid } from "@/lib/uuid";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -41,11 +42,11 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 }
 
 export default async function ArtistPage({
-    params,
-    searchParams,
+  params,
+  searchParams,
 }: {
-    params: { id: string };
-    searchParams: { ref?: string };
+  params: { id: string };
+  searchParams: { superfan?: string; gift?: string; ref?: string };
 }) {
   const supabase = createClient();
 
@@ -95,27 +96,45 @@ export default async function ArtistPage({
   const artistName = (artist as any).profiles?.display_name ?? "Unknown artist";
   const galleryUrls: string[] = ((artist as any).gallery_urls ?? []).filter(Boolean);
 
+  // Whether the logged-in fan is already a Super Fan of this artist, so the
+  // panel can say so instead of offering a subscription that
+  // startSuperFanCheckout would just reject. Gated by the "Fans can view
+  // their own super fan subscriptions" RLS policy (supabase/schema.sql), so
+  // this only ever sees the viewer's own row.
+  let isSuperFan = false;
+  if (user) {
+    const { data: subscription } = await supabase
+      .from("artist_subscriptions")
+      .select("id")
+      .eq("fan_id", user.id)
+      .eq("artist_id", artist.id)
+      .eq("status", "active")
+      .maybeSingle();
+
+    isSuperFan = Boolean(subscription);
+  }
+
+  // A fan who arrived from another fan's referral link, for
+  // artist_subscriptions.referred_by_fan_id. Ignored if it points at the
+  // viewer themselves, so a fan can't refer themselves by editing their link.
+  // Shape-checked before it goes anywhere near a form: this value
+  // ends up in a `uuid references profiles(id)` column, and `?ref=anything`
+  // in a shared link would otherwise fail that insert inside the webhook and
+  // leave a paying fan with no subscription row. startSuperFanCheckout checks
+  // it again, since the form post is not the only way to reach the action.
+  const referredByFanId =
+    isUuid(searchParams.ref) && searchParams.ref !== user?.id ? searchParams.ref : null;
+
   // Cover songs (see lib/coverCompliance.ts) can't be sold until the artist
   // has credited the original songwriter/producer as a contributor.
   const blockedTrackIds = await tracksNeedingCoverCredit(
     (tracks ?? []).map((t) => ({ id: t.id, genre: t.genre }))
   );
 
-    // Whether the logged-in fan already supports this artist at $9/month (see
-    // app/actions/superfan.ts and supabase/schema.sql's artist_subscriptions).
-    // An artist can't be their own Super Fan, so this is skipped for the owner.
-    const { data: superFanSub } = user
-      ? await supabase
-              .from("artist_subscriptions")
-              .select("id")
-              .eq("fan_id", user.id)
-              .eq("artist_id", artist.id)
-              .eq("status", "active")
-              .maybeSingle()
-          : { data: null };
-
-    const isSuperFan = Boolean(superFanSub);
-    const referralFanId = searchParams?.ref ?? null;
+  // What SuperFanSection builds its share link from. Deliberately the
+  // shape-checked value rather than the raw `?ref=` query param, so a junk
+  // value in a shared link can never reach the uuid column behind it.
+  const referralFanId = referredByFanId;
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
@@ -145,6 +164,27 @@ export default async function ArtistPage({
               Reactivate it from your dashboard
             </Link>
             .
+          </p>
+        </div>
+      )}
+
+      {/* Stripe sends the fan back here after checkout — see the success_url
+          in app/actions/superfan.ts. The subscription/gift row itself is
+          written by the webhook, which may land a moment later, so these
+          confirm the payment rather than reading back the new row. */}
+      {searchParams.superfan === "success" && (
+        <div className="mb-8 border border-forest/40 rounded-lg p-4 bg-forest/10">
+          <p className="font-mono text-sm text-forest">
+            You&apos;re a Super Fan of {artistName} — thank you. Your first month is paid,
+            and {artistName} has been notified.
+          </p>
+        </div>
+      )}
+
+      {searchParams.gift === "success" && (
+        <div className="mb-8 border border-forest/40 rounded-lg p-4 bg-forest/10">
+          <p className="font-mono text-sm text-forest">
+            Your gift is on its way to {artistName} — thank you.
           </p>
         </div>
       )}
