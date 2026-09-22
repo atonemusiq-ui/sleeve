@@ -1,5 +1,5 @@
-"use server";
 
+  "use server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { findDuplicateTrack } from "@/lib/fingerprint/check-duplicate";
@@ -24,6 +24,7 @@ export type PublishTrackInput = {
   aiDisclosure: AiDisclosureLevel;
   explicit: boolean;
   rightsAttested: boolean;
+    lyrics: string | null;
 };
 
 export type PublishTrackResult =
@@ -142,6 +143,7 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
     custom_tag: customTag,
     ai_disclosure: input.aiDisclosure,
     explicit: input.explicit,
+        lyrics: input.lyrics || null,
   });
 
   if (error) {
