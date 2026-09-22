@@ -85,7 +85,10 @@ export async function createTrackCheckoutSession(
     // app's platform-fee/artist-payout split, computed from it) stays the
     // pre-tax price — the tax Stripe adds rides on top of the charge, not
     // out of it.
-    automatic_tax: { enabled: true },
+        // TEMP: disabled until the Stripe account has a valid tax origin address
+        // (dashboard.stripe.com/test/settings/tax) -- Fyby team, flip back to
+        // true once that's set.
+        automatic_tax: { enabled: false },
     billing_address_collection: "required",
     line_items: [
       {
