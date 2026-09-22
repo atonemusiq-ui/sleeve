@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { logout } from "@/app/actions/auth";
 import { connectStripeAccount } from "@/app/actions/stripe-connect";
 import { redirect } from "next/navigation";
@@ -69,6 +70,36 @@ export default async function DashboardPage() {
     : { data: [] as any[] };
 
   const bookingRequests: BookingRequest[] = (bookingRows ?? []) as BookingRequest[];
+
+  // Year-to-date earnings for the Payouts section, in cents. Track/album
+  // sales only -- Super Fan subscription revenue isn't included here, since
+  // that's a recurring stream an artist already tracks separately via their
+  // Stripe dashboard, not a one-time sale. purchases has no RLS policy
+  // letting an artist read rows for their own tracks (only "fans can read
+  // their own purchases" -- supabase/schema.sql), so this goes through the
+  // service-role client, same as the contributor-credits lookup on the
+  // public artist page. "Complete" only -- a 'refunded' or 'disputed' sale's
+  // artist_net_payout_cents no longer reflects money the artist actually
+  // keeps, and "year to date" resets on Jan 1 in the server's clock (UTC).
+  let ytdEarningsCents = 0;
+  if (artist?.id) {
+    const admin = createServiceRoleClient();
+    const { data: ownTracks } = await admin.from("tracks").select("id").eq("artist_id", artist.id);
+    const ownTrackIds = (ownTracks ?? []).map((t) => t.id);
+    if (ownTrackIds.length > 0) {
+      const yearStart = `${new Date().getFullYear()}-01-01T00:00:00.000Z`;
+      const { data: ytdPurchases } = await admin
+        .from("purchases")
+        .select("artist_net_payout_cents")
+        .in("track_id", ownTrackIds)
+        .eq("status", "complete")
+        .gte("created_at", yearStart);
+      ytdEarningsCents = (ytdPurchases ?? []).reduce(
+        (sum, p) => sum + (p.artist_net_payout_cents ?? 0),
+        0
+      );
+    }
+  }
 
   // New sale / booking / refund alerts (app/api/webhooks/stripe/route.ts,
   // app/actions/booking.ts) — most recent first, capped since this is a
@@ -161,6 +192,18 @@ export default async function DashboardPage() {
             ? "Bank account connected via Stripe."
             : "Connect a bank account to get paid when your tracks sell."}
         </p>
+        <div className="mt-3 mb-1">
+          <p className="font-mono text-[10px] text-paper/40 uppercase">
+            {new Date().getFullYear()} earnings
+          </p>
+          <p className="font-display text-2xl text-forest">
+            ${(ytdEarningsCents / 100).toFixed(2)}
+          </p>
+          <p className="font-mono text-[10px] text-paper/40 mt-0.5">
+            Track and album sales, year to date. Super Fan subscriptions aren&apos;t included --
+            see your Stripe dashboard for that.
+          </p>
+        </div>
         <form action={connectStripeAccount}>
           <button
             type="submit"
