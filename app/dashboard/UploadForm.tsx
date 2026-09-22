@@ -30,6 +30,7 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
   const [genre, setGenre] = useState("");
   const [subgenre, setSubgenre] = useState("");
   const [customTag, setCustomTag] = useState("");
+    const [lyrics, setLyrics] = useState("");
   const [suggestedGenre, setSuggestedGenre] = useState("");
   const [suggestingGenre, setSuggestingGenre] = useState(false);
   const [suggestGenreMessage, setSuggestGenreMessage] = useState<string | null>(null);
@@ -210,6 +211,7 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
         aiDisclosure,
         explicit,
         rightsAttested,
+            lyrics: lyrics.trim() || null,
       });
 
       if (result.status === "error") {
@@ -227,6 +229,7 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
       setGenre("");
       setSubgenre("");
       setCustomTag("");
+          setLyrics("");
       setAiDisclosure("human");
       setExplicit(false);
       setRightsAttested(false);
@@ -357,6 +360,17 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
           className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper"
         />
       </div>
+
+                  <div>
+                              <label className="block font-mono text-xs text-paper/60 mb-1">Lyrics (optional)</label>
+                              <textarea
+                                              value={lyrics}
+                                              onChange={(e) => setLyrics(e.target.value)}
+                                              rows={8}
+                                              placeholder="Paste or type the lyrics here -- shown to buyers alongside the credits."
+                                              className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper font-mono text-sm"
+                                            />
+                            </div>
 
       <div>
         <label className="block font-mono text-xs text-paper/60 mb-1">
