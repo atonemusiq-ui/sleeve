@@ -12,6 +12,7 @@ import ReportVideoButton from "./ReportVideoButton";
 import VideoEmbed from "@/app/VideoEmbed";
 import CollapsibleSection from "@/app/CollapsibleSection";
 import SuperFanSection from "@/app/SuperFanSection";
+import LyricsCreditsDialog from "@/app/LyricsCreditsDialog";
 
 // Powers the og:title/og:description a crawler shows alongside the image
 // from this same folder's opengraph-image.tsx when a plain artist link is
@@ -83,7 +84,7 @@ export default async function ArtistPage({
   const { data: tracks } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, cover_url, preview_url, created_at, genre, custom_tag, ai_disclosure, explicit"
+      "id, title, price_cents, cover_url, preview_url, created_at, genre, custom_tag, ai_disclosure, explicit, lyrics"
     )
     // A frozen track (app/admin/moderation/page.tsx's freezeTrack) is hidden
     // here for everyone, owner included — the artist already sees why in
@@ -95,6 +96,28 @@ export default async function ArtistPage({
 
   const artistName = (artist as any).profiles?.display_name ?? "Unknown artist";
   const galleryUrls: string[] = ((artist as any).gallery_urls ?? []).filter(Boolean);
+
+  // Contributor names for the "Lyrics & Credits" dialog (app/LyricsCreditsDialog.tsx).
+  // Credits are just names -- never percentage/email/phone -- and contributors is
+  // RLS-locked to the owning artist (supabase/schema.sql), so a buyer's session can't
+  // read it directly. The service-role client bypasses that, and this query is scoped
+  // to exactly the name column so nothing more sensitive ever leaves the server.
+  const creditsByTrack: Record<string, string[]> = {};
+  if (tracks && tracks.length > 0) {
+    const admin = createServiceRoleClient();
+    const { data: contributorRows } = await admin
+      .from("contributors")
+      .select("track_id, name")
+      .in(
+        "track_id",
+        tracks.map((t) => t.id)
+      );
+    for (const row of contributorRows ?? []) {
+      const list = creditsByTrack[row.track_id] ?? [];
+      list.push(row.name);
+      creditsByTrack[row.track_id] = list;
+    }
+  }
 
   // Whether the logged-in fan is already a Super Fan of this artist, so the
   // panel can say so instead of offering a subscription that
@@ -284,6 +307,11 @@ export default async function ArtistPage({
                   preload="none"
                 />
               )}
+              <LyricsCreditsDialog
+                trackTitle={track.title}
+                lyrics={(track as any).lyrics ?? null}
+                credits={creditsByTrack[track.id] ?? []}
+              />
               </div>
               <div className="flex items-center justify-between mt-6">
                 {blockedTrackIds.has(track.id) ? (
