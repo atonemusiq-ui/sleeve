@@ -13,6 +13,7 @@ import VideoEmbed from "@/app/VideoEmbed";
 import CollapsibleSection from "@/app/CollapsibleSection";
 import SuperFanSection from "@/app/SuperFanSection";
 import LyricsCreditsDialog from "@/app/LyricsCreditsDialog";
+import MailingListForm from "./MailingListForm";
 
 // Powers the og:title/og:description a crawler shows alongside the image
 // from this same folder's opengraph-image.tsx when a plain artist link is
@@ -54,7 +55,7 @@ export default async function ArtistPage({
   const { data: artist } = await supabase
     .from("artists")
     .select(
-      "id, user_id, is_active, bio, bio_photo_url, gallery_urls, bio_video_url, bio_video_type, profiles ( display_name )"
+      "id, user_id, is_active, bio, bio_photo_url, gallery_urls, bio_video_url, bio_video_type, custom_links, tour_dates, mailing_list_enabled, profiles ( display_name )"
     )
     .eq("id", params.id)
     .single();
@@ -246,6 +247,51 @@ export default async function ArtistPage({
           <ReportVideoButton artistId={artist.id} videoUrl={(artist as any).bio_video_url} />
         </div>
       )}
+
+      {/* Custom links, tour dates, and mailing-list signup (Phase 7 --
+          app/dashboard/ArtistHubManager.tsx is where the artist manages
+          these). Skipped entirely when the artist hasn't set any of the
+          three, so a page with none of this doesn't show an empty block. */}
+      {(() => {
+        const customLinks = ((artist as any).custom_links as { label: string; url: string }[]) ?? [];
+        const tourDates = (artist as any).tour_dates as string | null;
+        const mailingListEnabled = (artist as any).mailing_list_enabled !== false;
+        if (customLinks.length === 0 && !tourDates && !mailingListEnabled) return null;
+
+        return (
+          <div className="mb-10 flex flex-col gap-6">
+            {customLinks.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {customLinks.map((link, i) => (
+                  <a
+                    key={i}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-xs px-3 py-1.5 rounded-full border border-paper/20 text-paper/70 hover:border-gold hover:text-gold"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {tourDates && (
+              <div>
+                <p className="font-mono text-xs text-paper/40 uppercase mb-2">Tour dates</p>
+                <p className="font-body text-sm text-paper/80 whitespace-pre-wrap">{tourDates}</p>
+              </div>
+            )}
+
+            {mailingListEnabled && (
+              <div>
+                <p className="font-mono text-xs text-paper/40 uppercase mb-2">Mailing list</p>
+                <MailingListForm artistId={artist.id} artistName={artistName} />
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="ticket-divider mb-10" />
 
