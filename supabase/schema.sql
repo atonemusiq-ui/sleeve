@@ -1098,3 +1098,41 @@ create policy "video exchange participants can upload"
   alter table tracks add column if not exists lyrics text;
       )
     );
+-- ============================================================================
+-- Artist Hub (Phase 7): a flexible list of custom links, a plain-text tour
+-- dates block, and a mailing-list opt-in -- all managed from the dashboard
+-- and rendered on the public artist page (app/artists/[id]/page.tsx).
+-- custom_links is a JSON array of {label, url} objects rather than its own
+-- table since it's small, artist-owned, and has no relational shape worth
+-- normalizing (no querying "all artists with a link to X").
+-- ============================================================================
+alter table artists add column if not exists custom_links jsonb not null default '[]'::jsonb;
+alter table artists add column if not exists tour_dates text;
+alter table artists add column if not exists mailing_list_enabled boolean not null default true;
+-- Mailing-list signups from an artist's public page. Public insert (anyone
+-- can sign up, logged in or not -- mirrors "anyone can submit a booking
+-- request" below), artist-only read, matching the booking_requests pattern
+-- this app already uses for fan-submitted forms.
+create table if not exists artist_fans (
+  id uuid primary key default gen_random_uuid(),
+  artist_id uuid not null references artists(id) on delete cascade,
+  fan_email text not null,
+  created_at timestamptz not null default now()
+);
+-- One signup per email per artist -- resubmitting the same address on a
+-- page revisit shouldn't create duplicate rows. Plain columns (not
+-- lower(fan_email)) so app/actions/artistHub.ts's upsert onConflict can
+-- target it directly -- the action lowercases fan_email itself before the
+-- write, so this still catches a same-address-different-case resubmit.
+create unique index if not exists artist_fans_artist_email_key on artist_fans (artist_id, fan_email);
+
+alter table artist_fans enable row level security;
+drop policy if exists "anyone can join an artist's mailing list" on artist_fans;
+create policy "anyone can join an artist's mailing list"
+  on artist_fans for insert
+  with check (true);
+drop policy if exists "artists manage their own mailing list" on artist_fans;
+create policy "artists manage their own mailing list"
+  on artist_fans for all
+  using (artist_id in (select id from artists where user_id = auth.uid()))
+  with check (artist_id in (select id from artists where user_id = auth.uid()));
