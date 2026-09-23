@@ -10,6 +10,7 @@ import ShareCard from "./ShareCard";
 import GalleryManager from "./GalleryManager";
 import VideoManager from "./VideoManager";
 import ArtistVisibilityManager from "./ArtistVisibilityManager";
+import ArtistHubManager from "./ArtistHubManager";
 import CollapsibleSection from "@/app/CollapsibleSection";
 import NotificationBell from "@/app/NotificationBell";
 import type { VideoTier } from "@/lib/videoTiers";
@@ -38,7 +39,7 @@ export default async function DashboardPage() {
   const { data: artist } = await supabase
     .from("artists")
     .select(
-            "id, plan, stripe_account_id, bio, bio_photo_url, gallery_urls, video_tier, bio_video_url, bio_video_type, is_active"
+            "id, plan, stripe_account_id, bio, bio_photo_url, gallery_urls, video_tier, bio_video_url, bio_video_type, is_active, custom_links, tour_dates, mailing_list_enabled"
     )
     .eq("user_id", user.id)
     .single();
@@ -100,6 +101,18 @@ export default async function DashboardPage() {
       );
     }
   }
+
+  // Mailing-list signups (app/actions/artistHub.ts's joinMailingList,
+  // ArtistHubManager.tsx's "Copy emails"). Oldest first so a "copy emails"
+  // export lands in signup order, not reverse.
+  const { data: fanRows } = artist?.id
+    ? await supabase
+        .from("artist_fans")
+        .select("fan_email")
+        .eq("artist_id", artist.id)
+        .order("created_at", { ascending: true })
+    : { data: [] as any[] };
+  const fanEmails: string[] = (fanRows ?? []).map((r: any) => r.fan_email);
 
   // New sale / booking / refund alerts (app/api/webhooks/stripe/route.ts,
   // app/actions/booking.ts) — most recent first, capped since this is a
@@ -229,6 +242,33 @@ export default async function DashboardPage() {
             artistId={artist.id}
             bio={artist.bio}
             bioPhotoUrl={(artist as any).bio_photo_url ?? null}
+          />
+        )}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Links, tour dates & mailing list"
+        badge={
+          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border border-paper/20 text-paper/50">
+            {fanEmails.length} signup{fanEmails.length === 1 ? "" : "s"}
+          </span>
+        }
+      >
+        <p className="font-mono text-xs text-paper/60 mb-4">
+          All shown on your public artist page — {artist?.id ? (
+            <Link href={`/artists/${artist.id}`} className="text-gold">
+              preview it
+            </Link>
+          ) : (
+            "preview it once you have a track released"
+          )}.
+        </p>
+        {artist?.id && (
+          <ArtistHubManager
+            customLinks={((artist as any).custom_links as { label: string; url: string }[]) ?? []}
+            tourDates={(artist as any).tour_dates ?? null}
+            mailingListEnabled={(artist as any).mailing_list_enabled !== false}
+            fanEmails={fanEmails}
           />
         )}
       </CollapsibleSection>
