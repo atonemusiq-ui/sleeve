@@ -3,9 +3,41 @@ import { transferArtistPayout } from "@/lib/stripe/payouts";
 import { commissionCents, payoutCents, planOf } from "@/lib/plans";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createNotification } from "@/lib/notifications";
+import { sendGiftClaimEmail } from "@/lib/email";
+import { randomUUID } from "crypto";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
+
+// Best-effort side effect for a completed single-track purchase made from a
+// shared referral link (app/artists/[id]/FanReferralLink.tsx). Logs the
+// referral by upserting the buyer into artist_fans, same table/shape as a
+// mailing-list signup (app/actions/artistHub.ts's joinMailingList) — a
+// purchase makes someone a fan of the artist either way. Plain insert +
+// 23505 (unique-violation) swallow rather than an upsert with onConflict,
+// for the exact reason explained on joinMailingList: under RLS, an anon/
+// service-role write can't safely evaluate ON CONFLICT DO NOTHING without
+// SELECT visibility into a possible existing row. Never throws — a broken
+// referral log should never fail a payment that already went through.
+async function logPurchaseReferral(
+  supabase: Supabase,
+  artistId: string,
+  buyerEmail: string | null,
+  referredByFanId: string | null
+) {
+  if (!referredByFanId || !buyerEmail) return;
+
+  try {
+    const { error } = await supabase
+      .from("artist_fans")
+      .insert({ artist_id: artistId, fan_email: buyerEmail, referred_by_fan_id: referredByFanId });
+    if (error && (error as any).code !== "23505") {
+      console.error("Failed to log purchase referral:", error.message);
+    }
+  } catch (err: any) {
+    console.error("Failed to log purchase referral:", err.message);
+  }
+}
 
 // Stripe needs the raw, unparsed request body to verify the webhook
 // signature, so we don't let Next.js parse it as JSON first.
@@ -492,6 +524,15 @@ export async function POST(req: Request) {
     const paymentIntentId =
       typeof session.payment_intent === "string" ? session.payment_intent : null;
 
+    // Gift purchase (app/artists/[id]/BuyTrackForm.tsx's "this is a gift"
+    // toggle) — single-track only for now, not albums. When set, the
+    // purchase row below gets fan_id: null and a claim token instead of the
+    // buyer's own fan_id, so the recipient (not the buyer) is who ends up
+    // able to stream it, once they claim it at /gift/[token].
+    const isGift = session.metadata?.is_gift === "true";
+    const giftRecipientEmail = session.metadata?.gift_recipient_email ?? null;
+    const referredByFanId = session.metadata?.referred_by_fan_id ?? null;
+
     if ((!trackId && !albumId) || !amountCents) {
       console.error("Webhook missing expected metadata:", session.metadata);
       return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
@@ -665,6 +706,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
     }
 
+    // A gift's claim token — generated up front so it can go straight into
+    // the insert below, rather than a separate update after the fact.
+    const giftClaimToken = isGift && giftRecipientEmail ? randomUUID() : null;
+
     const { data: insertedPurchase, error } = await supabase
       .from("purchases")
       .insert({
@@ -672,7 +717,12 @@ export async function POST(req: Request) {
         // Checkout requires login now (see app/actions/checkout.ts), so this
         // should always be present — but stay tolerant of null in case an
         // older/anonymous session's checkout completes after this deploy.
-        fan_id: fanId,
+        // For a gift, deliberately left null instead of the buyer's own
+        // fan_id: the buyer paid, but shouldn't get streaming access to a
+        // track they bought for someone else. The recipient's own fan_id
+        // gets set once they claim it (see app/gift/[token]/page.tsx and
+        // app/actions/giftClaim.ts).
+        fan_id: giftClaimToken ? null : fanId,
         buyer_email: buyerEmail,
         buyer_phone: buyerPhone,
         amount_cents: Number(amountCents),
@@ -680,6 +730,9 @@ export async function POST(req: Request) {
         artist_payout_cents: Number(artistPayoutCents),
         stripe_payment_intent_id: paymentIntentId,
         status: "complete",
+        ...(giftClaimToken
+          ? { gift_recipient_email: giftRecipientEmail, gift_claim_token: giftClaimToken }
+          : {}),
       })
       .select("id")
       .single();
@@ -712,13 +765,46 @@ export async function POST(req: Request) {
     // straight to a Stripe-onboarded contributor above.
     const { data: track, error: trackError } = await supabase
       .from("tracks")
-      .select("title, artists ( user_id, stripe_account_id )")
+      .select("title, artists ( id, user_id, stripe_account_id )")
       .eq("id", trackId)
       .single();
 
     const artistStripeAccountId = (track as any)?.artists?.stripe_account_id;
     const artistUserId = (track as any)?.artists?.user_id ?? null;
+    const artistIdForTrack = (track as any)?.artists?.id ?? null;
     const artistNetPayoutCents = Number(artistPayoutCents) - divertedCents;
+
+    // Referral log (no reward logic yet, per the brief) — best-effort, never
+    // affects the payout below.
+    if (artistIdForTrack) {
+      await logPurchaseReferral(supabase, artistIdForTrack, buyerEmail, referredByFanId);
+    }
+
+    // Gift claim email — best-effort. The purchase itself is already
+    // recorded above regardless of whether this send succeeds; see
+    // lib/email.ts for what happens when RESEND_API_KEY isn't configured.
+    if (giftClaimToken && giftRecipientEmail) {
+      try {
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+        let artistName = "an artist";
+        if (artistUserId) {
+          const { data: artistProfile } = await supabase
+            .from("profiles")
+            .select("display_name")
+            .eq("id", artistUserId)
+            .maybeSingle();
+          artistName = (artistProfile as any)?.display_name ?? artistName;
+        }
+        await sendGiftClaimEmail({
+          to: giftRecipientEmail,
+          trackTitle: (track as any)?.title ?? "a track",
+          artistName,
+          claimUrl: `${siteUrl}/gift/${giftClaimToken}`,
+        });
+      } catch (emailErr: any) {
+        console.error("Failed to send gift claim email:", emailErr.message);
+      }
+    }
 
     if (trackError || !artistStripeAccountId) {
       // Don't fail the webhook over this — the purchase is already
