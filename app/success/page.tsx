@@ -2,6 +2,7 @@ import { stripe } from "@/lib/stripe/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { formatPresentmentAmount } from "@/lib/currency";
+import ShareReceiptSection from "./ShareReceiptSection";
 import Link from "next/link";
 
 // One hour is plenty for a single sitting (stream + download), and keeps
@@ -260,11 +261,39 @@ export default async function SuccessPage({
   }
 
   const artistName = (track as any).artists?.profiles?.display_name ?? "Unknown artist";
-  const downloadUrl = await resolveDownloadUrl(admin, track);
+
+  // Gift purchases (app/artists/[id]/BuyTrackForm.tsx's toggle) don't hand
+  // the buyer a download/stream link here — the whole point is that the
+  // *recipient* claims access at /gift/[token], not the person who paid.
+  // See the is_gift branch in app/api/webhooks/stripe/route.ts.
+  const isGift = session.metadata?.is_gift === "true";
+  const giftRecipientEmail = session.metadata?.gift_recipient_email ?? null;
+  const downloadUrl = isGift ? null : await resolveDownloadUrl(admin, track);
+
+  // Best-effort lookup for the shareable receipt image (app/receipt/
+  // [purchaseId]/route.tsx) — the webhook that inserts this purchase row can
+  // still be in flight when this page first renders (Stripe's redirect and
+  // its webhook delivery aren't ordered against each other), so this simply
+  // doesn't render the share section rather than blocking on it.
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  let purchaseId: string | null = null;
+  const paymentIntentId =
+    typeof session.payment_intent === "string" ? session.payment_intent : null;
+  if (paymentIntentId) {
+    const { data: purchaseRow } = await admin
+      .from("purchases")
+      .select("id")
+      .eq("stripe_payment_intent_id", paymentIntentId)
+      .eq("track_id", trackId)
+      .maybeSingle();
+    purchaseId = (purchaseRow as any)?.id ?? null;
+  }
 
   return (
     <main className="max-w-xl mx-auto px-6 py-24 text-center">
-      <h1 className="font-display text-3xl text-gold mb-4">Thank you!</h1>
+      <h1 className="font-display text-3xl text-gold mb-4">
+        {isGift ? "Gift sent! 🎁" : "Thank you!"}
+      </h1>
       <p className="text-paper/70 mb-2">
         The artist gets paid directly — not a fraction of a cent, but a real share of what you
         just paid.
@@ -284,7 +313,15 @@ export default async function SuccessPage({
         />
       )}
 
-      {downloadUrl ? (
+      {isGift ? (
+        <div className="border border-gold/30 rounded-lg p-6 mb-10 bg-gold/5">
+          <p className="text-paper/80">
+            We&apos;ve sent {giftRecipientEmail ?? "your recipient"} an email with a link to claim
+            this track — they&apos;ll create a free account (or log in) and it&apos;s theirs to
+            keep.
+          </p>
+        </div>
+      ) : downloadUrl ? (
         <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col items-center gap-4 bg-paper/5">
           <audio controls src={downloadUrl} className="w-full h-10" />
           <a
@@ -304,6 +341,8 @@ export default async function SuccessPage({
           is recorded.
         </p>
       )}
+
+      {purchaseId && <ShareReceiptSection purchaseId={purchaseId} siteUrl={siteUrl} />}
 
       {!user && <AccountPrompt buyerEmail={buyerEmail} />}
 
