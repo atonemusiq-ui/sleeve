@@ -5,10 +5,32 @@ import { stripe } from "@/lib/stripe/server";
 import { commissionCents, payoutCents, planOf } from "@/lib/plans";
 import { trackNeedsCoverCredit } from "@/lib/coverCompliance";
 import { createTrackCheckoutSession } from "@/lib/checkoutSession";
+import { isUuid } from "@/lib/uuid";
 import { redirect } from "next/navigation";
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
 
 export async function startCheckout(formData: FormData) {
   const trackId = formData.get("trackId") as string;
+
+  // Gift toggle (app/artists/[id]/BuyTrackForm.tsx): a recipient email means
+  // this purchase should grant access to that inbox instead of the buyer's
+  // own account — see the is_gift branch in lib/checkoutSession.ts and the
+  // webhook. Silently ignored (treated as a normal purchase) if the field is
+  // blank or not a plausible email, rather than erroring the whole checkout
+  // over a malformed gift address.
+  const rawGiftEmail = (formData.get("giftRecipientEmail") as string | null)?.trim() ?? "";
+  const giftRecipientEmail = rawGiftEmail && isValidEmail(rawGiftEmail) ? rawGiftEmail : null;
+
+  // Re-validated here even though app/artists/[id]/page.tsx already
+  // shape-checks it before putting it in the form — a form post is never
+  // the only way to reach a server action, so this can't trust the hidden
+  // field on its own (same reasoning as startSuperFanCheckout's check in
+  // app/actions/superfan.ts).
+  const rawReferredBy = formData.get("referredByFanId") as string | null;
+  const referredByFanId = rawReferredBy && isUuid(rawReferredBy) ? rawReferredBy : null;
 
   const supabase = createClient();
 
@@ -34,7 +56,10 @@ export async function startCheckout(formData: FormData) {
   // embed widget's bounce route (app/embed/buy/[trackId]/route.ts) — see that
   // file's comment for why the embed path needs a plain HTTP redirect
   // instead of a redirect() thrown from inside a server action.
-  const result = await createTrackCheckoutSession(trackId, user.id);
+  const result = await createTrackCheckoutSession(trackId, user.id, {
+    giftRecipientEmail,
+    referredByFanId: referredByFanId && referredByFanId !== user.id ? referredByFanId : null,
+  });
 
   if ("error" in result) {
     throw new Error(result.error);
