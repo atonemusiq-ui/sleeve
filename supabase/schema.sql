@@ -1132,7 +1132,15 @@ create policy "anyone can join an artist's mailing list"
   on artist_fans for insert
   with check (true);
 drop policy if exists "artists manage their own mailing list" on artist_fans;
-create policy "artists manage their own mailing list"
-  on artist_fans for all
-  using (artist_id in (select id from artists where user_id = auth.uid()))
-  with check (artist_id in (select id from artists where user_id = auth.uid()));
+
+create policy "artists can view their own mailing list"
+  on artist_fans for select
+  using (artist_id in (select id from artists where user_id = auth.uid()));
+
+create policy "artists can update their own mailing list"
+  on artist_fans for update
+  using (artist_id in (select id from artists where user_id = auth.uid()));
+
+create policy "artists can delete their own mailing list"
+  on artist_fans for delete
+  using (artist_id in (select id from artists where user_id = auth.uid()));
