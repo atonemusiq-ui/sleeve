@@ -32,6 +32,18 @@ export async function startCheckout(formData: FormData) {
   const rawReferredBy = formData.get("referredByFanId") as string | null;
   const referredByFanId = rawReferredBy && isUuid(rawReferredBy) ? rawReferredBy : null;
 
+  // Where to send someone back to once they've logged in or signed up — the
+  // artist page they were buying from (app/artists/[id]/BuyTrackForm.tsx's
+  // returnTo), including a ?ref= referral token if that's how they got
+  // here. Without this, a first-time buyer arriving via a referral link
+  // would hit the login wall below, land back on the homepage after
+  // signing up, and lose the referral entirely. Only a same-origin path is
+  // accepted — anything else (a missing value, a full URL, a
+  // protocol-relative "//host" trying to hop origins) falls back to "/".
+  const rawReturnTo = formData.get("returnTo") as string | null;
+  const returnTo =
+    rawReturnTo && rawReturnTo.startsWith("/") && !rawReturnTo.startsWith("//") ? rawReturnTo : "/";
+
   const supabase = createClient();
 
   // Buying requires an account now — that's what lets a completed purchase
@@ -47,7 +59,7 @@ export async function startCheckout(formData: FormData) {
     redirect(
       `/login?message=${encodeURIComponent(
         "Log in or sign up to buy this track."
-      )}&next=${encodeURIComponent("/")}`
+      )}&next=${encodeURIComponent(returnTo)}`
     );
   }
 
