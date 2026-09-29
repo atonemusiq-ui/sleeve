@@ -1156,3 +1156,38 @@ create policy "artists can update their own mailing list"
 create policy "artists can delete their own mailing list"
   on artist_fans for delete
   using (artist_id in (select id from artists where user_id = auth.uid()));
+
+-- ============================================================================
+-- Phase 9: artist follows, powering the personalized "For You" tab on
+-- /discover (app/discover/page.tsx)
+-- ============================================================================
+-- A fan explicitly following an artist (app/artists/[id]/FollowButton.tsx),
+-- separate from artist_fans (the mailing list) and artist_subscriptions (paid
+-- Super Fan support) -- this is just "show me more from this artist" with no
+-- money or email involved. app/discover/page.tsx unions this with the
+-- artist_id behind the fan's own completed purchases to build the "For You"
+-- feed; a fan with neither yet falls back to the recency feed there.
+create table if not exists artist_follows (
+  id uuid primary key default gen_random_uuid(),
+  fan_id uuid not null references profiles(id) on delete cascade,
+  artist_id uuid not null references artists(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (fan_id, artist_id)
+);
+
+alter table artist_follows enable row level security;
+
+drop policy if exists "fans manage their own follows" on artist_follows;
+create policy "fans manage their own follows"
+  on artist_follows for all
+  using (fan_id = auth.uid())
+  with check (fan_id = auth.uid());
+
+-- Artists can see who follows them (follower counts, etc.) without seeing
+-- any other fan's rows -- this is additive with the policy above, not a
+-- replacement for it (multiple select policies on the same table combine
+-- with OR).
+drop policy if exists "artists can read their own followers" on artist_follows;
+create policy "artists can read their own followers"
+  on artist_follows for select
+  using (artist_id in (select id from artists where user_id = auth.uid()));
