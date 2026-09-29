@@ -146,3 +146,4 @@ revisiting the plan tier once real tracks (not test uploads) are live.
 - Editing a track's cover art doesn't delete the old cover file from storage — orphaned,
   not a correctness problem, just some unused storage
 - No bulk actions on the dashboard (re-order tracks, etc.)
+
