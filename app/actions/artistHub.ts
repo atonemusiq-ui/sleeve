@@ -115,10 +115,17 @@ export async function updateMailingListEnabled(formData: FormData): Promise<Arti
 // (app/artists/[id]/MailingListForm.tsx); the insert policy in
 // supabase/schema.sql ("anyone can join an artist's mailing list") is what
 // actually allows this to write with no session -- same shape as
-// submitBookingRequest in app/actions/booking.ts. The unique index on
-// (artist_id, fan_email) plus ignoreDuplicates makes a repeat signup a
-// harmless no-op (an INSERT ... ON CONFLICT DO NOTHING, needing only the
-// insert policy above) rather than a duplicate row or a confusing error.
+// submitBookingRequest in app/actions/booking.ts.
+//
+// This is a plain insert, not an upsert with onConflict/ignoreDuplicates:
+// under RLS, Postgres needs to see a potentially-conflicting existing row to
+// evaluate ON CONFLICT DO NOTHING safely, and the SELECT policy here is
+// (correctly) scoped to the owning artist only -- a fan signing up has no
+// session, so that check has nothing to see and Postgres refuses the whole
+// statement with "new row violates row-level security policy", even though
+// the insert policy itself allows it. Catching the unique-violation error
+// code (23505) after a plain insert gets the same "repeat signup is a
+// harmless no-op" behavior without needing anon to see other fans' rows.
 export async function joinMailingList(formData: FormData): Promise<ArtistHubActionResult> {
   const artistId = formData.get("artistId") as string;
   const fanEmail = (formData.get("fanEmail") as string)?.trim().toLowerCase();
@@ -140,8 +147,8 @@ export async function joinMailingList(formData: FormData): Promise<ArtistHubActi
 
   const { error } = await supabase
     .from("artist_fans")
-    .upsert({ artist_id: artistId, fan_email: fanEmail }, { onConflict: "artist_id,fan_email", ignoreDuplicates: true });
+    .insert({ artist_id: artistId, fan_email: fanEmail });
 
-  if (error) return { error: error.message };
+  if (error && error.code !== "23505") return { error: error.message };
   return { success: true };
 }

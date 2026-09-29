@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { startCheckout } from "@/app/actions/checkout";
 import { tracksNeedingCoverCredit } from "@/lib/coverCompliance";
 import { aiDisclosureBadge } from "@/lib/aiDisclosure";
 import { isUuid } from "@/lib/uuid";
@@ -14,6 +13,8 @@ import CollapsibleSection from "@/app/CollapsibleSection";
 import SuperFanSection from "@/app/SuperFanSection";
 import LyricsCreditsDialog from "@/app/LyricsCreditsDialog";
 import MailingListForm from "./MailingListForm";
+import BuyTrackForm from "./BuyTrackForm";
+import FanReferralLink from "./FanReferralLink";
 
 // Powers the og:title/og:description a crawler shows alongside the image
 // from this same folder's opengraph-image.tsx when a plain artist link is
@@ -371,15 +372,11 @@ export default async function ArtistPage({
                     <span className="font-mono text-forest text-lg">
                       ${(track.price_cents / 100).toFixed(2)}
                     </span>
-                    <form action={startCheckout}>
-                      <input type="hidden" name="trackId" value={track.id} />
-                      <button
-                        type="submit"
-                        className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
-                      >
-                        {user ? "Buy" : "Log in to buy"}
-                      </button>
-                    </form>
+                    <BuyTrackForm
+                      trackId={track.id}
+                      isLoggedIn={Boolean(user)}
+                      referredByFanId={referredByFanId}
+                    />
                   </>
                 )}
               </div>
@@ -399,6 +396,10 @@ export default async function ArtistPage({
                           referralFanId={referralFanId}
                         />
             )}
+
+      {!isOwner && (artist as any).is_active && user && (
+        <FanReferralLink artistId={artist.id} fanId={user.id} />
+      )}
 
       {!isOwner && (artist as any).is_active && <div className="ticket-divider my-10" />}
 

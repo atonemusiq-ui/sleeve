@@ -17,7 +17,20 @@ export type CheckoutSessionResult = { url: string } | { error: string };
 // than maintaining two copies that could drift.
 export async function createTrackCheckoutSession(
   trackId: string,
-  userId: string
+  userId: string,
+  opts?: {
+    // "This is a gift" toggle on the Buy form (app/artists/[id]/BuyTrackForm.tsx).
+    // Carried through Stripe metadata so the webhook (app/api/webhooks/stripe/
+    // route.ts) can leave the purchase's fan_id empty and email a claim link
+    // to giftRecipientEmail instead of granting the buyer themselves access.
+    giftRecipientEmail?: string | null;
+    // The fan whose ?ref= link brought this buyer to the artist page (see
+    // app/artists/[id]/page.tsx's referredByFanId) — shape-checked (a real
+    // uuid, not the buyer's own id) before it ever gets here. Logged by the
+    // webhook against artist_fans.referred_by_fan_id; no reward logic yet,
+    // per the brief.
+    referredByFanId?: string | null;
+  }
 ): Promise<CheckoutSessionResult> {
   const supabase = createClient();
 
@@ -113,6 +126,10 @@ export async function createTrackCheckoutSession(
       platform_fee_cents: String(platformFeeCents),
       artist_payout_cents: String(artistPayoutCents),
       plan,
+      ...(opts?.giftRecipientEmail
+        ? { is_gift: "true", gift_recipient_email: opts.giftRecipientEmail }
+        : {}),
+      ...(opts?.referredByFanId ? { referred_by_fan_id: opts.referredByFanId } : {}),
     },
   });
 

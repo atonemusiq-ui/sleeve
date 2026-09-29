@@ -1088,16 +1088,16 @@ create policy "video exchange participants can upload"
             where fan_id = auth.uid() and status = 'active'
           )
         )
-
-  -- Optional lyrics an artist can add at upload time, shown alongside the
-  -- per-track contributor credits (contributors.name, filtered by track_id)
-  -- in a lyrics/credits dialog on the track (app/artists/[id]/page.tsx) --
-  -- same idea as Apple Music's lyrics+credits sheet, just names, no
-  -- percentages, since the split itself is private business between the
-  -- artist and their contributors.
-  alter table tracks add column if not exists lyrics text;
       )
     );
+
+-- Optional lyrics an artist can add at upload time, shown alongside the
+-- per-track contributor credits (contributors.name, filtered by track_id)
+-- in a lyrics/credits dialog on the track (app/artists/[id]/page.tsx) --
+-- same idea as Apple Music's lyrics+credits sheet, just names, no
+-- percentages, since the split itself is private business between the
+-- artist and their contributors.
+alter table tracks add column if not exists lyrics text;
 -- ============================================================================
 -- Artist Hub (Phase 7): a flexible list of custom links, a plain-text tour
 -- dates block, and a mailing-list opt-in -- all managed from the dashboard
@@ -1136,3 +1136,29 @@ create policy "artists manage their own mailing list"
   on artist_fans for all
   using (artist_id in (select id from artists where user_id = auth.uid()))
   with check (artist_id in (select id from artists where user_id = auth.uid()));
+
+-- ============================================================================
+-- Growth Loops (Phase 8): gift purchases (buy a track for someone else's
+-- email; they claim it at /gift/[token] to get streaming access), and
+-- referral logging for a purchase made from a fan's own shared link
+-- (app/artists/[id]/FanReferralLink.tsx) -- no reward logic yet, just the
+-- log, per the brief. Shareable receipt images (app/receipt/[purchaseId]/
+-- route.tsx) need no schema change -- they're generated from data purchases
+-- already has.
+-- ============================================================================
+alter table purchases add column if not exists gift_recipient_email text;
+alter table purchases add column if not exists gift_claim_token text;
+alter table purchases add column if not exists gift_claimed_at timestamptz;
+
+-- Partial (gift_claim_token is usually null -- most purchases aren't gifts)
+-- so a claim token, once issued, can't collide with another purchase's.
+create unique index if not exists purchases_gift_claim_token_key
+  on purchases (gift_claim_token)
+  where gift_claim_token is not null;
+
+-- Which fan's shared link brought in a purchase, if any. Lives on
+-- artist_fans (not purchases) because a purchase already makes the buyer a
+-- "fan" of that artist the same way a mailing-list signup does (see
+-- app/actions/artistHub.ts's joinMailingList) -- logPurchaseReferral in the
+-- webhook (app/api/webhooks/stripe/route.ts) inserts/reuses that same row.
+alter table artist_fans add column if not exists referred_by_fan_id uuid references profiles(id);
