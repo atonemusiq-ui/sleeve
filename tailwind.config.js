@@ -7,11 +7,13 @@ module.exports = {
         ink: "#16121A",
         paper: "#E8E1D3",
         gold: "#C9A227",
+        flame: "#FF5A36",
         rust: "#8C3F2E",
         forest: "#5B8A67",
       },
       fontFamily: {
         display: ["Fraunces", "serif"],
+        logo: ["Unbounded", "sans-serif"],
         body: ["Inter", "sans-serif"],
         mono: ["IBM Plex Mono", "monospace"],
       },

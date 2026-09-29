@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { login } from "@/app/actions/auth";
-import FybyLogo from "@/app/FybyLogo";
+import FybyLogo, { FybyWordmark } from "@/app/FybyLogo";
 
 export default function LoginPage({
   searchParams,
@@ -11,7 +11,7 @@ export default function LoginPage({
     <main className="max-w-md mx-auto px-6 py-16">
       <Link href="/" className="flex items-center justify-center gap-2.5 mb-8">
         <FybyLogo className="h-9 w-9" />
-        <span className="font-display text-3xl text-gold leading-none">Fyby</span>
+        <FybyWordmark className="text-3xl" />
       </Link>
 
       <h1 className="font-display text-2xl text-paper text-center mb-2">Welcome back</h1>

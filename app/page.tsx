@@ -9,7 +9,7 @@ import HowItWorks from "./HowItWorks";
 import TrustFooter from "./TrustFooter";
 import FounderStory from "./FounderStory";
 import FeaturedTracks from "./FeaturedTracks";
-import FybyLogo from "./FybyLogo";
+import FybyLogo, { FybyWordmark } from "./FybyLogo";
 
 export default async function StorefrontPage() {
   const supabase = createClient();
@@ -98,7 +98,9 @@ export default async function StorefrontPage() {
       <header className="flex items-center justify-between mb-12">
         <div className="flex items-center gap-2.5">
           <FybyLogo className="h-8 w-8" />
-          <h1 className="font-display text-3xl text-gold leading-none">Fyby</h1>
+          <h1 className="leading-none">
+            <FybyWordmark className="text-3xl" />
+          </h1>
         </div>
         <nav className="font-mono text-sm">
           {user ? (
