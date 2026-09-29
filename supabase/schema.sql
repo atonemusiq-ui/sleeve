@@ -49,6 +49,14 @@ create table if not exists tracks (
   created_at timestamptz not null default now()
 );
 
+-- Optional lyrics an artist can add at upload time, shown alongside the
+-- per-track contributor credits (contributors.name, filtered by track_id)
+-- in a lyrics/credits dialog on the track (app/artists/[id]/page.tsx) --
+-- same idea as Apple Music's lyrics+credits sheet, just names, no
+-- percentages, since the split itself is private business between the
+-- artist and their contributors.
+alter table tracks add column if not exists lyrics text;
+
 -- cover_url: full public URL in the public "track-covers" bucket — fine to
 -- expose directly, it's artwork, not the paid content.
 alter table tracks add column if not exists cover_url text;
@@ -82,6 +90,17 @@ create table if not exists purchases (
   status text not null default 'pending' check (status in ('pending', 'complete', 'refunded')),
   created_at timestamptz not null default now()
 );
+
+-- Phase 8: gift purchases. A gift purchase has no fan_id until the
+-- recipient claims it via /gift/[token] (see app/actions/checkout.ts and
+-- app/api/webhooks/stripe/route.ts).
+alter table purchases add column if not exists gift_recipient_email text;
+alter table purchases add column if not exists gift_claim_token uuid;
+alter table purchases add column if not exists gift_claimed_at timestamptz;
+
+create unique index if not exists purchases_gift_claim_token_key
+  on purchases (gift_claim_token)
+  where gift_claim_token is not null;
 
 -- Checkout is anonymous (no login required to buy), so a purchase is not
 -- always tied to a Fyby account.
@@ -1088,14 +1107,6 @@ create policy "video exchange participants can upload"
             where fan_id = auth.uid() and status = 'active'
           )
         )
-
-  -- Optional lyrics an artist can add at upload time, shown alongside the
-  -- per-track contributor credits (contributors.name, filtered by track_id)
-  -- in a lyrics/credits dialog on the track (app/artists/[id]/page.tsx) --
-  -- same idea as Apple Music's lyrics+credits sheet, just names, no
-  -- percentages, since the split itself is private business between the
-  -- artist and their contributors.
-  alter table tracks add column if not exists lyrics text;
       )
     );
 -- ============================================================================
@@ -1119,6 +1130,7 @@ create table if not exists artist_fans (
   fan_email text not null,
   created_at timestamptz not null default now()
 );
+alter table artist_fans add column if not exists referred_by_fan_id uuid references profiles(id) on delete set null;
 -- One signup per email per artist -- resubmitting the same address on a
 -- page revisit shouldn't create duplicate rows. Plain columns (not
 -- lower(fan_email)) so app/actions/artistHub.ts's upsert onConflict can
