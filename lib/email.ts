@@ -22,10 +22,9 @@ type SendResult = { sent: true } | { sent: false; reason: string };
 const RESEND_API_URL = "https://api.resend.com/emails";
 
 // Resend requires the from address's domain to be verified in the Resend
-// dashboard before it will actually deliver. Until that's done, sends will
-// fail with a clear error from Resend's API, logged below — swap this for
-// a verified domain once one exists.
-const FROM_ADDRESS = "Fyby <gifts@fyby.app>";
+// dashboard before it will actually deliver. getfyby.com is the verified
+// sending domain (DKIM/SPF/DMARC configured in Resend + Porkbun DNS).
+const FROM_ADDRESS = "Fyby <gifts@getfyby.com>";
 
 async function send(to: string, subject: string, html: string): Promise<SendResult> {
   const apiKey = process.env.RESEND_API_KEY;

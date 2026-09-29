@@ -14,7 +14,7 @@ export default function PrivacyPage() {
       <div className="font-body text-paper/80 leading-relaxed flex flex-col gap-6 [&_h2]:font-display [&_h2]:text-xl [&_h2]:text-paper [&_h2]:mt-4 [&_h2]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:flex [&_ul]:flex-col [&_ul]:gap-1">
         <p>
           This Privacy Policy explains what information Fyby (operated by Anthony Bryant Inc)
-          collects, how we use it, and the choices you have. It applies to fyby-app.vercel.app
+          collects, how we use it, and the choices you have. It applies to getfyby.com
           and any successor domain.
         </p>
 

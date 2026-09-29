@@ -104,7 +104,7 @@ export async function GET(req: Request, { params }: { params: { purchaseId: stri
           </div>
 
           <div style={{ display: "flex", fontSize: 18, color: "rgba(232,225,211,0.4)", marginTop: 28 }}>
-            The artist gets paid directly — fyby.app
+            The artist gets paid directly — getfyby.com
           </div>
         </div>
       </div>
