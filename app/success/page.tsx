@@ -252,7 +252,7 @@ export default async function SuccessPage({
 
   const { data: track } = await admin
     .from("tracks")
-    .select("id, title, audio_path, audio_url, cover_url, artists ( profiles ( display_name ) )")
+    .select("id, title, audio_path, audio_url, cover_url, artists ( id, profiles ( display_name ) )")
     .eq("id", trackId)
     .single();
 
@@ -261,6 +261,7 @@ export default async function SuccessPage({
   }
 
   const artistName = (track as any).artists?.profiles?.display_name ?? "Unknown artist";
+  const artistId = (track as any).artists?.id ?? null;
 
   // Gift purchases (app/artists/[id]/BuyTrackForm.tsx's toggle) don't hand
   // the buyer a download/stream link here — the whole point is that the
@@ -342,7 +343,9 @@ export default async function SuccessPage({
         </p>
       )}
 
-      {purchaseId && <ShareReceiptSection purchaseId={purchaseId} siteUrl={siteUrl} />}
+      {purchaseId && (
+        <ShareReceiptSection purchaseId={purchaseId} siteUrl={siteUrl} artistId={artistId} />
+      )}
 
       {!user && <AccountPrompt buyerEmail={buyerEmail} />}
 

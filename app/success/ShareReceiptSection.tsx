@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 // "One-tap share" for the receipt-style image at app/receipt/[purchaseId]/
 // route.tsx. navigator.share with the image attached as a file is the
@@ -8,7 +9,21 @@ import { useState } from "react";
 // (native share sheet — Messages, Instagram Stories, etc. all accept an
 // image file there); falls back to copying the image link for anything
 // that doesn't support it (most desktop browsers).
-export default function ShareReceiptSection({ purchaseId, siteUrl }: { purchaseId: string; siteUrl: string }) {
+//
+// artistId is optional (a purchase row could in principle be missing its
+// track/artist join) -- when present, the receipt thumbnail itself is a
+// link back to that artist's page, so a buyer who's just looking at their
+// receipt has a one-tap way back to buy something else from the same
+// artist instead of having to navigate there manually.
+export default function ShareReceiptSection({
+  purchaseId,
+  siteUrl,
+  artistId,
+}: {
+  purchaseId: string;
+  siteUrl: string;
+  artistId?: string | null;
+}) {
   const [copied, setCopied] = useState(false);
   const imageUrl = `${siteUrl}/receipt/${purchaseId}`;
 
@@ -46,8 +61,19 @@ export default function ShareReceiptSection({ purchaseId, siteUrl }: { purchaseI
   return (
     <div className="border border-paper/15 rounded-lg p-6 mb-10 bg-paper/5">
       <p className="font-mono text-xs text-paper/50 mb-4">Share your purchase</p>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={imageUrl} alt="Purchase receipt" className="w-full rounded-lg mb-4" />
+      {artistId ? (
+        <Link href={`/artists/${artistId}`} className="block mb-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageUrl}
+            alt="Purchase receipt — click to visit the artist's page"
+            className="w-full rounded-lg hover:opacity-90 transition-opacity"
+          />
+        </Link>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={imageUrl} alt="Purchase receipt" className="w-full rounded-lg mb-4" />
+      )}
       <button
         type="button"
         onClick={handleShare}
