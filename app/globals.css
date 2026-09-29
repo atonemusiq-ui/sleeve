@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Site background: the deep purple glow from the pitch deck. Painted on a
+   fixed layer behind everything so it stays put while pages scroll
+   (background-attachment: fixed is unreliable on iPhone). */
+body.bg-fyby {
+  background: #15121d;
+}
+
+body.bg-fyby::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(circle at 80% 20%, #3a2350, #15121d 70%);
+}
+
 .ticket-divider {
   border-top: 2px dashed rgba(232, 225, 211, 0.25);
   position: relative;
@@ -15,7 +31,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #16121a;
+  background: #15121d;
 }
 
 .ticket-divider::before {
