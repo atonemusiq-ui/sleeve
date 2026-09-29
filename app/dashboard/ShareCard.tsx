@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 // The mic-badge QR graphic from app/artists/[id]/share-card/route.tsx,
 // previewed here with a download link and a suggested caption to paste
@@ -36,10 +37,17 @@ export default function ShareCard({ artistId, artistName }: { artistId: string; 
 
   return (
     <div className="flex flex-col sm:flex-row gap-4">
-      <div className="w-32 h-32 rounded-lg overflow-hidden border border-paper/15 bg-paper/5 flex-shrink-0">
+      <Link
+        href={`/artists/${artistId}`}
+        className="w-32 h-32 rounded-lg overflow-hidden border border-paper/15 bg-paper/5 flex-shrink-0 block"
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={imageUrl} alt="Social share graphic preview" className="w-full h-full object-cover" />
-      </div>
+        <img
+          src={imageUrl}
+          alt="Social share graphic preview — click to view your artist page"
+          className="w-full h-full object-cover hover:opacity-90 transition-opacity"
+        />
+      </Link>
       <div className="flex-1 flex flex-col gap-2">
         <a
           href={imageUrl}
