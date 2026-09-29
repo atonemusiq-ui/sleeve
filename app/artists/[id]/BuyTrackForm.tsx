@@ -28,6 +28,16 @@ export default function BuyTrackForm({
     <form action={startCheckout} className="flex flex-col items-end gap-2">
       <input type="hidden" name="trackId" value={trackId} />
       {referredByFanId && <input type="hidden" name="referredByFanId" value={referredByFanId} />}
+      {/* Where to bounce back to after a "log in to buy" detour
+          (app/actions/checkout.ts's startCheckout) — this page, including
+          the ?ref= referral token, so a fan who had to sign up mid-purchase
+          lands back on a page where Buy still carries their referral
+          instead of on the homepage. */}
+      <input
+        type="hidden"
+        name="returnTo"
+        value={typeof window !== "undefined" ? window.location.pathname + window.location.search : ""}
+      />
 
       {isLoggedIn && (
         <label className="flex items-center gap-1.5 font-mono text-xs text-paper/50">
