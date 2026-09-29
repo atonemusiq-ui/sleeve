@@ -105,6 +105,9 @@ export default async function StorefrontPage() {
         <nav className="font-mono text-sm">
           {user ? (
             <div className="flex gap-4">
+              <Link href="/discover" className="hover:text-gold">
+                Discover
+              </Link>
               <Link href="/ai-music" className="hover:text-gold">
                 AI Music
               </Link>
@@ -120,6 +123,9 @@ export default async function StorefrontPage() {
             </div>
           ) : (
             <div className="flex gap-4">
+              <Link href="/discover" className="hover:text-gold">
+                Discover
+              </Link>
               <Link href="/ai-music" className="hover:text-gold">
                 AI Music
               </Link>
@@ -155,7 +161,12 @@ export default async function StorefrontPage() {
         <Link href="/ai-music" className="text-gold">
           dedicated AI Music marketplace
         </Link>{" "}
-        for tracks that are 100% AI-generated.
+        for tracks that are 100% AI-generated. Want more ways to browse — trending tracks, or a
+        feed picked for you? Head to{" "}
+        <Link href="/discover" className="text-gold">
+          Discover
+        </Link>
+        .
       </p>
 
       <div className="ticket-divider mb-10" />
