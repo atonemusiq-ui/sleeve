@@ -199,14 +199,28 @@ function DiscoverTile({
   return (
     <div className="h-full border border-paper/15 rounded-lg p-5 bg-paper/5 flex flex-col justify-between">
       <div>
-        <div className="w-full aspect-square rounded bg-paper/10 overflow-hidden mb-4">
-          {track.cover_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-paper/30 text-3xl">♪</div>
-          )}
-        </div>
+        {track.artists?.id ? (
+          <Link
+            href={`/artists/${track.artists.id}`}
+            className="w-full aspect-square rounded bg-paper/10 overflow-hidden mb-4 block"
+          >
+            {track.cover_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={track.cover_url} alt="" className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-paper/30 text-3xl">♪</div>
+            )}
+          </Link>
+        ) : (
+          <div className="w-full aspect-square rounded bg-paper/10 overflow-hidden mb-4">
+            {track.cover_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-paper/30 text-3xl">♪</div>
+            )}
+          </div>
+        )}
         <h3 className="font-display text-xl">{track.title}</h3>
         {track.artists?.id ? (
           <Link

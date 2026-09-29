@@ -41,16 +41,32 @@ export default function FeaturedTracks({
             key={track.id}
             className="border border-paper/15 rounded-lg p-4 bg-paper/5 flex flex-col gap-3"
           >
-            <div className="w-full aspect-square rounded bg-paper/10 overflow-hidden">
-              {track.cover_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-paper/30 text-3xl">
-                  ♪
-                </div>
-              )}
-            </div>
+            {track.artists?.id ? (
+              <Link
+                href={`/artists/${track.artists.id}`}
+                className="w-full aspect-square rounded bg-paper/10 overflow-hidden block"
+              >
+                {track.cover_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={track.cover_url} alt="" className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-paper/30 text-3xl">
+                    ♪
+                  </div>
+                )}
+              </Link>
+            ) : (
+              <div className="w-full aspect-square rounded bg-paper/10 overflow-hidden">
+                {track.cover_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-paper/30 text-3xl">
+                    ♪
+                  </div>
+                )}
+              </div>
+            )}
             <div>
               <h3 className="font-display text-lg leading-tight">{track.title}</h3>
               {track.artists?.id ? (
