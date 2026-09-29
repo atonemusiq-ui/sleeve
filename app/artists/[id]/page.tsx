@@ -15,6 +15,7 @@ import LyricsCreditsDialog from "@/app/LyricsCreditsDialog";
 import MailingListForm from "./MailingListForm";
 import BuyTrackForm from "./BuyTrackForm";
 import FanReferralLink from "./FanReferralLink";
+import FollowButton from "./FollowButton";
 
 // Powers the og:title/og:description a crawler shows alongside the image
 // from this same folder's opengraph-image.tsx when a plain artist link is
@@ -139,6 +140,23 @@ export default async function ArtistPage({
     isSuperFan = Boolean(subscription);
   }
 
+  // Whether the logged-in fan already follows this artist -- powers the
+  // Follow/Following toggle below (FollowButton.tsx) and, together with
+  // purchase history, the "For You" tab on /discover
+  // (app/discover/page.tsx reads the same artist_follows table). Gated the
+  // same way as isSuperFan above: RLS only lets a fan see their own row.
+  let isFollowing = false;
+  if (user && !isOwner) {
+    const { data: followRow } = await supabase
+      .from("artist_follows")
+      .select("id")
+      .eq("fan_id", user.id)
+      .eq("artist_id", artist.id)
+      .maybeSingle();
+
+    isFollowing = Boolean(followRow);
+  }
+
   // A fan who arrived from another fan's referral link, for
   // artist_subscriptions.referred_by_fan_id. Ignored if it points at the
   // viewer themselves, so a fan can't refer themselves by editing their link.
@@ -214,19 +232,25 @@ export default async function ArtistPage({
         </div>
       )}
 
-      <header className="mt-6 mb-10 flex items-start gap-5">
-        {(artist as any).bio_photo_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={(artist as any).bio_photo_url}
-            alt={artistName}
-            className="w-20 h-20 rounded-full object-cover flex-shrink-0 border border-paper/15"
-          />
-        )}
-        <div>
-          <h1 className="font-display text-3xl text-gold">{artistName}</h1>
-          {artist.bio && <p className="text-paper/70 mt-3 max-w-xl">{artist.bio}</p>}
+      <header className="mt-6 mb-10 flex items-start justify-between gap-5">
+        <div className="flex items-start gap-5">
+          {(artist as any).bio_photo_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={(artist as any).bio_photo_url}
+              alt={artistName}
+              className="w-20 h-20 rounded-full object-cover flex-shrink-0 border border-paper/15"
+            />
+          )}
+          <div>
+            <h1 className="font-display text-3xl text-gold">{artistName}</h1>
+            {artist.bio && <p className="text-paper/70 mt-3 max-w-xl">{artist.bio}</p>}
+          </div>
         </div>
+
+        {!isOwner && (artist as any).is_active && user && (
+          <FollowButton artistId={artist.id} isFollowing={isFollowing} />
+        )}
       </header>
 
       {galleryUrls.length > 0 && (
