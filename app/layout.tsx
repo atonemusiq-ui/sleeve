@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import GlobalAudioManager from "./GlobalAudioManager";
 import SiteLogoBar from "./SiteLogoBar";
+import RadioProvider from "./RadioProvider";
 
 export const metadata: Metadata = {
   title: "Fyby",
@@ -21,8 +22,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Enforces "only one song plays at a time" across the whole site —
             see GlobalAudioManager.tsx for how. Renders nothing itself. */}
         <GlobalAudioManager />
-        <SiteLogoBar />
-        {children}
+        {/* Fyby Radio (Phase 10) wraps every page so the music keeps playing
+            across navigation. Hidden unless NEXT_PUBLIC_RADIO_ENABLED=true. */}
+        <RadioProvider>
+          <SiteLogoBar />
+          {children}
+        </RadioProvider>
       </body>
     </html>
   );

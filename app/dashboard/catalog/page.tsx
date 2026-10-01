@@ -35,14 +35,14 @@ export default async function CatalogPage() {
 
   const { data: artist } = await supabase
     .from("artists")
-    .select("id")
+    .select("id, plan")
     .eq("user_id", user.id)
     .single();
 
   const { data: tracks, error } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, created_at, audio_path, audio_url, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, explicit, verification_status, verification_note, frozen, frozen_reason"
+      "id, title, price_cents, created_at, audio_path, audio_url, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, explicit, verification_status, verification_note, frozen, frozen_reason, radio_opt_in, mood"
     )
     .eq("artist_id", artist?.id)
     .order("created_at", { ascending: false });
@@ -108,6 +108,22 @@ export default async function CatalogPage() {
     contributorsByTrack[c.track_id] = list;
   }
 
+  // Phase 10: active (or queued) Radio Premieres per track, for the
+  // premiere status line on each TrackList row. RLS ("artists can read
+  // their own radio premieres") scopes this to the artist's own rows.
+  const premiereEndsByTrack: Record<string, string> = {};
+  if (artist?.id) {
+    const { data: premiereRows } = await supabase
+      .from("radio_premieres")
+      .select("track_id, ends_at")
+      .eq("artist_id", artist.id)
+      .gt("ends_at", new Date().toISOString());
+    for (const row of premiereRows ?? []) {
+      const current = premiereEndsByTrack[row.track_id];
+      if (!current || row.ends_at > current) premiereEndsByTrack[row.track_id] = row.ends_at;
+    }
+  }
+
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
       <header className="mb-12">
@@ -137,6 +153,8 @@ export default async function CatalogPage() {
           artistId={artist.id}
           contributorsByTrack={contributorsByTrack}
           allGenres={allGenres}
+          premiereEndsByTrack={premiereEndsByTrack}
+          isPro={artist.plan === "pro"}
         />
       )}
     </main>

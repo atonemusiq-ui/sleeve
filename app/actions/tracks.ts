@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { isAllowedTrackPrice, trackPriceError } from "@/lib/trackPricing";
 import { isValidGenre, isValidSubgenre, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
 import { isAiDisclosureLevel, type AiDisclosureLevel } from "@/lib/aiDisclosure";
+import { isValidMood, RADIO_EXCLUDED_GENRES } from "@/lib/radio";
 
 export type TrackActionResult = { error?: string };
 
@@ -87,5 +88,55 @@ export async function updateTrack(formData: FormData): Promise<TrackActionResult
 
   revalidatePath("/dashboard");
   revalidatePath("/");
+  return {};
+}
+
+// Phase 10: turns Fyby Radio on or off for one of the artist's own tracks
+// (TrackList.tsx's "Play on Fyby Radio" toggle), and sets its optional mood.
+// Separate from updateTrack so flipping radio doesn't require opening the
+// full edit form. Covers can't be opted in (see lib/radio.ts).
+export async function setRadioSettings(
+  trackId: string,
+  radioOptIn: boolean,
+  mood: string | null
+): Promise<TrackActionResult> {
+  if (mood && !isValidMood(mood)) return { error: "That's not a recognized mood." };
+
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not logged in." };
+
+  const { data: track } = await supabase
+    .from("tracks")
+    .select("artist_id, genre, radio_opt_in")
+    .eq("id", trackId)
+    .maybeSingle();
+  if (!track) return { error: "Track not found." };
+
+  const { data: artist } = await supabase
+    .from("artists")
+    .select("id")
+    .eq("id", track.artist_id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!artist) return { error: "That track doesn't belong to your account." };
+
+  if (radioOptIn && RADIO_EXCLUDED_GENRES.includes(track.genre ?? "")) {
+    return { error: "Covers can't play on Fyby Radio." };
+  }
+
+  const update: { radio_opt_in: boolean; mood: string | null; radio_opted_in_at?: string | null } = {
+    radio_opt_in: radioOptIn,
+    mood: mood || null,
+  };
+  if (radioOptIn && !track.radio_opt_in) update.radio_opted_in_at = new Date().toISOString();
+  if (!radioOptIn) update.radio_opted_in_at = null;
+
+  const { error } = await supabase.from("tracks").update(update).eq("id", trackId);
+  if (error) return { error: `Saving radio settings failed: ${error.message}` };
+
+  revalidatePath("/dashboard/catalog");
   return {};
 }

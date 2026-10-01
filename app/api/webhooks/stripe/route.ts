@@ -3,6 +3,8 @@ import { transferArtistPayout } from "@/lib/stripe/payouts";
 import { commissionCents, payoutCents, planOf } from "@/lib/plans";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createNotification } from "@/lib/notifications";
+import { isPremiereTier } from "@/lib/radio";
+import { premiereWindow } from "@/lib/radioPremiere";
 import { sendGiftClaimEmail } from "@/lib/email";
 import { randomUUID } from "crypto";
 import { headers } from "next/headers";
@@ -384,6 +386,49 @@ export async function POST(req: Request) {
 
       if (error) {
         console.error("Failed to record verification request:", error.message);
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+
+      return NextResponse.json({ received: true });
+    }
+
+    // Fyby Radio Premiere (app/actions/radioPremiere.ts): a flat Fyby fee
+    // like the two branches above, no artist transfer. Writes the premiere
+    // now that payment is confirmed. stripe_session_id is unique, so a
+    // retried delivery of this same event is a no-op instead of a second
+    // premiere.
+    if (session.metadata?.type === "radio_premiere") {
+      const premiereTrackId = session.metadata?.track_id ?? null;
+      const premiereArtistId = session.metadata?.artist_id ?? null;
+      const premiereTier = session.metadata?.tier ?? null;
+
+      if (!premiereTrackId || !premiereArtistId || !isPremiereTier(premiereTier)) {
+        console.error("Radio premiere webhook missing expected metadata:", session.metadata);
+        return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
+      }
+
+      const supabase = createServiceRoleClient();
+      const { data: existing } = await supabase
+        .from("radio_premieres")
+        .select("id")
+        .eq("stripe_session_id", session.id)
+        .maybeSingle();
+      if (existing) return NextResponse.json({ received: true });
+
+      const window = await premiereWindow(premiereTrackId, premiereTier);
+      const { error } = await supabase.from("radio_premieres").insert({
+        track_id: premiereTrackId,
+        artist_id: premiereArtistId,
+        tier: premiereTier,
+        starts_at: window.startsAt,
+        ends_at: window.endsAt,
+        amount_cents: session.amount_total ?? 0,
+        stripe_session_id: session.id,
+      });
+
+      // 23505 = unique violation: a concurrent retry already recorded it.
+      if (error && error.code !== "23505") {
+        console.error("Failed to record radio premiere:", error.message);
         return NextResponse.json({ error: "Database error" }, { status: 500 });
       }
 

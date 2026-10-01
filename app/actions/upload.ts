@@ -7,6 +7,7 @@ import { isAllowedTrackPrice, trackPriceError } from "@/lib/trackPricing";
 import { isValidGenre, isValidSubgenre, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genres";
 import { isAiDisclosureLevel, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 import { DEFAULT_TRACK_COVER_URL } from "@/lib/defaultCover";
+import { isValidMood } from "@/lib/radio";
 import { revalidatePath } from "next/cache";
 
 export type PublishTrackInput = {
@@ -25,6 +26,9 @@ export type PublishTrackInput = {
   explicit: boolean;
   rightsAttested: boolean;
     lyrics: string | null;
+  // Phase 10: Fyby Radio consent and optional mood tag (lib/radio.ts).
+  radioOptIn: boolean;
+  mood: string | null;
 };
 
 export type PublishTrackResult =
@@ -113,6 +117,10 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
     };
   }
 
+  if (input.mood && !isValidMood(input.mood)) {
+    return { status: "error", message: "That's not a recognized mood." };
+  }
+
   const match = await findDuplicateTrack(admin, input.fingerprint);
   if (match) {
     await admin.from("flagged_uploads").insert({
@@ -144,6 +152,9 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
     ai_disclosure: input.aiDisclosure,
     explicit: input.explicit,
         lyrics: input.lyrics || null,
+    radio_opt_in: Boolean(input.radioOptIn),
+    radio_opted_in_at: input.radioOptIn ? new Date().toISOString() : null,
+    mood: input.mood || null,
   });
 
   if (error) {

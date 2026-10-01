@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { updateTrack } from "@/app/actions/tracks";
+import { updateTrack, setRadioSettings } from "@/app/actions/tracks";
+import { MOODS, PREMIERE_TIERS, PRO_FREE_PREMIERE_EVERY_DAYS, PRO_FREE_PREMIERE_TIER, RADIO_EXCLUDED_GENRES } from "@/lib/radio";
+import { startRadioPremiere } from "@/app/actions/radioPremiere";
 import { MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE, subgenresFor } from "@/lib/genres";
 import { AI_DISCLOSURE_LEVELS, aiDisclosureBadge, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 import { startVerificationCheckout } from "@/app/actions/verification";
@@ -34,6 +36,9 @@ type Track = {
   // happens, but it's shown here too so it's impossible to miss.
   frozen?: boolean | null;
   frozen_reason?: string | null;
+  // Phase 10: Fyby Radio consent and mood (lib/radio.ts).
+  radio_opt_in?: boolean | null;
+  mood?: string | null;
 };
 
 export default function TrackList({
@@ -41,11 +46,15 @@ export default function TrackList({
   artistId,
   contributorsByTrack,
   allGenres,
+  premiereEndsByTrack = {},
+  isPro = false,
 }: {
   tracks: Track[];
   artistId: string;
   contributorsByTrack: Record<string, Contributor[]>;
   allGenres: string[];
+  premiereEndsByTrack?: Record<string, string>;
+  isPro?: boolean;
 }) {
   if (tracks.length === 0) return null;
 
@@ -58,6 +67,8 @@ export default function TrackList({
           artistId={artistId}
           contributors={contributorsByTrack[track.id] ?? []}
           allGenres={allGenres}
+          premiereEndsAt={premiereEndsByTrack[track.id] ?? null}
+          isPro={isPro}
         />
       ))}
     </div>
@@ -69,11 +80,15 @@ function TrackRow({
   artistId,
   contributors,
   allGenres,
+  premiereEndsAt,
+  isPro,
 }: {
   track: Track;
   artistId: string;
   contributors: Contributor[];
   allGenres: string[];
+  premiereEndsAt: string | null;
+  isPro: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(track.title);
@@ -89,7 +104,41 @@ function TrackRow({
   const [copied, setCopied] = useState(false);
   const [showVerifyForm, setShowVerifyForm] = useState(false);
   const [verifyNote, setVerifyNote] = useState(track.verification_note ?? "");
+  const [radioOn, setRadioOn] = useState(Boolean(track.radio_opt_in));
+  const [radioMood, setRadioMood] = useState(track.mood ?? "");
+  const [radioBusy, setRadioBusy] = useState(false);
+  const [radioError, setRadioError] = useState<string | null>(null);
+  const [radioLinkCopied, setRadioLinkCopied] = useState(false);
+  const [showPremiere, setShowPremiere] = useState(false);
+
+  // The shareable "playing on Fyby Radio" page (app/radio/[trackId]).
+  const radioLink = `${typeof window !== "undefined" ? window.location.origin : ""}/radio/${track.id}`;
+  async function copyRadioLink() {
+    try {
+      await navigator.clipboard.writeText(radioLink);
+      setRadioLinkCopied(true);
+      setTimeout(() => setRadioLinkCopied(false), 2000);
+    } catch {
+      window.prompt("Copy your Fyby Radio link:", radioLink);
+    }
+  }
   const router = useRouter();
+
+  async function saveRadio(nextOn: boolean, nextMood: string) {
+    setRadioError(null);
+    setRadioBusy(true);
+    const prevOn = radioOn;
+    const prevMood = radioMood;
+    setRadioOn(nextOn);
+    setRadioMood(nextMood);
+    const result = await setRadioSettings(track.id, nextOn, nextMood || null);
+    if (result.error) {
+      setRadioOn(prevOn);
+      setRadioMood(prevMood);
+      setRadioError(result.error);
+    }
+    setRadioBusy(false);
+  }
 
   const subgenreOptions = useMemo(() => subgenresFor(genre), [genre]);
 
@@ -436,6 +485,82 @@ function TrackRow({
             <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-rust/50 text-rust">
               Explicit
             </span>
+          )}
+        </div>
+      )}
+      {/* Phase 10: Fyby Radio toggle + mood, saved instantly. */}
+      {!RADIO_EXCLUDED_GENRES.includes(track.genre ?? "") && (
+        <div className="flex flex-wrap items-center gap-3 border border-gold/30 bg-gold/5 rounded px-3 py-2">
+          <label className="flex items-center gap-2 font-mono text-xs text-paper/80">
+            <input
+              type="checkbox"
+              checked={radioOn}
+              disabled={radioBusy}
+              onChange={(e) => saveRadio(e.target.checked, radioMood)}
+            />
+            📻 Play on Fyby Radio
+          </label>
+          <select
+            value={radioMood}
+            disabled={radioBusy}
+            onChange={(e) => saveRadio(radioOn, e.target.value)}
+            className="bg-ink border border-paper/20 rounded px-2 py-1 text-paper font-mono text-xs"
+            aria-label="Mood"
+          >
+            <option value="">No mood</option>
+            {MOODS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          {radioOn && (
+            <button
+              type="button"
+              onClick={copyRadioLink}
+              className="font-mono text-xs px-2 py-1 rounded border border-gold/40 text-gold hover:bg-gold/10"
+            >
+              {radioLinkCopied ? "Link copied" : "Copy radio link"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowPremiere((v) => !v)}
+            className="font-mono text-xs px-2 py-1 rounded border border-flame/50 text-flame hover:bg-flame/10"
+          >
+            {showPremiere ? "Cancel" : premiereEndsAt ? "Extend premiere" : "Premiere on Fyby Radio"}
+          </button>
+          {radioError && <span className="font-mono text-xs text-rust">{radioError}</span>}
+          {premiereEndsAt && (
+            <p className="w-full font-mono text-xs text-flame">
+              Premiering on Fyby Radio until {new Date(premiereEndsAt).toLocaleDateString()}.
+            </p>
+          )}
+          {showPremiere && (
+            <form action={startRadioPremiere} className="w-full flex flex-col gap-2 pt-1">
+              <input type="hidden" name="trackId" value={track.id} />
+              <p className="font-mono text-xs text-paper/60">
+                Heavy rotation on Fyby Radio plus a spot in &quot;Premiering now&quot; on the homepage.
+                Turns radio on for this song.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {Object.entries(PREMIERE_TIERS).map(([key, t], i) => (
+                  <label key={key} className="flex items-center gap-1.5 font-mono text-xs text-paper/80">
+                    <input type="radio" name="tier" value={key} defaultChecked={i === 0} />
+                    {t.label} ·{" "}
+                    {isPro && key === PRO_FREE_PREMIERE_TIER
+                      ? `free with Pro (1 every ${PRO_FREE_PREMIERE_EVERY_DAYS} days)`
+                      : `$${(t.priceCents / 100).toFixed(2)}`}
+                  </label>
+                ))}
+              </div>
+              <button
+                type="submit"
+                className="self-start font-mono text-xs px-3 py-1.5 rounded bg-flame text-ink font-medium hover:opacity-90"
+              >
+                Start premiere
+              </button>
+            </form>
           )}
         </div>
       )}

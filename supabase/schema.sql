@@ -1191,3 +1191,74 @@ drop policy if exists "artists can read their own followers" on artist_follows;
 create policy "artists can read their own followers"
   on artist_follows for select
   using (artist_id in (select id from artists where user_id = auth.uid()));
+
+-- ============================================================================
+-- Phase 10: Fyby Radio ("the radio station where every song has a Buy
+-- button"). See lib/radio.ts for station and rotation rules, and
+-- app/api/radio/* for the routes.
+-- ============================================================================
+-- radio_opt_in: the artist's consent for this track to play in full on Fyby
+-- Radio. Defaults false so nothing plays without the artist checking the box
+-- (on upload, or later from their catalog). radio_opted_in_at records when
+-- consent was given. mood is an optional tag (lib/radio.ts MOODS), validated
+-- at the app layer like genre.
+alter table tracks add column if not exists radio_opt_in boolean not null default false;
+alter table tracks add column if not exists radio_opted_in_at timestamptz;
+alter table tracks add column if not exists mood text;
+
+create index if not exists tracks_radio_opt_in_idx on tracks (radio_opt_in) where radio_opt_in;
+
+-- One row per song served by the radio player ('play') and per Buy tap from
+-- the player ('buy_click'). Written only by the server (service role) in
+-- app/api/radio/next and app/api/radio/event, so there is no public insert
+-- policy. Artists can read events for their own tracks, for future
+-- radio analytics on the dashboard.
+create table if not exists radio_events (
+  id uuid primary key default gen_random_uuid(),
+  track_id uuid not null references tracks(id) on delete cascade,
+  station text,
+  event text not null check (event in ('play', 'buy_click')),
+  session_id text,
+  fan_id uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists radio_events_track_created_idx on radio_events (track_id, created_at desc);
+
+alter table radio_events enable row level security;
+
+drop policy if exists "artists can read radio events for their own tracks" on radio_events;
+create policy "artists can read radio events for their own tracks"
+  on radio_events for select
+  using (track_id in (
+    select t.id from tracks t join artists a on a.id = t.artist_id where a.user_id = auth.uid()
+  ));
+
+-- Radio Premieres: paid heavy rotation for a song on Fyby Radio, plus a spot
+-- on the homepage's "Premiering now" row. Tiers and prices live in
+-- lib/radio.ts (PREMIERE_TIERS). A row is only written once the premiere is
+-- real: by the Stripe webhook after payment (metadata.type =
+-- "radio_premiere"), or directly for a Pro artist's free 7-day premiere
+-- (app/actions/radioPremiere.ts). stripe_session_id is unique so a retried
+-- webhook can't create a second premiere. amount_cents = 0 marks a free Pro
+-- premiere, which is how the Pro limit (one every 60 days) is counted.
+create table if not exists radio_premieres (
+  id uuid primary key default gen_random_uuid(),
+  track_id uuid not null references tracks(id) on delete cascade,
+  artist_id uuid not null references artists(id) on delete cascade,
+  tier text not null check (tier in ('week', 'two_weeks', 'month')),
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  amount_cents integer not null default 0,
+  stripe_session_id text unique,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists radio_premieres_active_idx on radio_premieres (ends_at, starts_at);
+
+alter table radio_premieres enable row level security;
+
+drop policy if exists "artists can read their own radio premieres" on radio_premieres;
+create policy "artists can read their own radio premieres"
+  on radio_premieres for select
+  using (artist_id in (select id from artists where user_id = auth.uid()));

@@ -12,6 +12,7 @@ import { AI_DISCLOSURE_LEVELS, RIGHTS_ATTESTATION_TEXT, type AiDisclosureLevel }
 import { extractEmbeddedArtwork, type EmbeddedArtwork } from "@/lib/extractEmbeddedArtwork";
 import { DEFAULT_TRACK_COVER_URL } from "@/lib/defaultCover";
 import CollapsibleSection from "@/app/CollapsibleSection";
+import { MOODS, RADIO_OPT_IN_TEXT, RADIO_EXCLUDED_GENRES } from "@/lib/radio";
 
 // Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
 // app/actions/tracks.ts, which is what actually enforces this server-side.
@@ -36,6 +37,8 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
   const [suggestGenreMessage, setSuggestGenreMessage] = useState<string | null>(null);
   const [aiDisclosure, setAiDisclosure] = useState<AiDisclosureLevel>("human");
   const [explicit, setExplicit] = useState(false);
+  const [radioOptIn, setRadioOptIn] = useState(false);
+  const [mood, setMood] = useState("");
   const [rightsAttested, setRightsAttested] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -211,6 +214,8 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
         aiDisclosure,
         explicit,
         rightsAttested,
+        radioOptIn: radioOptIn && !RADIO_EXCLUDED_GENRES.includes(genre),
+        mood: mood || null,
             lyrics: lyrics.trim() || null,
       });
 
@@ -232,6 +237,8 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
           setLyrics("");
       setAiDisclosure("human");
       setExplicit(false);
+      setRadioOptIn(false);
+      setMood("");
       setRightsAttested(false);
       setAudioFile(null);
       setCoverFile(null);
@@ -407,6 +414,48 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
           and anywhere else this track is listed, so listeners know before they hit play.
         </span>
       </label>
+
+      {/* Phase 10: Fyby Radio consent + mood (see lib/radio.ts). Covers are
+          never offered for radio -- the songwriter's license isn't the
+          artist's to give. */}
+      <div className="border border-gold/30 bg-gold/5 rounded-lg px-3 py-3 flex flex-col gap-3">
+        <div>
+          <label className="block font-mono text-xs text-paper/60 mb-1">Mood (optional)</label>
+          <select
+            value={mood}
+            onChange={(e) => setMood(e.target.value)}
+            className="w-full bg-ink border border-paper/20 rounded px-3 py-2 text-paper font-mono text-sm"
+          >
+            <option value="">No mood</option>
+            {MOODS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <p className="font-mono text-xs text-paper/50 mt-1.5">
+            Puts this track on the matching Fyby Radio mood station.
+          </p>
+        </div>
+        {RADIO_EXCLUDED_GENRES.includes(genre) ? (
+          <p className="font-mono text-xs text-paper/50">
+            Covers can&apos;t play on Fyby Radio, since the original songwriter&apos;s license isn&apos;t yours to grant.
+          </p>
+        ) : (
+          <label className="flex items-start gap-2 font-mono text-xs text-paper/70">
+            <input
+              type="checkbox"
+              checked={radioOptIn}
+              onChange={(e) => setRadioOptIn(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="text-gold">📻 </span>
+              {RADIO_OPT_IN_TEXT}
+            </span>
+          </label>
+        )}
+      </div>
 
       <label className="flex items-start gap-2 font-mono text-xs text-paper/70">
         <input

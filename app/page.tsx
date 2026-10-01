@@ -9,6 +9,7 @@ import HowItWorks from "./HowItWorks";
 import TrustFooter from "./TrustFooter";
 import FounderStory from "./FounderStory";
 import FeaturedTracks from "./FeaturedTracks";
+import RadioHero from "./RadioHero";
 import FybyLogo, { FybyWordmark } from "./FybyLogo";
 
 export default async function StorefrontPage() {
@@ -145,6 +146,9 @@ export default async function StorefrontPage() {
           for signing up — shown only to logged-out visitors. Logged-in
           users (fans and artists alike) go straight to browsing below. */}
       {!user && <HeroSection />}
+
+      {/* Fyby Radio (Phase 10): for everyone, logged in or not. */}
+      <RadioHero />
 
       {!user && normalizedTracks.length > 0 && (
         <FeaturedTracks
