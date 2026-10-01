@@ -124,6 +124,9 @@ export default async function StorefrontPage() {
               <Link href="/tv" className="hover:text-gold" title="Fyby TV">
                 📺 TV
               </Link>
+              <Link href="/merch" className="hover:text-gold" title="Fyby Merch Booth">
+                👕 Merch
+              </Link>
               <Link href="/ai-music" className="hover:text-gold">
                 AI Music
               </Link>
@@ -147,6 +150,9 @@ export default async function StorefrontPage() {
               </Link>
               <Link href="/tv" className="hover:text-gold" title="Fyby TV">
                 📺 TV
+              </Link>
+              <Link href="/merch" className="hover:text-gold" title="Fyby Merch Booth">
+                👕 Merch
               </Link>
               <Link href="/ai-music" className="hover:text-gold">
                 AI Music
