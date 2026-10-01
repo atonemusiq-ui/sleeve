@@ -111,6 +111,64 @@ export async function sendGiftClaimEmail({
   return send(to, `${artistName} sent you a song on Fyby`, html);
 }
 
+// Merch Booth: sent by the Stripe webhook once a merch order is recorded.
+export async function sendMerchOrderEmail({
+  to,
+  productTitle,
+  artistName,
+  variantLabel,
+  quantity,
+}: {
+  to: string;
+  productTitle: string;
+  artistName: string;
+  variantLabel: string;
+  quantity: number;
+}): Promise<SendResult> {
+  const html = `
+    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; color: #16121a;">
+      <h1 style="font-size: 20px; margin-bottom: 8px;">Your order is in</h1>
+      <p style="font-size: 15px; line-height: 1.5;">
+        Thanks for supporting <strong>${escapeHtml(artistName)}</strong>. Your
+        <strong>${escapeHtml(productTitle)}</strong> (${escapeHtml(variantLabel)}, qty ${quantity})
+        is being printed just for you.
+      </p>
+      <p style="font-size: 15px; line-height: 1.5;">
+        Printing usually takes a few business days. We'll email you a tracking link as soon as it ships.
+      </p>
+    </div>
+  `;
+  return send(to, `Your ${artistName} merch order is in`, html);
+}
+
+// Merch Booth: sent when Printful reports the package shipped.
+export async function sendMerchShippedEmail({
+  to,
+  productTitle,
+  trackingUrl,
+  carrier,
+}: {
+  to: string;
+  productTitle: string;
+  trackingUrl: string | null;
+  carrier: string | null;
+}): Promise<SendResult> {
+  const html = `
+    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; color: #16121a;">
+      <h1 style="font-size: 20px; margin-bottom: 8px;">Your merch shipped</h1>
+      <p style="font-size: 15px; line-height: 1.5;">
+        <strong>${escapeHtml(productTitle)}</strong> is on its way${carrier ? ` with ${escapeHtml(carrier)}` : ""}.
+      </p>
+      ${
+        trackingUrl
+          ? `<p style="margin: 28px 0;"><a href="${escapeHtml(trackingUrl)}" style="display: inline-block; background: #C9A227; color: #16121a; padding: 12px 20px; border-radius: 6px; text-decoration: none; font-weight: 600;">Track your package</a></p>`
+          : ""
+      }
+    </div>
+  `;
+  return send(to, "Your Fyby merch is on its way", html);
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
