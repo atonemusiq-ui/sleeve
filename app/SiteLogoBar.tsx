@@ -32,6 +32,12 @@ export default function SiteLogoBar() {
       >
         📺 <span className="hidden sm:inline">TV</span>
       </Link>
+      <Link
+        href="/merch"
+        className="inline-flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-full border border-paper/20 text-paper/70 hover:border-gold/60 hover:text-gold"
+      >
+        👕 <span className="hidden sm:inline">Merch</span>
+      </Link>
       {/* The logo already links home; this makes that obvious. */}
       <Link
         href="/"
