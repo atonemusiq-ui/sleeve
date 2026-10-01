@@ -12,7 +12,7 @@ import FeaturedTracks from "./FeaturedTracks";
 import RadioHero from "./RadioHero";
 import FybyTV from "./FybyTV";
 import { fetchFybyTvVideos } from "@/lib/fybyTvServer";
-import { DEFAULT_TRACK_COVER_URL } from "@/lib/defaultCover";
+import { radioPreviewTrack } from "@/lib/radioPreview";
 import FybyLogo, { FybyWordmark } from "./FybyLogo";
 
 export default async function StorefrontPage() {
@@ -100,16 +100,8 @@ export default async function StorefrontPage() {
   // Fyby TV (Phase 10): the homepage video player.
   const tvVideos = await fetchFybyTvVideos();
 
-  // Sample song for the radio "Coming soon" preview: A-Tone's "Heat Check".
-  // Uses the real track (with its artwork and price) once it's uploaded;
-  // until then, shows the title as display text on the default Fyby cover.
-  const heatCheck = normalizedTracks.find((t: any) => /heat\s*check/i.test(t.title ?? ""));
-  const previewTrack = heatCheck ?? {
-    title: "Heat Check",
-    cover_url: DEFAULT_TRACK_COVER_URL,
-    price_cents: 500,
-    artists: { profiles: { display_name: "A-Tone" } },
-  };
+  // Sample song for the radio "Coming soon" preview (lib/radioPreview.ts).
+  const previewTrack = radioPreviewTrack(normalizedTracks);
 
   return (
     <main className="max-w-5xl lg:max-w-6xl xl:max-w-7xl mx-auto px-6 lg:px-8 py-12">
@@ -122,9 +114,15 @@ export default async function StorefrontPage() {
         </div>
         <nav className="font-mono text-sm">
           {user ? (
-            <div className="flex gap-4">
+            <div className="flex flex-wrap justify-end gap-x-4 gap-y-1">
               <Link href="/discover" className="hover:text-gold">
                 Discover
+              </Link>
+              <Link href="/radio" className="hover:text-gold" title="Fyby Radio">
+                📻 Radio
+              </Link>
+              <Link href="/tv" className="hover:text-gold" title="Fyby TV">
+                📺 TV
               </Link>
               <Link href="/ai-music" className="hover:text-gold">
                 AI Music
@@ -140,9 +138,15 @@ export default async function StorefrontPage() {
               )}
             </div>
           ) : (
-            <div className="flex gap-4">
+            <div className="flex flex-wrap justify-end gap-x-4 gap-y-1">
               <Link href="/discover" className="hover:text-gold">
                 Discover
+              </Link>
+              <Link href="/radio" className="hover:text-gold" title="Fyby Radio">
+                📻 Radio
+              </Link>
+              <Link href="/tv" className="hover:text-gold" title="Fyby TV">
+                📺 TV
               </Link>
               <Link href="/ai-music" className="hover:text-gold">
                 AI Music
@@ -167,18 +171,7 @@ export default async function StorefrontPage() {
       {/* Fyby Radio (Phase 10): for everyone, logged in or not. Shows a
           "Coming soon" preview until the radio is switched on; the preview's
           sample player uses the newest real track on Fyby. */}
-      <RadioHero
-        previewTrack={
-          previewTrack
-            ? {
-                title: previewTrack.title,
-                coverUrl: previewTrack.cover_url ?? null,
-                artistName: previewTrack.artists?.profiles?.display_name ?? "Fyby artist",
-                priceCents: previewTrack.price_cents,
-              }
-            : null
-        }
-      />
+      <RadioHero previewTrack={previewTrack} />
 
       {/* Fyby TV (Phase 10): premieres, What's New, and How-To videos. */}
       <FybyTV videos={tvVideos} isLoggedIn={Boolean(user)} />

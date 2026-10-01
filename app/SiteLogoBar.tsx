@@ -19,6 +19,19 @@ export default function SiteLogoBar() {
         <FybyLogo className="h-7 w-7" />
         <FybyWordmark className="text-2xl" />
       </Link>
+      <nav className="flex items-center gap-2">
+      <Link
+        href="/radio"
+        className="inline-flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-full border border-paper/20 text-paper/70 hover:border-gold/60 hover:text-gold"
+      >
+        📻 <span className="hidden sm:inline">Radio</span>
+      </Link>
+      <Link
+        href="/tv"
+        className="inline-flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-full border border-paper/20 text-paper/70 hover:border-gold/60 hover:text-gold"
+      >
+        📺 <span className="hidden sm:inline">TV</span>
+      </Link>
       {/* The logo already links home; this makes that obvious. */}
       <Link
         href="/"
@@ -30,6 +43,7 @@ export default function SiteLogoBar() {
         </svg>
         Home
       </Link>
+      </nav>
     </div>
   );
 }
