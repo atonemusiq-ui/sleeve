@@ -147,8 +147,21 @@ export default async function StorefrontPage() {
           users (fans and artists alike) go straight to browsing below. */}
       {!user && <HeroSection />}
 
-      {/* Fyby Radio (Phase 10): for everyone, logged in or not. */}
-      <RadioHero />
+      {/* Fyby Radio (Phase 10): for everyone, logged in or not. Shows a
+          "Coming soon" preview until the radio is switched on; the preview's
+          sample player uses the newest real track on Fyby. */}
+      <RadioHero
+        previewTrack={
+          normalizedTracks[0]
+            ? {
+                title: normalizedTracks[0].title,
+                coverUrl: normalizedTracks[0].cover_url ?? null,
+                artistName: normalizedTracks[0].artists?.profiles?.display_name ?? "Fyby artist",
+                priceCents: normalizedTracks[0].price_cents,
+              }
+            : null
+        }
+      />
 
       {!user && normalizedTracks.length > 0 && (
         <FeaturedTracks
