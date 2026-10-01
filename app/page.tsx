@@ -10,6 +10,7 @@ import TrustFooter from "./TrustFooter";
 import FounderStory from "./FounderStory";
 import FeaturedTracks from "./FeaturedTracks";
 import RadioHero from "./RadioHero";
+import { DEFAULT_TRACK_COVER_URL } from "@/lib/defaultCover";
 import FybyLogo, { FybyWordmark } from "./FybyLogo";
 
 export default async function StorefrontPage() {
@@ -94,10 +95,16 @@ export default async function StorefrontPage() {
     role = profile?.role ?? null;
   }
 
-  // Sample song for the radio "Coming soon" preview: the newest real
-  // release, skipping test uploads.
-  const previewTrack =
-    normalizedTracks.find((t: any) => !/\btest\b/i.test(t.title ?? "")) ?? null;
+  // Sample song for the radio "Coming soon" preview: A-Tone's "Heat Check".
+  // Uses the real track (with its artwork and price) once it's uploaded;
+  // until then, shows the title as display text on the default Fyby cover.
+  const heatCheck = normalizedTracks.find((t: any) => /heat\s*check/i.test(t.title ?? ""));
+  const previewTrack = heatCheck ?? {
+    title: "Heat Check",
+    cover_url: DEFAULT_TRACK_COVER_URL,
+    price_cents: 500,
+    artists: { profiles: { display_name: "A-Tone" } },
+  };
 
   return (
     <main className="max-w-5xl lg:max-w-6xl xl:max-w-7xl mx-auto px-6 lg:px-8 py-12">
