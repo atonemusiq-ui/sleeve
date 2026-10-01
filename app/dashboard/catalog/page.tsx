@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import TrackList from "../TrackList";
+import VideoPremiereSection from "../VideoPremiereSection";
 import type { Contributor } from "../ContributorManager";
 import { GENRES } from "@/lib/genres";
 
@@ -124,6 +125,17 @@ export default async function CatalogPage() {
     }
   }
 
+  // Phase 10: this artist's Fyby TV video premieres that haven't ended.
+  const { data: tvPremiereRows } = artist?.id
+    ? await supabase
+        .from("fyby_tv_videos")
+        .select("id, title, starts_at, ends_at")
+        .eq("artist_id", artist.id)
+        .eq("category", "premiere")
+        .gt("ends_at", new Date().toISOString())
+        .order("starts_at")
+    : { data: [] as any[] };
+
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
       <header className="mb-12">
@@ -162,6 +174,19 @@ export default async function CatalogPage() {
           </p>
         )}
       </section>
+
+      {artist?.id && (
+        <VideoPremiereSection
+          isPro={artist.plan === "pro"}
+          tracks={(tracks ?? []).filter((t: any) => !t.frozen).map((t: any) => ({ id: t.id, title: t.title }))}
+          activePremieres={(tvPremiereRows ?? []).map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            startsAt: p.starts_at,
+            endsAt: p.ends_at,
+          }))}
+        />
+      )}
 
       <div className="ticket-divider mb-10" />
 

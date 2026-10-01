@@ -3,7 +3,8 @@ import { transferArtistPayout } from "@/lib/stripe/payouts";
 import { commissionCents, payoutCents, planOf } from "@/lib/plans";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createNotification } from "@/lib/notifications";
-import { isPremiereTier } from "@/lib/radio";
+import { PREMIERE_TIERS, isPremiereTier } from "@/lib/radio";
+import { videoPremiereWindow } from "@/lib/fybyTvServer";
 import { premiereWindow } from "@/lib/radioPremiere";
 import { sendGiftClaimEmail } from "@/lib/email";
 import { randomUUID } from "crypto";
@@ -429,6 +430,53 @@ export async function POST(req: Request) {
       // 23505 = unique violation: a concurrent retry already recorded it.
       if (error && error.code !== "23505") {
         console.error("Failed to record radio premiere:", error.message);
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+
+      return NextResponse.json({ received: true });
+    }
+
+    // Fyby TV Video Premiere (app/actions/fybyTv.ts): a flat Fyby fee, no
+    // artist transfer. Publishes the premiere to the homepage player now
+    // that payment is confirmed; stripe_session_id is unique, so a retried
+    // delivery is a no-op.
+    if (session.metadata?.type === "video_premiere") {
+      const m: Record<string, string> = session.metadata ?? {};
+      const tvTier = m.tier;
+      if (!m.artist_id || !isPremiereTier(tvTier) || !m.title || !m.video_url) {
+        console.error("Video premiere webhook missing expected metadata:", session.metadata);
+        return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
+      }
+
+      const supabase = createServiceRoleClient();
+      const { data: existing } = await supabase
+        .from("fyby_tv_videos")
+        .select("id")
+        .eq("stripe_session_id", session.id)
+        .maybeSingle();
+      if (existing) return NextResponse.json({ received: true });
+
+      const requested = m.starts_at ? new Date(m.starts_at) : new Date();
+      const tvWindow = videoPremiereWindow(
+        Number.isNaN(requested.getTime()) ? new Date() : requested,
+        PREMIERE_TIERS[tvTier].days
+      );
+      const { error } = await supabase.from("fyby_tv_videos").insert({
+        category: "premiere",
+        title: m.title,
+        description: m.description || null,
+        video_url: m.video_url,
+        artist_id: m.artist_id,
+        track_id: m.track_id || null,
+        starts_at: tvWindow.startsAt,
+        ends_at: tvWindow.endsAt,
+        tier: tvTier,
+        amount_cents: session.amount_total ?? 0,
+        stripe_session_id: session.id,
+      });
+
+      if (error && error.code !== "23505") {
+        console.error("Failed to record video premiere:", error.message);
         return NextResponse.json({ error: "Database error" }, { status: 500 });
       }
 

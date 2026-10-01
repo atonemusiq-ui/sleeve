@@ -1262,3 +1262,39 @@ drop policy if exists "artists can read their own radio premieres" on radio_prem
 create policy "artists can read their own radio premieres"
   on radio_premieres for select
   using (artist_id in (select id from artists where user_id = auth.uid()));
+
+-- ============================================================================
+-- Fyby TV (Phase 10): the homepage video player. See lib/fybyTv.ts.
+-- category 'whats_new' / 'how_to' rows are Fyby's own videos, added by the
+-- admin at /admin/fyby-tv. category 'premiere' rows are artist music-video
+-- premieres, Pro plan only, written by the Stripe webhook after payment
+-- (metadata.type = "video_premiere"); stripe_session_id is unique so a
+-- retried webhook can't create two. All reads and writes go through the
+-- server (service role); artists can read their own premieres.
+-- ============================================================================
+create table if not exists fyby_tv_videos (
+  id uuid primary key default gen_random_uuid(),
+  category text not null check (category in ('whats_new', 'how_to', 'premiere')),
+  title text not null,
+  description text,
+  video_url text not null,
+  artist_id uuid references artists(id) on delete cascade,
+  track_id uuid references tracks(id) on delete set null,
+  starts_at timestamptz,
+  ends_at timestamptz,
+  tier text check (tier in ('week', 'two_weeks', 'month')),
+  amount_cents integer not null default 0,
+  stripe_session_id text unique,
+  published boolean not null default true,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists fyby_tv_videos_category_idx on fyby_tv_videos (category, published, sort_order);
+
+alter table fyby_tv_videos enable row level security;
+
+drop policy if exists "artists can read their own fyby tv premieres" on fyby_tv_videos;
+create policy "artists can read their own fyby tv premieres"
+  on fyby_tv_videos for select
+  using (artist_id in (select id from artists where user_id = auth.uid()));

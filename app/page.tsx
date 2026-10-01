@@ -10,6 +10,8 @@ import TrustFooter from "./TrustFooter";
 import FounderStory from "./FounderStory";
 import FeaturedTracks from "./FeaturedTracks";
 import RadioHero from "./RadioHero";
+import FybyTV from "./FybyTV";
+import { fetchFybyTvVideos } from "@/lib/fybyTvServer";
 import { DEFAULT_TRACK_COVER_URL } from "@/lib/defaultCover";
 import FybyLogo, { FybyWordmark } from "./FybyLogo";
 
@@ -95,6 +97,9 @@ export default async function StorefrontPage() {
     role = profile?.role ?? null;
   }
 
+  // Fyby TV (Phase 10): the homepage video player.
+  const tvVideos = await fetchFybyTvVideos();
+
   // Sample song for the radio "Coming soon" preview: A-Tone's "Heat Check".
   // Uses the real track (with its artwork and price) once it's uploaded;
   // until then, shows the title as display text on the default Fyby cover.
@@ -174,6 +179,9 @@ export default async function StorefrontPage() {
             : null
         }
       />
+
+      {/* Fyby TV (Phase 10): premieres, What's New, and How-To videos. */}
+      <FybyTV videos={tvVideos} isLoggedIn={Boolean(user)} />
 
       {!user && normalizedTracks.length > 0 && (
         <FeaturedTracks
