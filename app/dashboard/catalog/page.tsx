@@ -133,6 +133,36 @@ export default async function CatalogPage() {
         <h1 className="font-display text-3xl text-gold mt-2">Your Catalog</h1>
       </header>
 
+      {/* Phase 10: how Fyby Radio works for artists, right where the
+          per-song radio controls live. */}
+      <section className="mb-10 rounded-lg border border-gold/30 bg-gold/5 px-5 py-4">
+        <h2 className="font-display text-lg text-gold">📻 Get your music on Fyby Radio</h2>
+        <ul className="mt-2 flex flex-col gap-1.5 font-mono text-xs text-paper/70 list-disc pl-4">
+          <li>
+            Check <span className="text-paper">Play on Fyby Radio</span> on any song below. Fans hear the
+            full song free, with a Buy button on screen the whole time. Turn it off anytime.
+          </li>
+          <li>Add a mood so your song also plays on mood stations like Chill or Sunday Morning.</li>
+          <li>
+            New artists get extra plays free for their first month, and new songs get a boost for their
+            first two weeks.
+          </li>
+          <li>
+            <span className="text-paper">Premiere on Fyby Radio</span> puts a song in heavy rotation and on
+            the homepage. Pro members get six free 7-day premieres a year.
+          </li>
+          <li>
+            <span className="text-paper">Copy radio link</span> gives you a page to share on social media so
+            fans can tune in and hear your song first.
+          </li>
+        </ul>
+        {process.env.NEXT_PUBLIC_RADIO_ENABLED !== "true" && (
+          <p className="mt-3 font-mono text-xs text-paper/50">
+            Fyby Radio is launching soon. Songs you opt in now will be on the air from day one.
+          </p>
+        )}
+      </section>
+
       <div className="ticket-divider mb-10" />
 
       {error && <p className="text-rust font-mono text-sm">Couldn&apos;t load tracks: {error.message}</p>}

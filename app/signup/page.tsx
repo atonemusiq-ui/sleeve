@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { signup } from "@/app/actions/auth";
 import FybyLogo, { FybyWordmark } from "@/app/FybyLogo";
+import { isRadioEnabled } from "@/lib/radio";
 
 export default function SignupPage({
   searchParams,
@@ -83,6 +84,23 @@ export default function SignupPage({
             </label>
           </div>
         </fieldset>
+
+        {/* Fyby Radio (Phase 10), explained before they join. Hidden until
+            the radio is switched on (NEXT_PUBLIC_RADIO_ENABLED). */}
+        {isRadioEnabled() && (
+          <div className="border border-gold/30 bg-gold/5 rounded-lg px-4 py-3 font-mono text-xs text-paper/70 flex flex-col gap-2">
+            <p className="text-gold">📻 Fyby Radio comes with every account</p>
+            <p>
+              <span className="text-paper">Fans:</span> listen free, nonstop, by genre or mood, and buy any
+              song you hear with one tap.
+            </p>
+            <p>
+              <span className="text-paper">Artists:</span> check &quot;Play on Fyby Radio&quot; when you
+              upload. Every new artist gets extra plays free for their first month, and you can premiere a
+              new song for heavy rotation.
+            </p>
+          </div>
+        )}
 
         <button
           type="submit"

@@ -9,7 +9,7 @@ const STEPS = [
   },
   {
     title: "3. Get paid fast",
-    body: "You keep 80% of every sale, paid out to your bank account through Stripe in 24-48 hours.",
+    body: "You keep 85% or more of every sale (more on paid plans), paid out to your bank account through Stripe in days, not months.",
   },
 ];
 

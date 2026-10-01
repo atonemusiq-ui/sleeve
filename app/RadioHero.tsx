@@ -25,6 +25,21 @@ export default function RadioHero() {
         the money.
       </p>
 
+      <ol className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-3xl">
+        {[
+          ["Pick a station", "Tap Tune in, or choose a genre or mood below. It plays nonstop, free."],
+          ["Hear it, buy it", "Love a song? Tap Buy in the player at the bottom of your screen. The artist keeps the money."],
+          ["Keep listening", "The radio keeps playing while you browse Fyby. Tap ⏭ to skip or ✕ to turn it off."],
+        ].map(([title, body], i) => (
+          <li key={title} className="rounded-lg border border-paper/15 bg-paper/5 px-4 py-3">
+            <p className="font-display text-sm text-gold">
+              {i + 1}. {title}
+            </p>
+            <p className="text-paper/60 text-xs mt-1">{body}</p>
+          </li>
+        ))}
+      </ol>
+
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <button
           type="button"
