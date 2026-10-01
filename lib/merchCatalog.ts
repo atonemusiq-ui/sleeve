@@ -5,6 +5,11 @@
 // Printful charges Fyby for the blank plus printing, before shipping. If
 // Printful changes a price, update it here: the artist's payout is computed
 // from these numbers.
+//
+// Shipping is Printful's US standard rate for each product type (first item,
+// then each additional item), as published in August 2026. Printful charges
+// one flat US rate per product type, not by state, so these are exact for
+// every US address. The fan pays it at checkout.
 
 export type MerchProductKey = "tee" | "hoodie" | "hat" | "tote" | "mug";
 
@@ -24,12 +29,14 @@ export type MerchCatalogItem = {
   fileType: string;
   // Recommended print file, shown to the artist when they upload.
   designTip: string;
+  shipping: { firstCents: number; additionalCents: number };
   colors: Record<string, MerchVariant[]>;
 };
 
 export const MERCH_CATALOG: Record<MerchProductKey, MerchCatalogItem> = {
   tee: {
     key: "tee",
+    shipping: { firstCents: 399, additionalCents: 190 },
     label: "T-Shirt",
     printfulProductId: 71,
     printfulName: "Unisex Staple T-Shirt | Bella + Canvas 3001",
@@ -50,6 +57,7 @@ export const MERCH_CATALOG: Record<MerchProductKey, MerchCatalogItem> = {
   },
   hoodie: {
     key: "hoodie",
+    shipping: { firstCents: 719, additionalCents: 180 },
     label: "Hoodie",
     printfulProductId: 146,
     printfulName: "Unisex Heavy Blend Hoodie | Gildan 18500",
@@ -68,6 +76,7 @@ export const MERCH_CATALOG: Record<MerchProductKey, MerchCatalogItem> = {
   },
   hat: {
     key: "hat",
+    shipping: { firstCents: 449, additionalCents: 200 },
     label: "Dad Hat",
     printfulProductId: 206,
     printfulName: "Classic Dad Hat | Yupoong 6245CM",
@@ -83,6 +92,7 @@ export const MERCH_CATALOG: Record<MerchProductKey, MerchCatalogItem> = {
   },
   tote: {
     key: "tote",
+    shipping: { firstCents: 449, additionalCents: 200 },
     label: "Tote Bag",
     printfulProductId: 367,
     printfulName: "Eco Tote Bag | Econscious EC8000",
@@ -95,6 +105,7 @@ export const MERCH_CATALOG: Record<MerchProductKey, MerchCatalogItem> = {
   },
   mug: {
     key: "mug",
+    shipping: { firstCents: 469, additionalCents: 255 },
     label: "Mug",
     printfulProductId: 19,
     printfulName: "White Glossy Mug",
@@ -134,4 +145,10 @@ export function baseCostCents(key: MerchProductKey, color: string): number {
 // Printful's own upcharge for that size, so profit is the same on every size.
 export function variantPriceCents(basePriceCents: number, key: MerchProductKey, color: string, variant: MerchVariant): number {
   return basePriceCents + (variant.costCents - baseCostCents(key, color));
+}
+
+// What the fan pays to ship `quantity` of one product to a US address.
+export function shippingCents(key: MerchProductKey, quantity: number): number {
+  const { firstCents, additionalCents } = MERCH_CATALOG[key].shipping;
+  return firstCents + additionalCents * Math.max(0, quantity - 1);
 }

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MerchArt, MerchPreview } from "./MerchArt";
 import MerchProductCard, { type MerchCardProduct } from "./MerchProductCard";
 import { MERCH_CATALOG, type MerchProductKey } from "@/lib/merchCatalog";
-import { formatCents } from "@/lib/merch";
+import { fanUnitPriceCents, formatCents } from "@/lib/merch";
 
 // getfyby.com/merch: the Merch Booth (Phase 10). Shows merch from Pro-plan
 // artists, which is one of the Pro perks; artists on other plans sell from
@@ -75,7 +75,7 @@ export default async function MerchPage() {
                 href={`/merch/${drop.id}`}
                 className="inline-flex items-center px-6 py-3 rounded-full bg-flame text-ink font-semibold hover:bg-gold transition-colors"
               >
-                Shop the drop · {formatCents(drop.price_cents)}
+                Shop the drop · {formatCents(fanUnitPriceCents(drop.price_cents, drop.product_key as MerchProductKey))}
               </Link>
             ) : (
               <span className="inline-flex items-center px-5 py-3 rounded-full border border-flame/60 text-flame font-medium">

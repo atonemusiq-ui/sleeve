@@ -1419,6 +1419,10 @@ create table if not exists merch_orders (
   shipping_cents integer not null default 0,
   amount_cents integer not null,
   platform_fee_cents integer not null,
+  -- Estimated Stripe card fee on the whole charge, and the artist's half of
+  -- it (the fan's half is already inside unit_price_cents). See lib/merch.ts.
+  card_fee_cents integer not null default 0,
+  artist_card_share_cents integer not null default 0,
   artist_payout_cents integer not null,
   plan text,
   shipping_address jsonb,

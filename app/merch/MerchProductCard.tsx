@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { MerchPreview } from "./MerchArt";
 import { MERCH_CATALOG, isMerchProductKey } from "@/lib/merchCatalog";
-import { formatCents } from "@/lib/merch";
+import { fanUnitPriceCents, formatCents } from "@/lib/merch";
 
 export type MerchCardProduct = {
   id: string;
@@ -33,7 +33,7 @@ export default function MerchProductCard({ product }: { product: MerchCardProduc
         </div>
       </Link>
       <div className="mt-auto px-1 pb-1 flex items-center justify-between">
-        <span className="font-semibold">{formatCents(product.price_cents)}</span>
+        <span className="font-semibold">{formatCents(fanUnitPriceCents(product.price_cents, product.product_key))}</span>
         <Link
           href={`/merch/${product.id}`}
           className="font-mono text-xs px-3 py-2 rounded-full bg-flame text-ink font-medium hover:bg-gold"

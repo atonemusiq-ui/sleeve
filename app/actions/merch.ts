@@ -11,7 +11,7 @@ import {
   isMerchProductKey,
   variantPriceCents,
 } from "@/lib/merchCatalog";
-import { merchCheckoutEnabled, merchShippingCents, merchSplit, minimumPriceCents, formatCents } from "@/lib/merch";
+import { merchCheckoutEnabled, merchSplit, minimumPriceCents, formatCents } from "@/lib/merch";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
@@ -190,12 +190,14 @@ export async function startMerchCheckout(formData: FormData) {
   const variant = findVariant(product.product_key, product.color, variantId);
   if (!variant) throw new Error("Pick a size.");
 
-  const unitPriceCents = variantPriceCents(product.price_cents, product.product_key, product.color, variant);
+  // The artist's price for this size; the fan's half of the card fee is
+  // added on top inside merchSplit (see lib/merch.ts).
+  const artistUnitPriceCents = variantPriceCents(product.price_cents, product.product_key, product.color, variant);
   // The artist's plan when the fan paid, snapshotted like track sales are,
   // so the split the webhook pays out is the one shown at checkout.
   const plan = planOf(artist?.plan);
-  const split = merchSplit(unitPriceCents, variant.costCents, quantity, plan);
-  const shippingCents = merchShippingCents();
+  const split = merchSplit(artistUnitPriceCents, variant.costCents, quantity, plan, product.product_key);
+  const shippingCents = split.shippingCents;
   const artistName = artist?.profiles?.display_name ?? "Fyby artist";
   const variantLabel = `${product.color} / ${variant.size}`;
 
@@ -212,7 +214,7 @@ export async function startMerchCheckout(formData: FormData) {
       {
         shipping_rate_data: {
           type: "fixed_amount",
-          display_name: "Standard shipping",
+          display_name: "Standard shipping (printed and shipped by our print partner)",
           fixed_amount: { amount: shippingCents, currency: "usd" },
           delivery_estimate: {
             minimum: { unit: "business_day", value: 5 },
@@ -225,7 +227,7 @@ export async function startMerchCheckout(formData: FormData) {
       {
         price_data: {
           currency: "usd",
-          unit_amount: unitPriceCents,
+          unit_amount: split.fanUnitPriceCents,
           tax_behavior: "exclusive",
           product_data: {
             name: product.title,
@@ -244,9 +246,11 @@ export async function startMerchCheckout(formData: FormData) {
       variant_id: String(variant.id),
       variant_label: variantLabel,
       quantity: String(quantity),
-      unit_price_cents: String(unitPriceCents),
+      unit_price_cents: String(split.fanUnitPriceCents),
       unit_cost_cents: String(variant.costCents),
       shipping_cents: String(shippingCents),
+      card_fee_cents: String(split.cardFeeCents),
+      artist_card_share_cents: String(split.artistCardShareCents),
       platform_fee_cents: String(split.platformFeeCents),
       artist_payout_cents: String(split.artistPayoutCents),
       plan,

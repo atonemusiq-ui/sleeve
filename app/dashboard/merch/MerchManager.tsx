@@ -23,18 +23,33 @@ export type ManagedProduct = {
 
 const MAX_DESIGN_BYTES = 50 * 1024 * 1024;
 
-// Per-item breakdown at a given base price: what the fan pays, what printing
-// costs, Fyby's fee, and what the artist keeps. Same math the webhook pays out.
-function Breakdown({ priceCents, costCents, plan }: { priceCents: number; costCents: number; plan: Plan }) {
-  const split = merchSplit(priceCents, costCents, 1, plan);
+// Per-item breakdown for a one-item order at the artist's price: what the
+// fan sees, printing, Fyby's fee, the artist's half of the card fee, and what
+// the artist keeps. Same math the webhook pays out (lib/merch.ts).
+function Breakdown({
+  priceCents,
+  costCents,
+  plan,
+  productKey,
+}: {
+  priceCents: number;
+  costCents: number;
+  plan: Plan;
+  productKey: MerchProductKey;
+}) {
+  const split = merchSplit(priceCents, costCents, 1, plan, productKey);
   return (
     <dl className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs">
-      <dt className="text-paper/60">Fan pays</dt>
+      <dt className="text-paper/60">Fans see</dt>
+      <dd className="text-right">{formatCents(split.fanUnitPriceCents)}</dd>
+      <dt className="text-paper/60">Your price</dt>
       <dd className="text-right">{formatCents(priceCents)}</dd>
       <dt className="text-paper/60">Printing</dt>
       <dd className="text-right">−{formatCents(costCents)}</dd>
       <dt className="text-paper/60">Fyby fee</dt>
       <dd className="text-right">−{formatCents(split.platformFeeCents)}</dd>
+      <dt className="text-paper/60">Your half of card fee</dt>
+      <dd className="text-right">−{formatCents(split.artistCardShareCents)}</dd>
       <dt className="text-paper">You earn</dt>
       <dd className="text-right text-forest font-semibold">{formatCents(split.artistPayoutCents)}</dd>
     </dl>
@@ -205,7 +220,7 @@ export default function MerchManager({
             </label>
 
             <label className="flex flex-col gap-1.5 font-mono text-xs text-paper/60 max-w-[12rem]">
-              Price (USD)
+              Your price (USD)
               <input
                 type="number"
                 min={minimum / 100}
@@ -224,8 +239,11 @@ export default function MerchManager({
                 <MerchPreview productKey={productKey} color={activeColor} designUrl={previewUrl} />
               </div>
             </div>
-            <Breakdown priceCents={priceCents} costCents={costCents} plan={plan} />
-            <p className="font-mono text-[11px] text-paper/45">Bigger sizes cost the fan a little more, so you earn the same on every size.</p>
+            <Breakdown priceCents={priceCents} costCents={costCents} plan={plan} productKey={productKey} />
+            <p className="font-mono text-[11px] text-paper/45">
+              Fans pay shipping at checkout. The card fee is split: half is built into the price fans see, half
+              comes from your earnings. Bigger sizes cost the fan a little more, so you earn about the same on every size.
+            </p>
             <button
               type="submit"
               disabled={busy || !canSell}
@@ -270,7 +288,7 @@ function ProductRow({
   const key = product.product_key as MerchProductKey;
   const known = Boolean(MERCH_CATALOG[key]);
   const costCents = known ? baseCostCents(key, product.color) : 0;
-  const split = merchSplit(product.price_cents, costCents, 1, plan);
+  const split = known ? merchSplit(product.price_cents, costCents, 1, plan, key) : null;
 
   return (
     <li className="flex flex-wrap items-center gap-4 border border-paper/15 rounded-lg p-3">
@@ -282,7 +300,8 @@ function ProductRow({
           {product.title}
         </Link>
         <p className="font-mono text-[11px] text-paper/50">
-          {known ? MERCH_CATALOG[key].label : product.product_key} · {product.color} · you earn {formatCents(split.artistPayoutCents)} each
+          {known ? MERCH_CATALOG[key].label : product.product_key} · {product.color} · fans see {split ? formatCents(split.fanUnitPriceCents) : "—"} · you earn{" "}
+          {split ? formatCents(split.artistPayoutCents) : "—"} each
         </p>
       </div>
       <form

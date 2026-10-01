@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/uuid";
-import { MERCH_CATALOG, isMerchProductKey, variantPriceCents, variantsFor } from "@/lib/merchCatalog";
-import { merchCheckoutEnabled, merchShippingCents, formatCents } from "@/lib/merch";
+import { MERCH_CATALOG, isMerchProductKey, shippingCents, variantPriceCents, variantsFor } from "@/lib/merchCatalog";
+import { merchCheckoutEnabled, fanUnitPriceCents, formatCents } from "@/lib/merch";
 import { MerchPreview } from "../MerchArt";
 import BuyMerchForm from "./BuyMerchForm";
 
@@ -45,7 +45,10 @@ export default async function MerchProductPage({ params }: { params: { productId
   const variants = variantsFor(product.product_key, product.color).map((v) => ({
     id: v.id,
     size: v.size,
-    priceCents: variantPriceCents(product.price_cents, product.product_key, product.color, v),
+    priceCents: fanUnitPriceCents(
+      variantPriceCents(product.price_cents, product.product_key, product.color, v),
+      product.product_key
+    ),
   }));
 
   return (
@@ -86,7 +89,10 @@ export default async function MerchProductPage({ params }: { params: { productId
 
           <ul className="font-mono text-xs text-paper/60 flex flex-col gap-1.5 border-t border-paper/10 pt-4">
             <li>Printed just for you, ships in about 5–10 business days</li>
-            <li>US shipping {formatCents(merchShippingCents())}</li>
+            <li>
+              US shipping {formatCents(shippingCents(product.product_key, 1))}, plus{" "}
+              {formatCents(item.shipping.additionalCents)} for each extra item
+            </li>
             <li>Every purchase pays {artistName} directly</li>
           </ul>
         </div>

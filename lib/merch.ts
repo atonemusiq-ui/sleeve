@@ -1,60 +1,106 @@
 import type { Plan } from "@/lib/plans";
+import { shippingCents, type MerchProductKey } from "@/lib/merchCatalog";
 
-// Fyby's cut on merch, decided in the Merch Booth plan:
-//   Pro plan:            no fee; the Merch Booth is part of the subscription.
-//   Free and Artist:     25% of the artist's PROFIT (sale price minus what
-//                        Printful charges to make it) plus $0.20 per order.
+// Who pays what on a merch order.
 //
-// Taken from profit, not the sticker price, because on print-on-demand the
-// product cost is often half the price: 25% of a $30 shirt would leave the
-// artist less than Fyby. Shipping is charged to the fan and passed straight
-// through to Printful, so it isn't part of either side's share.
+// Fyby's cut, decided in the Merch Booth plan:
+//   Pro plan:         no fee; the Merch Booth is part of the subscription.
+//   Free and Artist:  25% of the artist's PROFIT (their price minus what
+//                     Printful charges to make it) plus $0.20 per order.
 //
-// Like track sales (lib/checkoutSession.ts), Stripe's card fee comes out of
-// Fyby's side, not the artist's, so the payout below is exactly what lands
-// in the artist's account.
+// Shipping: the fan pays Printful's real US rate for the product
+// (lib/merchCatalog.ts), added at checkout. Fyby doesn't cover any of it.
+//
+// Card fee (Stripe, 2.9% + 30¢ of the whole charge): split between fan and
+// artist. The fan's half is built into the price they see, not added as a
+// separate "card fee" line, because California bans card surcharges, no
+// state allows them on debit cards, and California's honest-pricing law
+// requires any mandatory fee to be inside the advertised price (shipping and
+// tax are the only things allowed on top). The artist's half comes out of
+// their payout. Fyby covers neither.
 export const MERCH_FEE_BPS = 2500;
 export const MERCH_ORDER_FEE_CENTS = 20;
 
-// What Fyby charges the fan for shipping, in cents. Printful's real cost
-// varies by product and destination; this flat rate is the fan-facing
-// price. Set MERCH_SHIPPING_CENTS in Vercel to change it without a deploy.
-export function merchShippingCents(): number {
-  const raw = Number(process.env.MERCH_SHIPPING_CENTS);
-  return Number.isInteger(raw) && raw >= 0 ? raw : 599;
+// Stripe's standard US card rate. International cards cost Stripe 1.5% more;
+// that difference isn't passed on.
+const CARD_FEE_BPS = 290;
+const CARD_FEE_FIXED_CENTS = 30;
+
+export function cardFeeCents(chargeCents: number): number {
+  return Math.round((chargeCents * CARD_FEE_BPS) / 10000) + CARD_FEE_FIXED_CENTS;
+}
+
+// The fan's half of the card fee on one unit, built into the unit price.
+// Solves  share = cardFee(price + share + shipping) / 2  for a single-item
+// order, rounded up to the cent.
+export function buyerCardShareCents(artistUnitPriceCents: number, key: MerchProductKey): number {
+  const base = artistUnitPriceCents + shippingCents(key, 1);
+  const rate = CARD_FEE_BPS / 10000;
+  return Math.ceil((base * rate + CARD_FEE_FIXED_CENTS) / (2 - rate));
+}
+
+// What the fan sees and pays per unit (before shipping and tax).
+export function fanUnitPriceCents(artistUnitPriceCents: number, key: MerchProductKey): number {
+  return artistUnitPriceCents + buyerCardShareCents(artistUnitPriceCents, key);
 }
 
 export type MerchSplit = {
-  amountCents: number; // what the fan pays for the items, before shipping and tax
-  costCents: number; // what Printful charges to make them
-  profitCents: number;
+  fanUnitPriceCents: number;
+  itemsCents: number; // what the fan pays for the items, before shipping and tax
+  shippingCents: number;
+  totalCents: number; // the whole card charge (no tax while Stripe Tax is off)
+  cardFeeCents: number;
+  buyerCardShareCents: number;
+  artistCardShareCents: number;
+  profitCents: number; // artist's price minus printing, before fees
   platformFeeCents: number;
   artistPayoutCents: number;
 };
 
-export function merchSplit(unitPriceCents: number, unitCostCents: number, quantity: number, plan: Plan): MerchSplit {
-  const amountCents = unitPriceCents * quantity;
-  const costCents = unitCostCents * quantity;
-  const profitCents = Math.max(0, amountCents - costCents);
+// artistUnitPriceCents: the artist's price for this size (base price plus
+// Printful's own size upcharge), before the fan's card-fee share.
+export function merchSplit(
+  artistUnitPriceCents: number,
+  unitCostCents: number,
+  quantity: number,
+  plan: Plan,
+  key: MerchProductKey
+): MerchSplit {
+  const buyerShareUnit = buyerCardShareCents(artistUnitPriceCents, key);
+  const fanUnit = artistUnitPriceCents + buyerShareUnit;
+  const itemsCents = fanUnit * quantity;
+  const ship = shippingCents(key, quantity);
+  const totalCents = itemsCents + ship;
+  const cardFee = cardFeeCents(totalCents);
+  const buyerCardShare = buyerShareUnit * quantity;
+  const artistCardShare = Math.max(0, cardFee - buyerCardShare);
+
+  const profitCents = Math.max(0, (artistUnitPriceCents - unitCostCents) * quantity);
 
   let platformFeeCents = 0;
   if (plan !== "pro") {
     platformFeeCents = Math.round((profitCents * MERCH_FEE_BPS) / 10000) + MERCH_ORDER_FEE_CENTS;
   }
-  // The fee can never take more than the profit itself.
+  // Fees can never take more than the profit itself.
   platformFeeCents = Math.min(platformFeeCents, profitCents);
+  const artistPayoutCents = Math.max(0, profitCents - platformFeeCents - artistCardShare);
 
   return {
-    amountCents,
-    costCents,
+    fanUnitPriceCents: fanUnit,
+    itemsCents,
+    shippingCents: ship,
+    totalCents,
+    cardFeeCents: cardFee,
+    buyerCardShareCents: buyerCardShare,
+    artistCardShareCents: artistCardShare,
     profitCents,
     platformFeeCents,
-    artistPayoutCents: profitCents - platformFeeCents,
+    artistPayoutCents,
   };
 }
 
 // The lowest base price an artist may set: Printful's cost plus at least $5
-// of profit, so no listing can lose money once card fees are paid.
+// of profit.
 export const MIN_PROFIT_CENTS = 500;
 
 export function minimumPriceCents(baseCostCents: number): number {

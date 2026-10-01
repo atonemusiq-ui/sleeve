@@ -41,6 +41,8 @@ export async function handleMerchCheckout(session: Stripe.Checkout.Session): Pro
   const shippingCents = Number(m.shipping_cents ?? 0);
   const platformFeeCents = Number(m.platform_fee_cents);
   const artistPayoutCents = Number(m.artist_payout_cents);
+  const cardFeeCents = Number(m.card_fee_cents ?? 0);
+  const artistCardShareCents = Number(m.artist_card_share_cents ?? 0);
 
   if (
     !isUuid(productId) ||
@@ -83,6 +85,8 @@ export async function handleMerchCheckout(session: Stripe.Checkout.Session): Pro
       shipping_cents: shippingCents,
       amount_cents: unitPriceCents * quantity,
       platform_fee_cents: platformFeeCents,
+      card_fee_cents: Number.isFinite(cardFeeCents) ? cardFeeCents : 0,
+      artist_card_share_cents: Number.isFinite(artistCardShareCents) ? artistCardShareCents : 0,
       artist_payout_cents: artistPayoutCents,
       plan: m.plan ?? null,
       shipping_address: address ? { name: shipName, ...address } : null,
