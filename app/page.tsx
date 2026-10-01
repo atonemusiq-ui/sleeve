@@ -94,6 +94,11 @@ export default async function StorefrontPage() {
     role = profile?.role ?? null;
   }
 
+  // Sample song for the radio "Coming soon" preview: the newest real
+  // release, skipping test uploads.
+  const previewTrack =
+    normalizedTracks.find((t: any) => !/\btest\b/i.test(t.title ?? "")) ?? null;
+
   return (
     <main className="max-w-5xl lg:max-w-6xl xl:max-w-7xl mx-auto px-6 lg:px-8 py-12">
       <header className="flex items-center justify-between mb-12">
@@ -152,12 +157,12 @@ export default async function StorefrontPage() {
           sample player uses the newest real track on Fyby. */}
       <RadioHero
         previewTrack={
-          normalizedTracks[0]
+          previewTrack
             ? {
-                title: normalizedTracks[0].title,
-                coverUrl: normalizedTracks[0].cover_url ?? null,
-                artistName: normalizedTracks[0].artists?.profiles?.display_name ?? "Fyby artist",
-                priceCents: normalizedTracks[0].price_cents,
+                title: previewTrack.title,
+                coverUrl: previewTrack.cover_url ?? null,
+                artistName: previewTrack.artists?.profiles?.display_name ?? "Fyby artist",
+                priceCents: previewTrack.price_cents,
               }
             : null
         }
