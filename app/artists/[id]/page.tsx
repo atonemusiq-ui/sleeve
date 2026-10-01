@@ -19,6 +19,7 @@ import { offeredTiers } from "@/lib/licensing";
 import { COVERS_GENRE } from "@/lib/genres";
 import FanReferralLink from "./FanReferralLink";
 import FollowButton from "./FollowButton";
+import MerchProductCard from "@/app/merch/MerchProductCard";
 
 // Powers the og:title/og:description a crawler shows alongside the image
 // from this same folder's opengraph-image.tsx when a plain artist link is
@@ -181,6 +182,16 @@ export default async function ArtistPage({
   // shape-checked value rather than the raw `?ref=` query param, so a junk
   // value in a shared link can never reach the uuid column behind it.
   const referralFanId = referredByFanId;
+
+  // Merch Booth (app/merch): every artist's active merch shows here,
+  // whatever their plan. The Booth page itself only features Pro artists.
+  const { data: merchRows } = await supabase
+    .from("merch_products")
+    .select("id, title, product_key, color, design_url, price_cents")
+    .eq("artist_id", artist.id)
+    .eq("active", true)
+    .order("created_at", { ascending: false });
+  const merchProducts = (merchRows ?? []) as any[];
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
@@ -449,6 +460,19 @@ export default async function ArtistPage({
       )}
 
       {!isOwner && (artist as any).is_active && <div className="ticket-divider my-10" />}
+
+      {(artist as any).is_active && merchProducts.length > 0 && (
+        <section aria-labelledby="artist-merch-heading" className="mb-10">
+          <h2 id="artist-merch-heading" className="font-display text-2xl mb-4">
+            👕 Merch
+          </h2>
+          <ul className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {merchProducts.map((p) => (
+              <MerchProductCard key={p.id} product={p} />
+            ))}
+          </ul>
+        </section>
+      )}
 
       <CollapsibleSection
         title="Book or collaborate with this artist"

@@ -1,90 +1,141 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { MerchArt, MerchPreview } from "./MerchArt";
+import MerchProductCard, { type MerchCardProduct } from "./MerchProductCard";
+import { MERCH_CATALOG, type MerchProductKey } from "@/lib/merchCatalog";
+import { formatCents } from "@/lib/merch";
 
-// getfyby.com/merch: the Merch Booth (Phase 10). This first version is the
-// storefront layout only. Products are print-on-demand (Printful) and will be
-// loaded from the database once artist merch listings and merch checkout are
-// built; until then every item shows "Coming soon" instead of a buy button,
-// so nothing on this page takes money it can't fulfil.
+// getfyby.com/merch: the Merch Booth (Phase 10). Shows merch from Pro-plan
+// artists, which is one of the Pro perks; artists on other plans sell from
+// their own artist page only (app/artists/[id]/page.tsx). Print-on-demand
+// through Printful; checkout lives on each product page (app/merch/[productId]).
 export const metadata: Metadata = {
   title: "Merch Booth · Fyby",
   description: "Artist merch, printed when you order and shipped to your door.",
 };
 
-type Product = {
-  rank: string;
-  name: string;
-  detail: string;
-  art: React.ReactNode;
-};
+export const dynamic = "force-dynamic";
 
-// The five merch items fans buy most, in order.
-const TOP_FIVE: Product[] = [
-  { rank: "#1 Best seller", name: "T-Shirt", detail: "Heavyweight, boxy fit", art: <TeeArt /> },
-  { rank: "#2 Top earner", name: "Hoodie", detail: "Embroidered or printed", art: <HoodieArt /> },
-  { rank: "#3", name: "Hat", detail: "Dad hat, snapback or trucker", art: <HatArt /> },
-  { rank: "#4", name: "Tote Bag", detail: "Everyday carry", art: <ToteArt /> },
-  { rank: "#5", name: "Mug or Tumbler", detail: "Ceramic mug or steel tumbler", art: <DrinkArt /> },
+// The five merch items fans buy most, in order. Shown as "coming soon" tiles
+// until Pro artists have listed products.
+const TOP_FIVE: { rank: string; key: MerchProductKey; detail: string }[] = [
+  { rank: "#1 Best seller", key: "tee", detail: "Soft, everyday fit" },
+  { rank: "#2 Top earner", key: "hoodie", detail: "Heavyweight blend" },
+  { rank: "#3", key: "hat", detail: "Classic dad hat" },
+  { rank: "#4", key: "tote", detail: "Everyday carry" },
+  { rank: "#5", key: "mug", detail: "11 or 15 oz" },
 ];
 
-export default function MerchPage() {
+export default async function MerchPage() {
+  const supabase = createClient();
+
+  const { data: rows } = await supabase
+    .from("merch_products")
+    .select("id, title, product_key, color, design_url, price_cents, created_at, artists!inner ( plan, is_active, profiles ( display_name ) )")
+    .eq("active", true)
+    .eq("artists.plan", "pro")
+    .eq("artists.is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(60);
+
+  const products: MerchCardProduct[] = (rows ?? []).map((r: any) => ({
+    id: r.id,
+    title: r.title,
+    product_key: r.product_key,
+    color: r.color,
+    design_url: r.design_url,
+    price_cents: r.price_cents,
+    artistName: r.artists?.profiles?.display_name ?? null,
+  }));
+
+  const drop = products[0] ?? null;
+
   return (
     <main className="max-w-5xl lg:max-w-6xl xl:max-w-7xl mx-auto px-6 lg:px-8 py-10 flex flex-col gap-12">
-      {/* Drop of the Week */}
+      {/* Drop of the Week: the newest Pro listing */}
       <section
         aria-labelledby="drop-heading"
         className="grid md:grid-cols-2 gap-8 items-center rounded-3xl bg-ink/70 border border-paper/10 p-6 sm:p-10"
       >
         <div className="flex flex-col gap-4">
           <span className="self-start font-mono text-xs tracking-widest uppercase px-3 py-1 rounded-full bg-flame text-ink font-medium">
-            Drop of the week
+            {drop ? "Drop of the week" : "The Fyby Merch Booth"}
           </span>
           <h1 id="drop-heading" className="font-display text-4xl sm:text-5xl font-bold leading-tight">
-            The Fyby Merch Booth
+            {drop ? drop.title : "The Fyby Merch Booth"}
           </h1>
           <p className="text-paper/70 text-lg leading-relaxed max-w-md">
-            Artist merch printed when you order and shipped to your door. Nothing sitting in a box
-            backstage, and every purchase pays the artist directly.
+            {drop?.artistName ? `By ${drop.artistName}. ` : ""}
+            Printed when you order and shipped to your door. Every purchase pays the artist directly.
           </p>
           <div className="flex flex-wrap gap-3 items-center">
-            <span className="inline-flex items-center px-5 py-3 rounded-full border border-flame/60 text-flame font-medium">
-              First drops coming soon
-            </span>
+            {drop ? (
+              <Link
+                href={`/merch/${drop.id}`}
+                className="inline-flex items-center px-6 py-3 rounded-full bg-flame text-ink font-semibold hover:bg-gold transition-colors"
+              >
+                Shop the drop · {formatCents(drop.price_cents)}
+              </Link>
+            ) : (
+              <span className="inline-flex items-center px-5 py-3 rounded-full border border-flame/60 text-flame font-medium">
+                First drops coming soon
+              </span>
+            )}
           </div>
         </div>
         <div className="aspect-square rounded-2xl bg-[#100d16] flex items-center justify-center">
           <div className="w-3/4 h-3/4">
-            <TeeArt />
+            {drop ? (
+              <MerchPreview productKey={drop.product_key as MerchProductKey} color={drop.color} designUrl={drop.design_url} />
+            ) : (
+              <MerchArt productKey="tee" />
+            )}
           </div>
         </div>
       </section>
 
-      {/* Top 5 */}
-      <section aria-labelledby="top-heading" className="flex flex-col gap-6">
-        <div>
-          <h2 id="top-heading" className="font-display text-3xl font-bold">
-            Shop the top 5
-          </h2>
-          <p className="text-paper/70 mt-1">What fans buy most. Every piece printed on demand.</p>
-        </div>
-
-        <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {TOP_FIVE.map((p) => (
-            <li key={p.name} className="rounded-2xl bg-ink/70 border border-paper/10 p-3 flex flex-col gap-3">
-              <div className="aspect-square rounded-xl bg-[#100d16] flex items-center justify-center">
-                <div className="w-4/5 h-4/5">{p.art}</div>
-              </div>
-              <div className="px-1 flex flex-col gap-1">
-                <span className="font-mono text-[11px] tracking-wider uppercase text-flame">{p.rank}</span>
-                <h3 className="font-semibold text-lg leading-tight">{p.name}</h3>
-                <span className="text-paper/60 text-sm">{p.detail}</span>
-              </div>
-              <span className="mt-auto mx-1 mb-1 font-mono text-xs text-paper/50">Coming soon</span>
-            </li>
-          ))}
-        </ul>
-        <p className="text-paper/60 text-sm">Plus stickers, added at checkout.</p>
-      </section>
+      {products.length > 0 ? (
+        <section aria-labelledby="shop-heading" className="flex flex-col gap-6">
+          <div>
+            <h2 id="shop-heading" className="font-display text-3xl font-bold">
+              Shop the Booth
+            </h2>
+            <p className="text-paper/70 mt-1">Every piece printed on demand.</p>
+          </div>
+          <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {products.map((p) => (
+              <MerchProductCard key={p.id} product={p} />
+            ))}
+          </ul>
+        </section>
+      ) : (
+        <section aria-labelledby="top-heading" className="flex flex-col gap-6">
+          <div>
+            <h2 id="top-heading" className="font-display text-3xl font-bold">
+              Shop the top 5
+            </h2>
+            <p className="text-paper/70 mt-1">What fans buy most. Every piece printed on demand.</p>
+          </div>
+          <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            {TOP_FIVE.map((p) => (
+              <li key={p.key} className="rounded-2xl bg-ink/70 border border-paper/10 p-3 flex flex-col gap-3">
+                <div className="aspect-square rounded-xl bg-[#100d16] flex items-center justify-center">
+                  <div className="w-4/5 h-4/5">
+                    <MerchArt productKey={p.key} />
+                  </div>
+                </div>
+                <div className="px-1 flex flex-col gap-1">
+                  <span className="font-mono text-[11px] tracking-wider uppercase text-flame">{p.rank}</span>
+                  <h3 className="font-semibold text-lg leading-tight">{MERCH_CATALOG[p.key].label}</h3>
+                  <span className="text-paper/60 text-sm">{p.detail}</span>
+                </div>
+                <span className="mt-auto mx-1 mb-1 font-mono text-xs text-paper/50">Coming soon</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Fyby Radio tie-in */}
       <section
@@ -121,8 +172,9 @@ export default function MerchPage() {
             Artists: sell merch without carrying a box of shirts
           </h2>
           <p className="text-paper/70 leading-relaxed">
-            Upload a design, see your profit before you publish, and let fans order. Soon you&apos;ll
-            also be able to make a 15-second commercial that plays on Fyby TV with a Shop Now button.
+            Upload a design, see your profit before you publish, and let fans order. Pro artists are
+            featured here in the Booth; every artist can sell from their own page. Soon you&apos;ll
+            also be able to make a 15-second commercial that plays on Fyby TV.
           </p>
         </div>
         <div className="flex flex-wrap gap-3 md:justify-end">
@@ -135,84 +187,13 @@ export default function MerchPage() {
             Make a Commercial · soon
           </span>
           <Link
-            href="/dashboard"
+            href="/dashboard/merch"
             className="px-5 py-3 rounded-full bg-flame text-ink font-semibold hover:bg-gold transition-colors"
           >
-            Go to my dashboard
+            Sell merch
           </Link>
         </div>
       </section>
     </main>
-  );
-}
-
-// Simple product drawings, in the site's colors, until real Printful mockups
-// replace them.
-const SHIRT = "#2b2436";
-const SHADE = "#3a3148";
-const FLAME = "#FF5A36";
-const INK = "#16121A";
-
-function Art({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <svg viewBox="0 0 120 120" className="w-full h-full" role="img" aria-label={label}>
-      {children}
-    </svg>
-  );
-}
-
-function TeeArt() {
-  return (
-    <Art label="T-shirt">
-      <path d="M40 22 28 28 14 44l12 10 8-8v54h52V46l8 8 12-10-14-16-12-6c-4 8-36 8-40 0Z" fill={SHIRT} />
-      <circle cx="60" cy="58" r="13" fill={FLAME} />
-      <path d="M56 52 66 58 56 64Z" fill={INK} />
-    </Art>
-  );
-}
-
-function HoodieArt() {
-  return (
-    <Art label="Hoodie">
-      <path d="M44 20c0-6 32-6 32 0l14 8 16 18-12 10-8-8v56H34V48l-8 8-12-10 16-18Z" fill={SHIRT} />
-      <path d="M46 20c2 14 26 14 28 0" fill="none" stroke={INK} strokeWidth="3" />
-      <path d="M44 78h32v14H44z" fill="none" stroke={INK} strokeWidth="2" />
-      <circle cx="60" cy="58" r="9" fill={FLAME} />
-    </Art>
-  );
-}
-
-function HatArt() {
-  return (
-    <Art label="Hat">
-      <path d="M22 76c0-26 16-40 38-40s38 14 38 40Z" fill={SHIRT} />
-      <path d="M60 76h46c4 0 6 8-2 10H60Z" fill={SHADE} />
-      <path d="M60 36v40" stroke={INK} strokeWidth="2" />
-      <circle cx="44" cy="58" r="8" fill={FLAME} />
-    </Art>
-  );
-}
-
-function ToteArt() {
-  return (
-    <Art label="Tote bag">
-      <path d="M44 46c0-24 32-24 32 0" fill="none" stroke={SHADE} strokeWidth="5" />
-      <rect x="28" y="44" width="64" height="62" rx="4" fill={SHIRT} />
-      <circle cx="60" cy="76" r="14" fill="none" stroke={FLAME} strokeWidth="4" />
-      <circle cx="60" cy="76" r="4" fill={FLAME} />
-    </Art>
-  );
-}
-
-function DrinkArt() {
-  return (
-    <Art label="Mug and tumbler">
-      <path d="M24 50h36v44a6 6 0 0 1-6 6H30a6 6 0 0 1-6-6Z" fill={SHIRT} />
-      <path d="M60 58h6a10 10 0 0 1 0 20h-6" fill="none" stroke={SHIRT} strokeWidth="5" />
-      <circle cx="42" cy="74" r="7" fill={FLAME} />
-      <path d="M74 32h28l-4 70H78Z" fill={SHADE} />
-      <rect x="72" y="26" width="32" height="8" rx="2" fill={SHIRT} />
-      <path d="M94 26 98 12" stroke={FLAME} strokeWidth="3" strokeLinecap="round" />
-    </Art>
   );
 }
