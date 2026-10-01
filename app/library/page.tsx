@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { formatReleaseDate, isPreorder } from "@/lib/preorder";
-import { LICENSE_TIERS, isLicenseTier } from "@/lib/licensing";
+import { licenseTierLabel } from "@/lib/licensing";
 
 export default async function LibraryPage({ searchParams }: { searchParams?: { licensed?: string } }) {
   const supabase = createClient();
@@ -71,7 +71,7 @@ export default async function LibraryPage({ searchParams }: { searchParams?: { l
                 <div className="flex-1">
                   <span className="font-display text-lg block">{license.tracks?.title ?? "Untitled"}</span>
                   <span className="font-mono text-xs text-paper/60">
-                    {isLicenseTier(license.tier) ? LICENSE_TIERS[license.tier].label : license.tier} · for{" "}
+                    {licenseTierLabel(license.tier)} · for{" "}
                     {license.licensee_name}
                     {license.status !== "complete" && <span className="text-rust"> · {license.status}</span>}
                   </span>

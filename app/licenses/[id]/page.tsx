@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { isUuid } from "@/lib/uuid";
-import { LICENSE_TIERS, isLicenseTier, licenseNumber } from "@/lib/licensing";
+import { LICENSE_TIERS, isLicenseTier, licenseNumber, type LicenseTier } from "@/lib/licensing";
 import PrintButton from "./PrintButton";
 
 export const metadata = { title: "License certificate · Fyby" };
@@ -29,7 +29,7 @@ export default async function LicenseCertificatePage({ params }: { params: { id:
 
   if (!license || !isLicenseTier(license.tier)) notFound();
 
-  const tier = LICENSE_TIERS[license.tier];
+  const tier = LICENSE_TIERS[license.tier as LicenseTier];
   const trackTitle = (license as any).tracks?.title ?? "Untitled";
   const artistName = (license as any).artists?.profiles?.display_name ?? "Unknown artist";
   const issued = new Date(license.created_at).toLocaleDateString("en-US", {

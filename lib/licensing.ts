@@ -67,6 +67,11 @@ export function isLicenseTier(value: unknown): value is LicenseTier {
   return typeof value === "string" && Object.prototype.hasOwnProperty.call(LICENSE_TIERS, value);
 }
 
+// Display label for a tier read back from the database (typed loosely there).
+export function licenseTierLabel(value: unknown): string {
+  return isLicenseTier(value) ? LICENSE_TIERS[value as LicenseTier].label : String(value ?? "License");
+}
+
 export type LicensePricing = {
   license_enabled?: boolean | null;
   license_beat_cents?: number | null;
