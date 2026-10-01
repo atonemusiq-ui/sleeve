@@ -1,12 +1,13 @@
 import { stripe } from "@/lib/stripe/server";
 import { transferArtistPayout } from "@/lib/stripe/payouts";
-import { commissionCents, payoutCents, planOf } from "@/lib/plans";
+import { commissionCents, isFybyDay, payoutCents, planOf } from "@/lib/plans";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createNotification } from "@/lib/notifications";
 import { PREMIERE_TIERS, isPremiereTier } from "@/lib/radio";
 import { videoPremiereWindow } from "@/lib/fybyTvServer";
 import { premiereWindow } from "@/lib/radioPremiere";
 import { sendGiftClaimEmail } from "@/lib/email";
+import { LICENSE_TIERS, isLicenseTier } from "@/lib/licensing";
 import { randomUUID } from "crypto";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
@@ -90,7 +91,10 @@ async function payContributorsAndRecordPayouts(
   paymentIntentId: string | null,
   trackId: string,
   purchaseId: string,
-  artistPayoutCents: number
+  artistPayoutCents: number,
+  // Which ledger column purchaseId belongs in: a normal sale's purchases row,
+  // or a license sale's license_purchases row (lib/licensing.ts).
+  ledgerColumn: "purchase_id" | "license_purchase_id" = "purchase_id"
 ): Promise<number> {
   const { data: contributors } = await supabase
     .from("contributors")
@@ -116,7 +120,7 @@ async function payContributorsAndRecordPayouts(
         divertedCents += amountCents;
         const { error: payoutError } = await supabase.from("contributor_payouts").insert({
           contributor_id: contributor.id,
-          purchase_id: purchaseId,
+          [ledgerColumn]: purchaseId,
           amount_owed_cents: amountCents,
           status: "paid",
           paid_at: new Date().toISOString(),
@@ -134,7 +138,7 @@ async function payContributorsAndRecordPayouts(
 
     const { error: payoutError } = await supabase.from("contributor_payouts").insert({
       contributor_id: contributor.id,
-      purchase_id: purchaseId,
+      [ledgerColumn]: purchaseId,
       amount_owed_cents: amountCents,
       status: "owed",
     });
@@ -171,6 +175,51 @@ async function payContributorsAndRecordPayouts(
 // loudly instead -- same call as the transfer paths above, where a failed
 // reversal is real money to reconcile by hand in the Stripe dashboard.
 async function reverseNonPurchasePayouts(supabase: Supabase, paymentIntentId: string) {
+  // License sales (lib/licensing.ts): end the license, claw back the
+  // artist's net transfer, and void or reverse each contributor's share --
+  // the same treatment reverseArtistPayoutsAndVoidContributors gives a
+  // track sale, against the license ledger instead.
+  const { data: licenses } = await supabase
+    .from("license_purchases")
+    .select("id, stripe_transfer_id, artist_net_payout_cents, artist_payout_cents")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .neq("status", "refunded");
+
+  for (const license of licenses ?? []) {
+    const amount = license.artist_net_payout_cents ?? license.artist_payout_cents ?? 0;
+    if (license.stripe_transfer_id && amount > 0) {
+      try {
+        await stripe.transfers.createReversal(license.stripe_transfer_id, { amount });
+      } catch (err: any) {
+        console.error(`Failed to reverse license transfer ${license.stripe_transfer_id}:`, err.message);
+      }
+    }
+
+    await supabase
+      .from("contributor_payouts")
+      .update({ status: "voided" })
+      .eq("license_purchase_id", license.id)
+      .eq("status", "owed");
+
+    const { data: paidShares } = await supabase
+      .from("contributor_payouts")
+      .select("id, stripe_transfer_id")
+      .eq("license_purchase_id", license.id)
+      .eq("status", "paid")
+      .not("stripe_transfer_id", "is", null);
+
+    for (const share of paidShares ?? []) {
+      try {
+        await stripe.transfers.createReversal(share.stripe_transfer_id as string);
+        await supabase.from("contributor_payouts").update({ status: "voided" }).eq("id", share.id);
+      } catch (err: any) {
+        console.error(`Failed to reverse contributor license transfer ${share.stripe_transfer_id}:`, err.message);
+      }
+    }
+
+    await supabase.from("license_purchases").update({ status: "refunded" }).eq("id", license.id);
+  }
+
   const { data: gifts } = await supabase
     .from("gifts")
     .select("id, stripe_transfer_id")
@@ -489,6 +538,127 @@ export async function POST(req: Request) {
     // but unlike them it's a real fan payment that owes the artist money, so
     // it takes the same 20% platform cut and the same Stripe transfer as a
     // track sale rather than staying in the platform's balance.
+    // Beat & sync license sale (app/actions/licensing.ts's
+    // startLicenseCheckout). Like a gift it has no `purchases` row; unlike a
+    // gift it is tied to a track, so the track's contributors are paid their
+    // split of the artist's share exactly as on a normal sale.
+    if (session.metadata?.type === "license") {
+      const m: Record<string, string> = session.metadata ?? {};
+      const licensePaymentIntentId =
+        typeof session.payment_intent === "string" ? session.payment_intent : null;
+      const licenseAmountCents = Number(m.amount_cents);
+      const licenseTier = m.tier;
+
+      if (!m.track_id || !m.artist_id || !m.buyer_id || !isLicenseTier(licenseTier) || !licenseAmountCents) {
+        console.error("License webhook missing expected metadata:", session.metadata);
+        return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
+      }
+
+      const supabase = createServiceRoleClient();
+
+      // Redelivery guard, before any money moves -- same as the gift branch.
+      if (licensePaymentIntentId) {
+        const { data: existingLicense } = await supabase
+          .from("license_purchases")
+          .select("id")
+          .eq("stripe_payment_intent_id", licensePaymentIntentId)
+          .limit(1);
+        if (existingLicense && existingLicense.length > 0) {
+          return NextResponse.json({ received: true, note: "already processed" });
+        }
+      }
+
+      // The split the buyer agreed to was snapshotted at checkout (plan and
+      // Fyby Day), so recompute it from that snapshot rather than the
+      // artist's plan today.
+      const licensePlan = planOf(m.plan);
+      const licenseFybyDay = m.fyby_day === "true";
+      const licensePlatformFeeCents = commissionCents(licenseAmountCents, licensePlan, { fybyDay: licenseFybyDay });
+      const licenseArtistPayoutCents = payoutCents(licenseAmountCents, licensePlan, { fybyDay: licenseFybyDay });
+
+      const { data: insertedLicense, error: licenseError } = await supabase
+        .from("license_purchases")
+        .insert({
+          track_id: m.track_id,
+          artist_id: m.artist_id,
+          buyer_id: m.buyer_id,
+          tier: licenseTier,
+          licensee_name: m.licensee_name || "Unnamed licensee",
+          project_description: m.project_description || null,
+          buyer_email: session.customer_details?.email ?? null,
+          amount_cents: licenseAmountCents,
+          platform_fee_cents: licensePlatformFeeCents,
+          artist_payout_cents: licenseArtistPayoutCents,
+          fyby_day: licenseFybyDay,
+          stripe_payment_intent_id: licensePaymentIntentId,
+        })
+        .select("id")
+        .single();
+
+      if (licenseError) {
+        if ((licenseError as any).code === "23505") {
+          return NextResponse.json({ received: true, note: "already processed" });
+        }
+        console.error("Failed to record license sale:", licenseError.message);
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+
+      const { data: licenseArtist } = await supabase
+        .from("artists")
+        .select("user_id, stripe_account_id")
+        .eq("id", m.artist_id)
+        .single();
+
+      const divertedCents = await payContributorsAndRecordPayouts(
+        supabase,
+        licensePaymentIntentId,
+        m.track_id,
+        insertedLicense.id,
+        licenseArtistPayoutCents,
+        "license_purchase_id"
+      );
+      const licenseArtistNetCents = licenseArtistPayoutCents - divertedCents;
+      let licenseTransferId: string | null = null;
+
+      if (!(licenseArtist as any)?.stripe_account_id) {
+        console.error(
+          `License ${insertedLicense.id} recorded but artist ${m.artist_id} has no connected Stripe account — pay by hand.`
+        );
+      } else if (licensePaymentIntentId && licenseArtistNetCents > 0) {
+        try {
+          const transfer = await transferArtistPayout(
+            licensePaymentIntentId,
+            licenseArtistNetCents,
+            (licenseArtist as any).stripe_account_id,
+            `license_${insertedLicense.id}`
+          );
+          licenseTransferId = transfer.id;
+        } catch (transferError: any) {
+          console.error("Failed to transfer license payout:", transferError.message);
+        }
+      }
+
+      await supabase
+        .from("license_purchases")
+        .update({ artist_net_payout_cents: licenseArtistNetCents, stripe_transfer_id: licenseTransferId })
+        .eq("id", insertedLicense.id);
+
+      const licenseArtistUserId = (licenseArtist as any)?.user_id ?? null;
+      if (licenseArtistUserId) {
+        await createNotification(supabase, {
+          userId: licenseArtistUserId,
+          type: "license",
+          title: "You sold a license!",
+          body: `${LICENSE_TIERS[licenseTier].label} to ${m.licensee_name || "a buyer"} — $${(
+            licenseArtistPayoutCents / 100
+          ).toFixed(2)} to you${licenseFybyDay ? " (Fyby Day: 0% commission)" : ""}.`,
+          link: `/licenses/${insertedLicense.id}`,
+        });
+      }
+
+      return NextResponse.json({ received: true });
+    }
+
     if (session.metadata?.type === "gift") {
       const giftArtistId = session.metadata?.artist_id ?? null;
       const giftFanId = session.metadata?.fan_id ?? null;
@@ -532,8 +702,11 @@ export async function POST(req: Request) {
       // its own rate. Looked up live rather than snapshotted at checkout
       // because, unlike an album, the split is computed once and only here.
       const giftPlan = planOf((giftArtist as any)?.plan);
-      const giftPlatformFeeCents = commissionCents(giftAmountCents, giftPlan);
-      const giftArtistPayoutCents = payoutCents(giftAmountCents, giftPlan);
+      // Fyby Day is judged by when the fan opened checkout (session.created),
+      // not when this event happened to arrive.
+      const giftFybyDay = isFybyDay(new Date(session.created * 1000));
+      const giftPlatformFeeCents = commissionCents(giftAmountCents, giftPlan, { fybyDay: giftFybyDay });
+      const giftArtistPayoutCents = payoutCents(giftAmountCents, giftPlan, { fybyDay: giftFybyDay });
 
       const { data: insertedGift, error: giftError } = await supabase
         .from("gifts")
@@ -688,8 +861,9 @@ export async function POST(req: Request) {
 
       const rows = trackIds.map((id, i) => {
         const rowAmountCents = amountShares[i];
-        const rowPlatformFeeCents = commissionCents(rowAmountCents, purchasePlan);
-        const rowArtistPayoutCents = payoutCents(rowAmountCents, purchasePlan);
+        const rowFybyDay = session.metadata?.fyby_day === "true";
+        const rowPlatformFeeCents = commissionCents(rowAmountCents, purchasePlan, { fybyDay: rowFybyDay });
+        const rowArtistPayoutCents = payoutCents(rowAmountCents, purchasePlan, { fybyDay: rowFybyDay });
         return {
           track_id: id,
           album_id: albumId,
@@ -1037,6 +1211,14 @@ export async function POST(req: Request) {
     }
 
     const supabase = createServiceRoleClient();
+
+    // A disputed license sale is suspended the same way (lib/licensing.ts).
+    await supabase
+      .from("license_purchases")
+      .update({ status: "disputed" })
+      .eq("stripe_payment_intent_id", paymentIntentId)
+      .eq("status", "complete");
+
     const { data: disputed } = await supabase
       .from("purchases")
       .update({ status: "disputed" })
@@ -1079,6 +1261,11 @@ export async function POST(req: Request) {
     const supabase = createServiceRoleClient();
 
     if (dispute.status === "won") {
+      await supabase
+        .from("license_purchases")
+        .update({ status: "complete" })
+        .eq("stripe_payment_intent_id", paymentIntentId)
+        .eq("status", "disputed");
       await supabase
         .from("purchases")
         .update({ status: "complete" })

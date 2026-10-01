@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { aiDisclosureBadge, isAiMusic, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 import { verificationBadgeLabel } from "@/lib/verification";
+import { formatReleaseDate, isPreorder } from "@/lib/preorder";
 
 type Track = {
   id: string;
@@ -21,6 +22,8 @@ type Track = {
   // Self-declared at upload (UploadForm.tsx) — shown as a plain badge so a
   // listener knows before they hit play, not gated behind anything else.
   explicit?: boolean | null;
+  // Pre-order release date (lib/preorder.ts); absent/null = already out.
+  release_at?: string | null;
   artists: {
     id: string;
     profiles: { display_name: string } | null;
@@ -276,6 +279,11 @@ function TrackTile({
           )}
         </div>
         <h3 className="font-display text-xl">{track.title}</h3>
+        {isPreorder(track.release_at) && (
+          <p className="font-mono text-xs text-flame mt-1">
+            Pre-order · Out {formatReleaseDate(track.release_at as string)}
+          </p>
+        )}
         {track.artists?.id ? (
           <Link
             href={`/artists/${track.artists.id}`}
@@ -343,7 +351,13 @@ function TrackTile({
                 type="submit"
                 className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
               >
-                {isLoggedIn ? "Buy this song" : "Log in to buy"}
+                {isPreorder(track.release_at)
+                  ? isLoggedIn
+                    ? "Pre-order"
+                    : "Log in to pre-order"
+                  : isLoggedIn
+                  ? "Buy this song"
+                  : "Log in to buy"}
               </button>
             </form>
           </div>

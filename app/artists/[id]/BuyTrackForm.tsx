@@ -17,10 +17,14 @@ export default function BuyTrackForm({
   trackId,
   isLoggedIn,
   referredByFanId,
+  isPreorder = false,
 }: {
   trackId: string;
   isLoggedIn: boolean;
   referredByFanId?: string | null;
+  // Sold before its release date (lib/preorder.ts) -- same checkout, the
+  // button just says what the fan is getting.
+  isPreorder?: boolean;
 }) {
   const [isGift, setIsGift] = useState(false);
 
@@ -65,7 +69,15 @@ export default function BuyTrackForm({
         type="submit"
         className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
       >
-        {!isLoggedIn ? "Log in to buy" : isGift ? "Send as a gift" : "Buy"}
+        {!isLoggedIn
+          ? isPreorder
+            ? "Log in to pre-order"
+            : "Log in to buy"
+          : isGift
+          ? "Send as a gift"
+          : isPreorder
+          ? "Pre-order"
+          : "Buy"}
       </button>
     </form>
   );

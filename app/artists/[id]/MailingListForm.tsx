@@ -3,7 +3,16 @@
 import { useState } from "react";
 import { joinMailingList } from "@/app/actions/artistHub";
 
-export default function MailingListForm({ artistId, artistName }: { artistId: string; artistName: string }) {
+export default function MailingListForm({
+  artistId,
+  artistName,
+  defaultEmail = "",
+}: {
+  artistId: string;
+  artistName: string;
+  // Pre-filled after a purchase (app/success/page.tsx) with the checkout email.
+  defaultEmail?: string;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
@@ -37,6 +46,7 @@ export default function MailingListForm({ artistId, artistName }: { artistId: st
         type="email"
         name="fanEmail"
         required
+        defaultValue={defaultEmail}
         placeholder="your@email.com"
         className="flex-1 bg-paper/5 border border-paper/20 rounded px-3 py-1.5 text-paper font-mono text-xs"
       />

@@ -37,6 +37,7 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
   const [suggestGenreMessage, setSuggestGenreMessage] = useState<string | null>(null);
   const [aiDisclosure, setAiDisclosure] = useState<AiDisclosureLevel>("human");
   const [explicit, setExplicit] = useState(false);
+  const [releaseDate, setReleaseDate] = useState("");
   const [radioOptIn, setRadioOptIn] = useState(false);
   const [mood, setMood] = useState("");
   const [rightsAttested, setRightsAttested] = useState(false);
@@ -217,6 +218,7 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
         radioOptIn: radioOptIn && !RADIO_EXCLUDED_GENRES.includes(genre),
         mood: mood || null,
             lyrics: lyrics.trim() || null,
+        releaseDate: releaseDate || null,
       });
 
       if (result.status === "error") {
@@ -237,6 +239,7 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
           setLyrics("");
       setAiDisclosure("human");
       setExplicit(false);
+      setReleaseDate("");
       setRadioOptIn(false);
       setMood("");
       setRightsAttested(false);
@@ -414,6 +417,25 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
           and anywhere else this track is listed, so listeners know before they hit play.
         </span>
       </label>
+
+      {/* Pre-orders (lib/preorder.ts): fans can buy now, the full song
+          unlocks in their library on the release date. */}
+      <div className="border border-paper/15 rounded-lg px-3 py-3">
+        <label className="block font-mono text-xs text-paper/60 mb-1">
+          Release date (optional — set a future date to sell this as a pre-order)
+        </label>
+        <input
+          type="date"
+          value={releaseDate}
+          onChange={(e) => setReleaseDate(e.target.value)}
+          className="w-full bg-ink border border-paper/20 rounded px-3 py-2 text-paper font-mono text-sm [color-scheme:dark]"
+        />
+        <p className="font-mono text-xs text-paper/50 mt-1.5">
+          {releaseDate
+            ? "Fans can pre-order now. The full song unlocks for every buyer at 12am Pacific on this date, and stays off Fyby Radio until then."
+            : "Leave blank to release right away."}
+        </p>
+      </div>
 
       {/* Phase 10: Fyby Radio consent + mood (see lib/radio.ts). Covers are
           never offered for radio -- the songwriter's license isn't the

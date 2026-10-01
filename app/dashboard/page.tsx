@@ -182,6 +182,9 @@ export default async function DashboardPage() {
                                       ? "Artist plan -- 10% commission on every sale."
                                       : "Free plan -- 15% commission on every sale. Upgrade to lower it."}
                     </p>
+                    <p className="font-mono text-xs text-flame/80 mt-1">
+                      Every plan: 0% commission on Fyby Day, the first Friday of every month.
+                    </p>
         </div>
                       <span className="font-mono text-xs text-gold flex-shrink-0">Manage &rarr;</span>
             </Link>

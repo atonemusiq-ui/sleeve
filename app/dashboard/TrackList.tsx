@@ -11,6 +11,8 @@ import { AI_DISCLOSURE_LEVELS, aiDisclosureBadge, type AiDisclosureLevel } from 
 import { startVerificationCheckout } from "@/app/actions/verification";
 import { VERIFICATION_FEE_CENTS, verificationBadgeLabel } from "@/lib/verification";
 import ContributorManager, { type Contributor } from "./ContributorManager";
+import LicenseSettings from "./LicenseSettings";
+import { formatReleaseDate, isPreorder } from "@/lib/preorder";
 
 // Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
 // app/actions/tracks.ts, which is what actually enforces this server-side.
@@ -38,6 +40,13 @@ type Track = {
   frozen_reason?: string | null;
   // Phase 10: Fyby Radio consent and mood (lib/radio.ts).
   radio_opt_in?: boolean | null;
+  // Pre-order release date (lib/preorder.ts); null = already released.
+  release_at?: string | null;
+  // Beat & sync licensing (lib/licensing.ts).
+  license_enabled?: boolean | null;
+  license_beat_cents?: number | null;
+  license_standard_cents?: number | null;
+  license_commercial_cents?: number | null;
   mood?: string | null;
 };
 
@@ -403,7 +412,14 @@ function TrackRow({
             </div>
           )}
         </div>
-        <span className="font-display text-lg flex-1">{track.title}</span>
+        <span className="font-display text-lg flex-1">
+          {track.title}
+          {isPreorder(track.release_at) && (
+            <span className="block font-mono text-xs text-flame mt-0.5">
+              Pre-order · unlocks for buyers {formatReleaseDate(track.release_at as string)}
+            </span>
+          )}
+        </span>
         <span className="font-mono text-forest">${(track.price_cents / 100).toFixed(2)}</span>
         <div className="flex gap-2">
           <button
@@ -624,6 +640,20 @@ function TrackRow({
             </form>
           )}
         </div>
+      )}
+
+      {/* Beat & sync licensing (lib/licensing.ts). Never offered for covers --
+          the song isn't the cover artist's to license. */}
+      {track.genre !== COVERS_GENRE && (
+        <LicenseSettings
+          trackId={track.id}
+          enabled={Boolean(track.license_enabled)}
+          prices={{
+            beat: track.license_beat_cents ?? null,
+            standard: track.license_standard_cents ?? null,
+            commercial: track.license_commercial_cents ?? null,
+          }}
+        />
       )}
 
       <ContributorManager trackId={track.id} contributors={contributors} />

@@ -1298,3 +1298,66 @@ drop policy if exists "artists can read their own fyby tv premieres" on fyby_tv_
 create policy "artists can read their own fyby tv premieres"
   on fyby_tv_videos for select
   using (artist_id in (select id from artists where user_id = auth.uid()));
+-- ============================================================================
+-- Pre-orders (lib/preorder.ts): a track published with a future release_at
+-- can be bought straight away, but its full audio stays locked
+-- (app/api/stream/[trackId]) and it stays off Fyby Radio
+-- (lib/radioCatalog.ts) until that moment. Null = released.
+-- ============================================================================
+alter table tracks add column if not exists release_at timestamptz;
+
+-- ============================================================================
+-- Beat & sync licensing (lib/licensing.ts). Per-track opt-in plus a price
+-- per tier; a null price means that tier isn't offered. Non-exclusive only.
+-- ============================================================================
+alter table tracks add column if not exists license_enabled boolean not null default false;
+alter table tracks add column if not exists license_beat_cents integer
+  check (license_beat_cents is null or license_beat_cents > 0);
+alter table tracks add column if not exists license_standard_cents integer
+  check (license_standard_cents is null or license_standard_cents > 0);
+alter table tracks add column if not exists license_commercial_cents integer
+  check (license_commercial_cents is null or license_commercial_cents > 0);
+
+-- One row per license sold, written by the "license" branch of
+-- app/api/webhooks/stripe/route.ts once Stripe confirms payment. Mirrors the
+-- money columns on purchases; the unique payment intent is what makes a
+-- redelivered webhook safe. Rows are only ever written by the service role.
+create table if not exists license_purchases (
+  id uuid primary key default gen_random_uuid(),
+  track_id uuid not null references tracks(id) on delete restrict,
+  artist_id uuid not null references artists(id) on delete restrict,
+  buyer_id uuid not null references profiles(id) on delete restrict,
+  tier text not null check (tier in ('beat', 'standard', 'commercial')),
+  licensee_name text not null,
+  project_description text,
+  buyer_email text,
+  amount_cents integer not null,
+  platform_fee_cents integer not null,
+  artist_payout_cents integer not null,
+  artist_net_payout_cents integer,
+  fyby_day boolean not null default false,
+  stripe_payment_intent_id text unique,
+  stripe_transfer_id text,
+  status text not null default 'complete' check (status in ('complete', 'disputed', 'refunded')),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists license_purchases_buyer_idx on license_purchases (buyer_id);
+create index if not exists license_purchases_artist_idx on license_purchases (artist_id);
+
+alter table license_purchases enable row level security;
+
+drop policy if exists "buyers can view their own licenses" on license_purchases;
+create policy "buyers can view their own licenses"
+  on license_purchases for select
+  using (buyer_id = auth.uid());
+
+drop policy if exists "artists can view licenses sold for their tracks" on license_purchases;
+create policy "artists can view licenses sold for their tracks"
+  on license_purchases for select
+  using (artist_id in (select id from artists where user_id = auth.uid()));
+
+-- Contributor royalties on a license sale use the same ledger as track
+-- sales; a row points at exactly one of purchase_id or license_purchase_id.
+alter table contributor_payouts add column if not exists license_purchase_id uuid
+  references license_purchases(id) on delete set null;

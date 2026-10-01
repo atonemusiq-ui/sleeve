@@ -14,6 +14,9 @@ import SuperFanSection from "@/app/SuperFanSection";
 import LyricsCreditsDialog from "@/app/LyricsCreditsDialog";
 import MailingListForm from "./MailingListForm";
 import BuyTrackForm from "./BuyTrackForm";
+import { formatReleaseDate, isPreorder } from "@/lib/preorder";
+import { offeredTiers } from "@/lib/licensing";
+import { COVERS_GENRE } from "@/lib/genres";
 import FanReferralLink from "./FanReferralLink";
 import FollowButton from "./FollowButton";
 
@@ -87,7 +90,7 @@ export default async function ArtistPage({
   const { data: tracks } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, cover_url, preview_url, created_at, genre, custom_tag, ai_disclosure, explicit, lyrics"
+      "id, title, price_cents, cover_url, preview_url, created_at, genre, custom_tag, ai_disclosure, explicit, lyrics, release_at, license_enabled, license_beat_cents, license_standard_cents, license_commercial_cents"
     )
     // A frozen track (app/admin/moderation/page.tsx's freezeTrack) is hidden
     // here for everyone, owner included — the artist already sees why in
@@ -343,6 +346,11 @@ export default async function ArtistPage({
                   )}
                 </div>
                 <h2 className="font-display text-xl">{track.title}</h2>
+                {isPreorder((track as any).release_at) && (
+                  <p className="font-mono text-xs text-flame mt-1">
+                    Pre-order · Out {formatReleaseDate((track as any).release_at)}
+                  </p>
+                )}
                 {(track.genre ||
                   track.custom_tag ||
                   aiDisclosureBadge(track.ai_disclosure) ||
@@ -400,10 +408,25 @@ export default async function ArtistPage({
                       trackId={track.id}
                       isLoggedIn={Boolean(user)}
                       referredByFanId={referredByFanId}
+                      isPreorder={isPreorder((track as any).release_at)}
                     />
                   </>
                 )}
               </div>
+              {/* Beat & sync licensing (lib/licensing.ts): shown only when the
+                  artist offers at least one tier and the song is out. */}
+              {(artist as any).is_active &&
+                track.genre !== COVERS_GENRE &&
+                !isPreorder((track as any).release_at) &&
+                offeredTiers(track as any).length > 0 && (
+                  <Link
+                    href={`/license/${track.id}`}
+                    className="mt-3 font-mono text-xs text-gold hover:underline self-end"
+                  >
+                    💼 License this song · from $
+                    {(Math.min(...offeredTiers(track as any).map((o) => o.priceCents)) / 100).toFixed(0)}
+                  </Link>
+                )}
             </div>
           ))}
         </div>

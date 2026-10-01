@@ -12,6 +12,7 @@ import {
   isPremiereTier,
 } from "@/lib/radio";
 import { premiereWindow } from "@/lib/radioPremiere";
+import { formatReleaseDate, isPreorder } from "@/lib/preorder";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -57,7 +58,7 @@ export async function startRadioPremiere(formData: FormData) {
 
   const { data: track } = await supabase
     .from("tracks")
-    .select("id, title, genre, frozen, radio_opt_in, artist_id, artists ( id, user_id, plan )")
+    .select("id, title, genre, frozen, radio_opt_in, release_at, artist_id, artists ( id, user_id, plan )")
     .eq("id", trackId)
     .maybeSingle();
   const artist = track ? ((Array.isArray(track.artists) ? track.artists[0] : track.artists) as any) : null;
@@ -65,6 +66,15 @@ export async function startRadioPremiere(formData: FormData) {
     throw new Error("That track doesn't belong to your account.");
   }
   if (track.frozen) throw new Error("This track was removed by an admin and can't be premiered.");
+  // Radio skips a pre-order until it's released (lib/radioCatalog.ts), so a
+  // premiere bought now would pay for airtime the song can't get.
+  if (isPreorder((track as any).release_at)) {
+    throw new Error(
+      `This song is a pre-order. Premiere it on Fyby Radio on or after its release date (${formatReleaseDate(
+        (track as any).release_at
+      )}).`
+    );
+  }
   if (RADIO_EXCLUDED_GENRES.includes(track.genre ?? "")) throw new Error("Covers can't play on Fyby Radio.");
 
   if (!track.radio_opt_in) {

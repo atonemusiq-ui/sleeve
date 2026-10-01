@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/server";
-import { commissionCents, payoutCents, planOf } from "@/lib/plans";
+import { commissionCents, isFybyDay, payoutCents, planOf } from "@/lib/plans";
 import { trackNeedsCoverCredit } from "@/lib/coverCompliance";
 import { createTrackCheckoutSession } from "@/lib/checkoutSession";
 import { isUuid } from "@/lib/uuid";
@@ -157,8 +157,9 @@ export async function startAlbumCheckout(formData: FormData) {
   // plan sets the cut, and it is snapshotted into metadata so the per-track
   // split the webhook writes uses the same rate this total was built from.
   const plan = planOf((album as any).artists?.plan);
-  const platformFeeCents = commissionCents(amountCents, plan);
-  const artistPayoutCents = payoutCents(amountCents, plan);
+  const fybyDay = isFybyDay();
+  const platformFeeCents = commissionCents(amountCents, plan, { fybyDay });
+  const artistPayoutCents = payoutCents(amountCents, plan, { fybyDay });
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -194,6 +195,7 @@ export async function startAlbumCheckout(formData: FormData) {
       platform_fee_cents: String(platformFeeCents),
       artist_payout_cents: String(artistPayoutCents),
       plan,
+      ...(fybyDay ? { fyby_day: "true" } : {}),
     },
   });
 

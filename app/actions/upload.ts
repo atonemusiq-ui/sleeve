@@ -8,6 +8,7 @@ import { isValidGenre, isValidSubgenre, MAX_CUSTOM_TAG_LENGTH } from "@/lib/genr
 import { isAiDisclosureLevel, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 import { DEFAULT_TRACK_COVER_URL } from "@/lib/defaultCover";
 import { isValidMood } from "@/lib/radio";
+import { releaseAtFromDateInput } from "@/lib/preorder";
 import { revalidatePath } from "next/cache";
 
 export type PublishTrackInput = {
@@ -29,6 +30,9 @@ export type PublishTrackInput = {
   // Phase 10: Fyby Radio consent and optional mood tag (lib/radio.ts).
   radioOptIn: boolean;
   mood: string | null;
+  // Optional pre-order release date ("YYYY-MM-DD" from a date input; see
+  // lib/preorder.ts). Blank/omitted = released immediately.
+  releaseDate?: string | null;
 };
 
 export type PublishTrackResult =
@@ -121,6 +125,11 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
     return { status: "error", message: "That's not a recognized mood." };
   }
 
+  const release = releaseAtFromDateInput(input.releaseDate);
+  if (release.error) {
+    return { status: "error", message: release.error };
+  }
+
   const match = await findDuplicateTrack(admin, input.fingerprint);
   if (match) {
     await admin.from("flagged_uploads").insert({
@@ -155,6 +164,9 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
     radio_opt_in: Boolean(input.radioOptIn),
     radio_opted_in_at: input.radioOptIn ? new Date().toISOString() : null,
     mood: input.mood || null,
+    // Only written for a pre-order, so a normal upload's insert is exactly
+    // what it was before this column existed.
+    ...(release.releaseAt ? { release_at: release.releaseAt } : {}),
   });
 
   if (error) {

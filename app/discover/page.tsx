@@ -22,7 +22,7 @@ export default async function DiscoverPage() {
   const { data: tracks } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, created_at, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, explicit, artists!inner ( id, is_active, profiles ( display_name ) )"
+      "id, title, price_cents, created_at, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, explicit, release_at, artists!inner ( id, is_active, profiles ( display_name ) )"
     )
     .eq("artists.is_active", true)
     .eq("frozen", false)

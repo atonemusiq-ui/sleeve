@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/server";
-import { commissionCents, payoutCents, planOf } from "@/lib/plans";
+import { commissionCents, isFybyDay, payoutCents, planOf } from "@/lib/plans";
 import { trackNeedsCoverCredit } from "@/lib/coverCompliance";
 
 export type CheckoutSessionResult = { url: string } | { error: string };
@@ -78,8 +78,11 @@ export async function createTrackCheckoutSession(
   // the session metadata below so the webhook records the split the fan
   // actually agreed to, even if the artist changes plan before it arrives.
   const plan = planOf((track as any).artists?.plan);
-  const platformFeeCents = commissionCents(amountCents, plan);
-  const artistPayoutCents = payoutCents(amountCents, plan);
+  // Fyby Day (lib/plans.ts): 0% cut, decided now -- at checkout -- and
+  // snapshotted below, so a fan who pays at 11:59pm still gets the day's deal.
+  const fybyDay = isFybyDay();
+  const platformFeeCents = commissionCents(amountCents, plan, { fybyDay });
+  const artistPayoutCents = payoutCents(amountCents, plan, { fybyDay });
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -126,6 +129,7 @@ export async function createTrackCheckoutSession(
       platform_fee_cents: String(platformFeeCents),
       artist_payout_cents: String(artistPayoutCents),
       plan,
+      ...(fybyDay ? { fyby_day: "true" } : {}),
       ...(opts?.giftRecipientEmail
         ? { is_gift: "true", gift_recipient_email: opts.giftRecipientEmail }
         : {}),

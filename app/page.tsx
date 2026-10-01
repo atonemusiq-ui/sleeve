@@ -26,7 +26,7 @@ export default async function StorefrontPage() {
   const { data: tracks, error } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, created_at, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, explicit, verification_status, artists!inner ( id, bio, user_id, profiles ( display_name ) )"
+      "id, title, price_cents, created_at, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, explicit, verification_status, release_at, artists!inner ( id, bio, user_id, profiles ( display_name ) )"
     )
     .eq("artists.is_active", true)
     // A frozen track (app/admin/moderation/page.tsx's freezeTrack) is pulled

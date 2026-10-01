@@ -4,6 +4,8 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { formatPresentmentAmount } from "@/lib/currency";
 import ShareReceiptSection from "./ShareReceiptSection";
 import Link from "next/link";
+import MailingListForm from "@/app/artists/[id]/MailingListForm";
+import { formatReleaseDate, isPreorder } from "@/lib/preorder";
 
 // One hour is plenty for a single sitting (stream + download), and keeps
 // the signed URL from being usable long after the buyer's browser tab is
@@ -26,7 +28,7 @@ function ErrorState({ message }: { message: string }) {
   );
 }
 
-type TrackAudio = { id: string; title: string; downloadUrl: string | null };
+type TrackAudio = { id: string; title: string; downloadUrl: string | null; releaseAt: string | null };
 
 // Shared by both the single-track and album paths below — mints a signed
 // download URL for the private "track-audio" bucket, or falls back to a
@@ -168,7 +170,7 @@ export default async function SuccessPage({
 
     const { data: albumTrackRows } = await admin
       .from("album_tracks")
-      .select("track_order, tracks ( id, title, audio_path, audio_url )")
+      .select("track_order, tracks ( id, title, audio_path, audio_url, release_at )")
       .eq("album_id", albumId)
       .order("track_order", { ascending: true });
 
@@ -178,7 +180,10 @@ export default async function SuccessPage({
         return {
           id: track?.id,
           title: track?.title ?? "Untitled",
-          downloadUrl: track ? await resolveDownloadUrl(admin, track) : null,
+          // A pre-order track (lib/preorder.ts) stays locked until release --
+          // no file link here; it unlocks in the buyer's library instead.
+          releaseAt: isPreorder(track?.release_at) ? track.release_at : null,
+          downloadUrl: track && !isPreorder(track.release_at) ? await resolveDownloadUrl(admin, track) : null,
         };
       })
     );
@@ -214,7 +219,11 @@ export default async function SuccessPage({
               className="border border-paper/15 rounded-lg p-4 flex flex-col items-center gap-3 bg-paper/5"
             >
               <span className="font-display text-base">{track.title}</span>
-              {track.downloadUrl ? (
+              {track.releaseAt ? (
+                <p className="font-mono text-xs text-flame">
+                  Pre-ordered — unlocks in your library on {formatReleaseDate(track.releaseAt)}.
+                </p>
+              ) : track.downloadUrl ? (
                 <>
                   <audio controls src={track.downloadUrl} className="w-full h-10" />
                   <a
@@ -252,7 +261,7 @@ export default async function SuccessPage({
 
   const { data: track } = await admin
     .from("tracks")
-    .select("id, title, audio_path, audio_url, cover_url, artists ( id, profiles ( display_name ) )")
+    .select("id, title, audio_path, audio_url, cover_url, release_at, artists ( id, mailing_list_enabled, profiles ( display_name ) )")
     .eq("id", trackId)
     .single();
 
@@ -269,7 +278,9 @@ export default async function SuccessPage({
   // See the is_gift branch in app/api/webhooks/stripe/route.ts.
   const isGift = session.metadata?.is_gift === "true";
   const giftRecipientEmail = session.metadata?.gift_recipient_email ?? null;
-  const downloadUrl = isGift ? null : await resolveDownloadUrl(admin, track);
+  const preorderReleaseAt = isPreorder((track as any).release_at) ? ((track as any).release_at as string) : null;
+  const downloadUrl = isGift || preorderReleaseAt ? null : await resolveDownloadUrl(admin, track);
+  const mailingListOpen = (track as any).artists?.mailing_list_enabled !== false;
 
   // Best-effort lookup for the shareable receipt image (app/receipt/
   // [purchaseId]/route.tsx) — the webhook that inserts this purchase row can
@@ -322,6 +333,16 @@ export default async function SuccessPage({
             keep.
           </p>
         </div>
+      ) : preorderReleaseAt ? (
+        <div className="border border-flame/40 rounded-lg p-6 mb-10 bg-flame/5">
+          <p className="text-paper/80">
+            You&apos;re pre-ordered! The full song unlocks in{" "}
+            <Link href="/library" className="text-gold underline">
+              My Music
+            </Link>{" "}
+            on {formatReleaseDate(preorderReleaseAt)}.
+          </p>
+        </div>
       ) : downloadUrl ? (
         <div className="border border-paper/15 rounded-lg p-6 mb-10 flex flex-col items-center gap-4 bg-paper/5">
           <audio controls src={downloadUrl} className="w-full h-10" />
@@ -345,6 +366,19 @@ export default async function SuccessPage({
 
       {purchaseId && (
         <ShareReceiptSection purchaseId={purchaseId} siteUrl={siteUrl} artistId={artistId} />
+      )}
+
+      {/* Fan list: the moment right after buying is when a fan most wants to
+          hear what's next, so offer the artist's mailing list here, with the
+          checkout email filled in. Opt-in only -- nothing is added unless the
+          fan clicks Join. */}
+      {artistId && mailingListOpen && !isGift && (
+        <div className="border border-paper/15 rounded-lg p-5 mb-10 bg-paper/5 text-left">
+          <p className="font-mono text-xs text-paper/70 mb-3">
+            Hear first when {artistName} drops something new:
+          </p>
+          <MailingListForm artistId={artistId} artistName={artistName} defaultEmail={buyerEmail ?? ""} />
+        </div>
       )}
 
       {!user && <AccountPrompt buyerEmail={buyerEmail} />}

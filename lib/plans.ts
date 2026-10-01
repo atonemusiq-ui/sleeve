@@ -55,15 +55,28 @@ export function planOf(value: unknown): Plan {
 // cent as the `Math.round(amountCents * 0.2)` it replaced, for every integer
 // amount from $0 to $50,000 — checked exhaustively before the swap, so moving
 // onto this function changed no existing payout.
-export function commissionCents(amountCents: number, plan: Plan): number {
+export function commissionCents(
+  amountCents: number,
+  plan: Plan,
+  opts?: { fybyDay?: boolean }
+): number {
+  // Fyby Day (see isFybyDay below): Fyby waives its cut entirely, so the
+  // artist's payout is the whole sale. Opt-in per call site rather than read
+  // from the clock in here, so the webhook can honour the day the fan
+  // actually checked out on even when the event arrives after midnight.
+  if (opts?.fybyDay) return 0;
   return Math.round((amountCents * PLANS[plan].rateBps) / 10000);
 }
 
 // What the artist is owed from one sale. Always the remainder of the amount
 // rather than its own rounded percentage, so the two halves can never fail to
 // sum back to exactly what the fan paid.
-export function payoutCents(amountCents: number, plan: Plan): number {
-  return amountCents - commissionCents(amountCents, plan);
+export function payoutCents(
+  amountCents: number,
+  plan: Plan,
+  opts?: { fybyDay?: boolean }
+): number {
+  return amountCents - commissionCents(amountCents, plan, opts);
 }
 
 // Monthly sales at which a plan starts paying for itself against Free, in
@@ -77,4 +90,65 @@ export function breakEvenCentsPerMonth(plan: Plan): number | null {
   if (priceCents <= 0 || saved <= 0) return null;
 
   return Math.ceil((priceCents * 10000) / saved);
+}
+
+// ---------------------------------------------------------------------------
+// Fyby Day: on the first Friday of every month Fyby takes 0% of one-time fan
+// payments (track, album, gift and license sales). Super Fan subscriptions
+// keep their normal cut -- they're recurring, so a monthly "day" doesn't map
+// onto them. Fyby still pays Stripe's processing fee on those sales, so the
+// day costs the platform roughly 3% of that day's sales; that's the price of
+// the promotion.
+//
+// Judged in Pacific time (Fyby's home time zone) so "Friday" means the same
+// day for every artist promoting it, wherever the server happens to run.
+const FYBY_DAY_TZ = "America/Los_Angeles";
+
+function pacificParts(at: Date): { year: number; month: number; day: number; weekday: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: FYBY_DAY_TZ,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+  }).formatToParts(at);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return {
+    year: Number(get("year")),
+    month: Number(get("month")),
+    day: Number(get("day")),
+    weekday: weekdays.indexOf(get("weekday")),
+  };
+}
+
+export function isFybyDay(at: Date = new Date()): boolean {
+  const { day, weekday } = pacificParts(at);
+  // The first Friday always falls on day 1-7 of the month.
+  return weekday === 5 && day <= 7;
+}
+
+// The next Fyby Day on or after `from`, as a "YYYY-MM-DD" Pacific date --
+// used for the "Next Fyby Day" banner. Walks forward a day at a time; the
+// answer is never more than 35 days away.
+export function nextFybyDay(from: Date = new Date()): string {
+  for (let i = 0; i < 40; i++) {
+    const candidate = new Date(from.getTime() + i * 24 * 60 * 60 * 1000);
+    if (isFybyDay(candidate)) {
+      const { year, month, day } = pacificParts(candidate);
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+  }
+  return "";
+}
+
+export function formatFybyDay(isoDate: string): string {
+  if (!isoDate) return "";
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }

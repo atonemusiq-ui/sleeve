@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { NextResponse } from "next/server";
+import { formatReleaseDate, isPreorder } from "@/lib/preorder";
 
 // Short-lived — this route is what a purchaser's player actually points at
 // (see app/library/page.tsx), so a fresh signed URL gets minted on every
@@ -30,19 +31,45 @@ export async function GET(req: Request, { params }: { params: { trackId: string 
     .eq("status", "complete")
     .maybeSingle();
 
+  // A license (lib/licensing.ts) comes with the full-quality file too --
+  // a creator can't sync a song they can't download. RLS ("buyers can view
+  // their own licenses") scopes this to the caller's own rows.
+  let license: { id: string } | null = null;
   if (!purchase) {
+    const { data } = await supabase
+      .from("license_purchases")
+      .select("id")
+      .eq("track_id", params.trackId)
+      .eq("buyer_id", user.id)
+      .eq("status", "complete")
+      .limit(1)
+      .maybeSingle();
+    license = data;
+  }
+
+  if (!purchase && !license) {
     return NextResponse.json({ error: "You haven't purchased this track." }, { status: 403 });
   }
 
   const admin = createServiceRoleClient();
   const { data: track } = await admin
     .from("tracks")
-    .select("audio_path, audio_url")
+    .select("audio_path, audio_url, release_at")
     .eq("id", params.trackId)
     .maybeSingle();
 
   if (!track) {
     return NextResponse.json({ error: "Track not found." }, { status: 404 });
+  }
+
+  // A pre-order (lib/preorder.ts) is paid for but stays locked until its
+  // release date -- this route is the only way to the full audio, so this one
+  // check is what enforces it everywhere (library player and download).
+  if (isPreorder((track as any).release_at)) {
+    return NextResponse.json(
+      { error: `Pre-ordered — this song unlocks on ${formatReleaseDate((track as any).release_at)}.` },
+      { status: 403 }
+    );
   }
 
   if (track.audio_path) {

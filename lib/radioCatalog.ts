@@ -42,6 +42,9 @@ export async function fetchRadioEligibleTracks(): Promise<RadioTrackRow[]> {
     .eq("radio_opt_in", true)
     .eq("frozen", false)
     .eq("artists.is_active", true)
+    // A pre-order (lib/preorder.ts) stays off the air until its release
+    // date -- radio plays the full song, which buyers can't hear yet either.
+    .or(`release_at.is.null,release_at.lte.${new Date().toISOString()}`)
     .order("created_at", { ascending: false })
     .limit(2000);
 

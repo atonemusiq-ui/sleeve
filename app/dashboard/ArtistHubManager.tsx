@@ -205,6 +205,7 @@ export default function ArtistHubManager({
             <p className="font-mono text-xs text-paper/60">
               {fanEmails.length} signup{fanEmails.length === 1 ? "" : "s"} so far
             </p>
+            <div className="flex gap-2">
             <button
               type="button"
               onClick={() => {
@@ -216,6 +217,24 @@ export default function ArtistHubManager({
             >
               {copied ? "Copied!" : "Copy emails"}
             </button>
+            {/* A CSV imports straight into Mailchimp, Kit, Laylo or any
+                other email tool -- the list is the artist's to take. */}
+            <button
+              type="button"
+              onClick={() => {
+                const csv = ["email", ...fanEmails.map((e) => `"${e.replace(/"/g, '""')}"`)].join("\n");
+                const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "fyby-fan-list.csv";
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="font-mono text-xs px-2 py-1 rounded border border-gold/40 text-gold hover:bg-gold/10"
+            >
+              Download CSV
+            </button>
+            </div>
           </div>
           <div className="max-h-32 overflow-y-auto border border-paper/15 rounded p-2">
             {fanEmails.map((email) => (

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import GlobalAudioManager from "./GlobalAudioManager";
 import SiteLogoBar from "./SiteLogoBar";
+import FybyDayBanner from "./FybyDayBanner";
 import RadioProvider from "./RadioProvider";
 
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Fyby Radio (Phase 10) wraps every page so the music keeps playing
             across navigation. Hidden unless NEXT_PUBLIC_RADIO_ENABLED=true. */}
         <RadioProvider>
+          <FybyDayBanner />
           <SiteLogoBar />
           {children}
         </RadioProvider>
