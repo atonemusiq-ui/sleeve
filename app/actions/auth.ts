@@ -14,6 +14,9 @@ export async function signup(formData: FormData) {
   // still ends up back where they were after confirming their email and
   // logging in, instead of just landing on /dashboard.
   const next = formData.get("next") as string | null;
+  // Fans can opt in to verifying their email with a code at signup (the
+  // checkbox on /signup). Artists always do — see verifyEmailCode below.
+  const fanWantsCode = formData.get("verifyEmail") === "on";
 
   const supabase = createClient();
 
@@ -73,7 +76,7 @@ export async function signup(formData: FormData) {
   // immediately instead. This uses the service-role admin API — a trusted,
   // server-only operation — rather than touching the project-wide "confirm
   // email" setting, which would also turn off confirmation for artists.
-  if (role === "fan") {
+  if (role === "fan" && !fanWantsCode) {
     const { error: confirmError } = await admin.auth.admin.updateUserById(data.user.id, {
       email_confirm: true,
     });
@@ -117,15 +120,70 @@ export async function signup(formData: FormData) {
     // one extra step, not a broken signup.
   }
 
-  // Email confirmation is required, so signUp() doesn't return an active
-  // session yet — send them to log in once they've confirmed their email
-  // instead of straight to the dashboard.
-  const nextParam = next ? `&next=${encodeURIComponent(next)}` : "";
-  redirect(
-    `/login?message=${encodeURIComponent(
-      "Check your email to confirm your account, then log in."
-    )}${nextParam}`
-  );
+  // Email confirmation is required, so signUp() didn't return an active
+  // session yet. Two-step signup: the confirmation email Supabase just sent
+  // carries a 6-digit code ({{ .Token }} in the "Confirm signup" template),
+  // and /verify-email takes it and signs them straight in — no need to go
+  // find the link and then log in separately.
+  redirect(verifyEmailUrl(email, next));
+}
+
+function verifyEmailUrl(email: string, next: string | null, extra?: { error?: string; message?: string }) {
+  const params = new URLSearchParams({ email });
+  if (next) params.set("next", next);
+  if (extra?.error) params.set("error", extra.error);
+  if (extra?.message) params.set("message", extra.message);
+  return `/verify-email?${params.toString()}`;
+}
+
+// Second step of signup: check the code from the confirmation email. A
+// successful verifyOtp() both confirms the email and starts a session, so
+// they land in the app already logged in.
+export async function verifyEmailCode(formData: FormData) {
+  const email = ((formData.get("email") as string) ?? "").trim();
+  const token = ((formData.get("code") as string) ?? "").replace(/\s/g, "");
+  const next = formData.get("next") as string | null;
+
+  if (!email) {
+    redirect("/signup");
+  }
+  if (!/^\d{6,10}$/.test(token)) {
+    redirect(verifyEmailUrl(email, next, { error: "Enter the code from your email." }));
+  }
+
+  const supabase = createClient();
+  const { data, error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
+
+  if (error || !data.session) {
+    redirect(
+      verifyEmailUrl(email, next, {
+        error: "That code didn't work — it may have expired. Check the code or send a new one.",
+      })
+    );
+  }
+
+  const role = data.user?.user_metadata?.role;
+  const fallback = role === "artist" ? "/dashboard" : "/";
+  redirect(next && next.startsWith("/") ? next : fallback);
+}
+
+export async function resendEmailCode(formData: FormData) {
+  const email = ((formData.get("email") as string) ?? "").trim();
+  const next = formData.get("next") as string | null;
+
+  if (!email) {
+    redirect("/signup");
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase.auth.resend({ type: "signup", email });
+
+  if (error) {
+    // Most often Supabase's per-email rate limit (one resend per ~60s).
+    redirect(verifyEmailUrl(email, next, { error: error.message }));
+  }
+
+  redirect(verifyEmailUrl(email, next, { message: "New code sent — check your inbox." }));
 }
 
 export async function login(formData: FormData) {
@@ -138,6 +196,16 @@ export async function login(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
+    // Signed up but never entered their code: send a fresh one and take
+    // them to the code screen instead of a dead-end error.
+    if (error.code === "email_not_confirmed" || /not confirmed/i.test(error.message)) {
+      await supabase.auth.resend({ type: "signup", email });
+      return redirect(
+        verifyEmailUrl(email, next, {
+          message: "Your email isn't verified yet — we just sent you a new code.",
+        })
+      );
+    }
     const nextParam = next ? `&next=${encodeURIComponent(next)}` : "";
     return redirect(`/login?error=${encodeURIComponent(error.message)}${nextParam}`);
   }
