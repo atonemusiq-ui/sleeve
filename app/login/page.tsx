@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { login } from "@/app/actions/auth";
 import FybyLogo, { FybyWordmark } from "@/app/FybyLogo";
+import PasswordInput from "@/app/PasswordInput";
 
 export default function LoginPage({
   searchParams,
@@ -43,9 +44,9 @@ export default function LoginPage({
 
         <div>
           <label className="block font-mono text-xs text-paper/60 mb-1">Password</label>
-          <input
+          <PasswordInput
             name="password"
-            type="password"
+            autoComplete="current-password"
             required
             className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper"
           />
