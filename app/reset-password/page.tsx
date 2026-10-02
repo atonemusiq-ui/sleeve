@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import PasswordInput from "@/app/PasswordInput";
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
@@ -50,8 +51,8 @@ export default function ResetPasswordPage() {
 
           <div>
             <label className="block font-mono text-xs text-paper/60 mb-1">New password</label>
-            <input
-              type="password"
+            <PasswordInput
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required

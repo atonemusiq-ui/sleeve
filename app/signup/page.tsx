@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { signup } from "@/app/actions/auth";
 import FybyLogo, { FybyWordmark } from "@/app/FybyLogo";
+import PasswordInput from "@/app/PasswordInput";
 import { isRadioEnabled } from "@/lib/radio";
 
 export default function SignupPage({
@@ -57,9 +58,9 @@ export default function SignupPage({
 
         <div>
           <label className="block font-mono text-xs text-paper/60 mb-1">Password</label>
-          <input
+          <PasswordInput
             name="password"
-            type="password"
+            autoComplete="new-password"
             required
             minLength={6}
             className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper"
