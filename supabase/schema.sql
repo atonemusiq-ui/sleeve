@@ -1473,3 +1473,96 @@ drop policy if exists "merch designs are publicly readable" on storage.objects;
 create policy "merch designs are publicly readable"
   on storage.objects for select
   using (bucket_id = 'merch-designs');
+
+-- ============================================================================
+-- Fyby Connect: anyone with a Fyby account (artist or not) can list the
+-- roles they offer (lib/connectRoles.ts) and be found from the "I'm looking
+-- for a…" search at /connect. Requests between members land in /connect/me.
+-- No money moves here yet; paid jobs come later.
+-- ============================================================================
+create table if not exists connect_profiles (
+  user_id uuid primary key references profiles(id) on delete cascade,
+  headline text,
+  roles text[] not null default '{}',
+  genres text[] not null default '{}',
+  rate_text text,
+  location text,
+  remote boolean not null default true,
+  sample_url text,
+  available boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists connect_profiles_roles_idx on connect_profiles using gin (roles);
+
+alter table connect_profiles enable row level security;
+
+drop policy if exists "available connect profiles are public" on connect_profiles;
+create policy "available connect profiles are public"
+  on connect_profiles for select
+  using (available = true or user_id = auth.uid());
+
+drop policy if exists "users manage their own connect profile" on connect_profiles;
+create policy "users manage their own connect profile"
+  on connect_profiles for all
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+create table if not exists connect_requests (
+  id uuid primary key default gen_random_uuid(),
+  from_user uuid not null references profiles(id) on delete cascade,
+  to_user uuid not null references profiles(id) on delete cascade,
+  role text not null,
+  budget_text text,
+  deadline date,
+  message text not null,
+  contact_email text not null,
+  status text not null default 'new' check (status in ('new', 'accepted', 'declined', 'done')),
+  created_at timestamptz not null default now(),
+  check (from_user <> to_user)
+);
+
+create index if not exists connect_requests_to_idx on connect_requests (to_user, created_at desc);
+create index if not exists connect_requests_from_idx on connect_requests (from_user, created_at desc);
+
+alter table connect_requests enable row level security;
+
+drop policy if exists "members send connect requests as themselves" on connect_requests;
+create policy "members send connect requests as themselves"
+  on connect_requests for insert
+  with check (from_user = auth.uid());
+
+drop policy if exists "both sides read their connect requests" on connect_requests;
+create policy "both sides read their connect requests"
+  on connect_requests for select
+  using (from_user = auth.uid() or to_user = auth.uid());
+
+drop policy if exists "recipients update connect request status" on connect_requests;
+create policy "recipients update connect request status"
+  on connect_requests for update
+  using (to_user = auth.uid())
+  with check (to_user = auth.uid());
+
+-- ============================================================================
+-- Phase 11, the Fyby Engine (first slice): what a member tells Fyby they're
+-- into, plus their choices about personalization. Only the member can read
+-- or change their own row. Recommendations also use purchases, follows and
+-- Connect roles; see lib/engine.ts. birth_year: anyone under 18 is never
+-- shown targeted ads (ads aren't built yet; the rule is set now).
+-- ============================================================================
+create table if not exists user_interests (
+  user_id uuid primary key references profiles(id) on delete cascade,
+  genres text[] not null default '{}',
+  tags text[] not null default '{}',
+  personalized boolean not null default true,
+  birth_year integer check (birth_year between 1900 and 2100),
+  updated_at timestamptz not null default now()
+);
+
+alter table user_interests enable row level security;
+
+drop policy if exists "users manage their own interests" on user_interests;
+create policy "users manage their own interests"
+  on user_interests for all
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());

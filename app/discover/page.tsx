@@ -6,6 +6,7 @@ import { GENRES } from "@/lib/genres";
 import Link from "next/link";
 import DiscoverTabs from "./DiscoverTabs";
 import FybyLogo from "../FybyLogo";
+import { recommendTracks } from "@/lib/engine";
 
 // Phase 9: three ways to browse instead of just one long homepage grid --
 // a plain recency feed (with genre/AI-disclosure filters, same as the
@@ -51,29 +52,11 @@ export default async function DiscoverPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // "For You": tracks by an artist the fan follows (artist_follows) or has
-  // bought from before (purchases -> tracks.artist_id). Two separate small
-  // queries rather than one join so a fan with neither yet just gets two
-  // empty results instead of a query that needs an outer join to not
-  // exclude them.
-  const personalizedArtistIds = new Set<string>();
-  if (user) {
-    const [{ data: followRows }, { data: purchaseRows }] = await Promise.all([
-      supabase.from("artist_follows").select("artist_id").eq("fan_id", user.id),
-      supabase
-        .from("purchases")
-        .select("tracks ( artist_id )")
-        .eq("fan_id", user.id)
-        .eq("status", "complete"),
-    ]);
-    for (const row of followRows ?? []) personalizedArtistIds.add((row as any).artist_id);
-    for (const row of purchaseRows ?? []) {
-      const artistId = (row as any).tracks?.artist_id;
-      if (artistId) personalizedArtistIds.add(artistId);
-    }
-  }
-
-  const personalizedTracks = normalizedTracks.filter((t) => personalizedArtistIds.has(t.artists?.id));
+  // "For You": the Fyby Engine (lib/engine.ts) scores every track from what
+  // this fan follows, bought, and told Fyby they like on /interests, and
+  // gives each pick a reason shown on its tile.
+  const recommendations = user ? await recommendTracks(supabase, user.id, normalizedTracks) : [];
+  const personalizedTracks = recommendations.map((r) => ({ ...r.track, reason: r.reason }));
 
   // "Trending": purchase volume over the last 30 days, across every fan --
   // an aggregate count, never which fan bought what, so this is the one
@@ -116,14 +99,18 @@ export default async function DiscoverPage() {
       <h2 className="font-display text-2xl mb-2">Discover</h2>
       <p className="text-paper/40 font-mono text-xs mb-10 max-w-xl">
         Browse what&apos;s new, what&apos;s trending, or what&apos;s picked for you based on who
-        you follow and have bought from.
+        you follow, buy and like.{" "}
+        <Link href="/interests" className="text-gold underline">
+          Tell Fyby what you&apos;re into
+        </Link>
+        .
       </p>
 
       <DiscoverTabs
         recencyTracks={normalizedTracks}
         personalizedTracks={personalizedTracks}
         trendingTracks={trendingTracks}
-        hasPersonalization={Boolean(user) && personalizedArtistIds.size > 0}
+        hasPersonalization={personalizedTracks.length > 0}
         isLoggedIn={Boolean(user)}
         startCheckout={startCheckout}
         blockedTrackIds={blockedTrackIds}

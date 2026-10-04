@@ -15,6 +15,8 @@ type Track = {
   ai_disclosure: AiDisclosureLevel;
   explicit?: boolean | null;
   artists: { id: string; profiles: { display_name: string } | null } | null;
+  // Why the Fyby Engine picked it (For You only), e.g. "Because you like Jazz".
+  reason?: string;
 };
 
 type Tab = "new" | "forYou" | "trending";
@@ -117,8 +119,11 @@ export default function DiscoverTabs({
 
       {tab === "forYou" && isLoggedIn && !hasPersonalization && (
         <p className="text-paper/50 font-mono text-sm mb-6">
-          Follow an artist or buy a track and this feed fills in with more like it. Showing the
-          newest releases for now.
+          Follow an artist, buy a track, or{" "}
+          <Link href="/interests" className="text-gold underline">
+            pick genres you like
+          </Link>{" "}
+          and this feed fills in with more like it. Showing the newest releases for now.
         </p>
       )}
 
@@ -126,7 +131,13 @@ export default function DiscoverTabs({
         <p className="text-paper/50 font-mono text-sm mb-6">Nothing trending in the last 30 days yet.</p>
       )}
 
-      <Grid tracks={activeTracks} startCheckout={startCheckout} isLoggedIn={isLoggedIn} blockedSet={blockedSet} />
+      <Grid
+        tracks={activeTracks}
+        startCheckout={startCheckout}
+        isLoggedIn={isLoggedIn}
+        blockedSet={blockedSet}
+        showReasons={tab === "forYou" && hasPersonalization}
+      />
     </div>
   );
 }
@@ -158,11 +169,13 @@ function Grid({
   startCheckout,
   isLoggedIn,
   blockedSet,
+  showReasons = false,
 }: {
   tracks: Track[];
   startCheckout: (formData: FormData) => void;
   isLoggedIn: boolean;
   blockedSet: Set<string>;
+  showReasons?: boolean;
 }) {
   if (tracks.length === 0) {
     return <p className="text-paper/50 font-mono text-sm">No tracks match this feed yet.</p>;
@@ -177,6 +190,7 @@ function Grid({
           startCheckout={startCheckout}
           isLoggedIn={isLoggedIn}
           blocked={blockedSet.has(track.id)}
+          reason={showReasons ? track.reason : undefined}
         />
       ))}
     </div>
@@ -188,17 +202,24 @@ function DiscoverTile({
   startCheckout,
   isLoggedIn,
   blocked,
+  reason,
 }: {
   track: Track;
   startCheckout: (formData: FormData) => void;
   isLoggedIn: boolean;
   blocked: boolean;
+  reason?: string;
 }) {
   const aiBadge = aiDisclosureBadge(track.ai_disclosure);
 
   return (
     <div className="h-full border border-paper/15 rounded-lg p-5 bg-paper/5 flex flex-col justify-between">
       <div>
+        {reason && (
+          <p className="font-mono text-[11px] text-flame mb-3" title="Why you're seeing this">
+            ✦ {reason}
+          </p>
+        )}
         {track.artists?.id ? (
           <Link
             href={`/artists/${track.artists.id}`}

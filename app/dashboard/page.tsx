@@ -139,6 +139,9 @@ export default async function DashboardPage() {
         </div>
         <div className="flex flex-wrap items-center gap-4 font-mono text-sm">
           <NotificationBell notifications={notificationRows ?? []} />
+          <Link href="/connect/me" className="hover:text-gold" title="Fyby Connect">
+            🤝 Connect
+          </Link>
           {artist?.id && (
             <Link href={`/artists/${artist.id}`} className="hover:text-gold">
               View public profile
