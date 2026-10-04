@@ -387,6 +387,27 @@ export async function POST(req: Request) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
 
+    // Fyby Engine ad campaign (app/actions/ads.ts's startAdCampaign): the
+    // budget is paid, so the campaign moves to review. Nothing runs until an
+    // admin approves it at /admin/ads; a rejection is refunded there.
+    if (session.metadata?.type === "ad_campaign") {
+      const campaignId = session.metadata?.campaign_id ?? null;
+      if (!campaignId) {
+        console.error("Ad campaign webhook missing campaign_id:", session.metadata);
+        return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
+      }
+      const supabase = createServiceRoleClient();
+      await supabase
+        .from("ad_campaigns")
+        .update({
+          status: "in_review",
+          stripe_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : null,
+        })
+        .eq("id", campaignId)
+        .eq("status", "pending_payment");
+      return NextResponse.json({ received: true });
+    }
+
     // Merch Booth order (app/actions/merch.ts's startMerchCheckout): record
     // it, send it to Printful, pay the artist. All in lib/merchFulfillment.ts.
     if (session.metadata?.type === "merch") {

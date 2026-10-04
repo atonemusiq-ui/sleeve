@@ -21,6 +21,7 @@ import FanReferralLink from "./FanReferralLink";
 import FollowButton from "./FollowButton";
 import MerchProductCard from "@/app/merch/MerchProductCard";
 import { connectRoleLabel } from "@/lib/connectRoles";
+import SponsoredCard from "@/app/SponsoredCard";
 
 // Powers the og:title/og:description a crawler shows alongside the image
 // from this same folder's opengraph-image.tsx when a plain artist link is
@@ -454,6 +455,18 @@ export default async function ArtistPage({
       )}
 
       <div className="ticket-divider my-10" />
+
+      {/* Fyby Engine sponsored card: matched to this page's genres; 30% of
+          what the view costs goes to this artist (lib/ads.ts). Not shown to
+          the artist on their own page. */}
+      {!isOwner && (artist as any).is_active && (
+        <SponsoredCard
+          placement="artist"
+          artistId={artist.id}
+          pageGenres={Array.from(new Set((tracks ?? []).map((t: any) => t.genre).filter(Boolean))) as string[]}
+          className="mb-10"
+        />
+      )}
 
       {!isOwner && (artist as any).is_active && (
               <SuperFanSection

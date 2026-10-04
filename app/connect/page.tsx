@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { CONNECT_ROLES, CONNECT_ROLE_GROUPS, connectRoleLabel, isConnectRole } from "@/lib/connectRoles";
 import { GENRES, isValidGenre } from "@/lib/genres";
+import SponsoredCard from "../SponsoredCard";
 
 export const metadata: Metadata = {
   title: "Fyby Connect",
@@ -98,6 +99,8 @@ export default async function ConnectPage({ searchParams }: { searchParams: Sear
           Search
         </button>
       </form>
+
+      <SponsoredCard placement="connect" pageGenres={genre ? [genre] : []} />
 
       <section aria-label="Results">
         {members.length === 0 ? (

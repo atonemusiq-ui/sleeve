@@ -5,6 +5,7 @@ import { MerchArt, MerchPreview } from "./MerchArt";
 import MerchProductCard, { type MerchCardProduct } from "./MerchProductCard";
 import { MERCH_CATALOG, type MerchProductKey } from "@/lib/merchCatalog";
 import { fanUnitPriceCents, formatCents } from "@/lib/merch";
+import SponsoredCard from "../SponsoredCard";
 
 // getfyby.com/merch: the Merch Booth (Phase 10). Shows merch from Pro-plan
 // artists, which is one of the Pro perks; artists on other plans sell from
@@ -136,6 +137,8 @@ export default async function MerchPage() {
           </ul>
         </section>
       )}
+
+      <SponsoredCard placement="merch" />
 
       {/* Fyby Radio tie-in */}
       <section

@@ -130,6 +130,9 @@ export default async function StorefrontPage() {
               <Link href="/connect" className="hover:text-gold" title="Fyby Connect">
                 🤝 Connect
               </Link>
+              <Link href="/advertise" className="hover:text-gold" title="Advertise with Fyby">
+                Advertise
+              </Link>
               <Link href="/ai-music" className="hover:text-gold">
                 AI Music
               </Link>
@@ -159,6 +162,9 @@ export default async function StorefrontPage() {
               </Link>
               <Link href="/connect" className="hover:text-gold" title="Fyby Connect">
                 🤝 Connect
+              </Link>
+              <Link href="/advertise" className="hover:text-gold" title="Advertise with Fyby">
+                Advertise
               </Link>
               <Link href="/ai-music" className="hover:text-gold">
                 AI Music
