@@ -78,13 +78,14 @@ export default function InterestsForm({ initial }: { initial: Initial }) {
           defaultValue={initial.birthYear ?? ""}
           className="bg-ink border border-paper/25 rounded-lg px-3 py-2.5 text-paper"
         />
-        <span className="text-paper/45">Members under 18 never see targeted offers.</span>
+        <span className="text-paper/45">Needed for interest-based ads. Members under 18 never see them.</span>
       </label>
 
       <label className="flex items-start gap-2 font-mono text-xs text-paper/85">
         <input type="checkbox" name="personalized" defaultChecked={initial.personalized} className="h-4 w-4 mt-0.5" />
         <span>
-          Personalize my recommendations. Turn this off and For You only shows artists you follow or have bought from.
+          Personalize my recommendations and ads. Turn this off and For You only shows artists you follow or have
+          bought from, and you only see general, untargeted ads.
         </span>
       </label>
 

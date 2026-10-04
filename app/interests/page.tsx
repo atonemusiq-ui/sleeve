@@ -29,8 +29,9 @@ export default async function InterestsPage() {
         </Link>
         <h1 className="font-display text-4xl mt-2">What are you into?</h1>
         <p className="text-paper/70 mt-2">
-          Your picks shape the For You feed on Discover. Fyby uses what you do and tell us here, never your race,
-          religion, health or exact location, and never shares your details with advertisers.
+          Your picks shape the For You feed on Discover and which sponsored cards you see. Fyby uses what you do
+          and tell us here, never your race, religion, health or exact location, and never shares your details
+          with advertisers.
         </p>
       </div>
       <InterestsForm

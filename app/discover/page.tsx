@@ -7,6 +7,7 @@ import Link from "next/link";
 import DiscoverTabs from "./DiscoverTabs";
 import FybyLogo from "../FybyLogo";
 import { recommendTracks } from "@/lib/engine";
+import SponsoredCard from "../SponsoredCard";
 
 // Phase 9: three ways to browse instead of just one long homepage grid --
 // a plain recency feed (with genre/AI-disclosure filters, same as the
@@ -105,6 +106,8 @@ export default async function DiscoverPage() {
         </Link>
         .
       </p>
+
+      <SponsoredCard placement="discover" className="mb-8" />
 
       <DiscoverTabs
         recencyTracks={normalizedTracks}

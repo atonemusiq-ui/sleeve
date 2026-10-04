@@ -1566,3 +1566,121 @@ create policy "users manage their own interests"
   on user_interests for all
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
+
+-- ============================================================================
+-- Phase 11, the Fyby Engine: advertising. Brands buy sponsored cards aimed at
+-- interest groups (genres, music-life tags, Connect roles). Fyby shows them
+-- on its own pages using its own data; advertisers only ever see totals.
+-- Rules (lib/ads.ts): no targeted ads for anyone under 18 or anyone who
+-- turned personalization off; an audience smaller than 100 is never shown as
+-- a number. 30% of the cost of an ad shown on an artist's page goes to that
+-- artist (ad_events.artist_id, paid out from /admin/ads).
+-- ============================================================================
+create table if not exists ad_campaigns (
+  id uuid primary key default gen_random_uuid(),
+  advertiser_id uuid not null references profiles(id) on delete cascade,
+  brand_name text not null,
+  headline text not null,
+  body text,
+  click_url text not null,
+  image_url text,
+  target_genres text[] not null default '{}',
+  target_tags text[] not null default '{}',
+  target_roles text[] not null default '{}',
+  budget_cents integer not null check (budget_cents >= 10000),
+  cpm_cents integer not null check (cpm_cents > 0),
+  max_impressions integer not null,
+  impressions integer not null default 0,
+  clicks integer not null default 0,
+  status text not null default 'pending_payment' check (status in (
+    'pending_payment', 'in_review', 'active', 'paused', 'rejected', 'completed', 'refunded'
+  )),
+  review_note text,
+  stripe_session_id text unique,
+  stripe_payment_intent_id text,
+  created_at timestamptz not null default now(),
+  approved_at timestamptz
+);
+
+create index if not exists ad_campaigns_status_idx on ad_campaigns (status);
+create index if not exists ad_campaigns_advertiser_idx on ad_campaigns (advertiser_id);
+
+alter table ad_campaigns enable row level security;
+
+-- Advertisers see and create their own campaigns. Status, counts and
+-- payment fields are changed only by the server (service role).
+drop policy if exists "advertisers read their own campaigns" on ad_campaigns;
+create policy "advertisers read their own campaigns"
+  on ad_campaigns for select
+  using (advertiser_id = auth.uid());
+
+-- One row per sponsored-card view or click. Written only by the server.
+create table if not exists ad_events (
+  id bigint generated always as identity primary key,
+  campaign_id uuid not null references ad_campaigns(id) on delete cascade,
+  kind text not null check (kind in ('impression', 'click')),
+  placement text not null,
+  artist_id uuid references artists(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists ad_events_campaign_idx on ad_events (campaign_id, kind);
+create index if not exists ad_events_artist_idx on ad_events (artist_id) where artist_id is not null;
+
+alter table ad_events enable row level security;
+
+-- Artists' 30% share of ads shown on their pages, paid by Stripe transfer.
+create table if not exists ad_artist_payouts (
+  id uuid primary key default gen_random_uuid(),
+  artist_id uuid not null references artists(id) on delete cascade,
+  amount_cents integer not null check (amount_cents > 0),
+  impressions_through bigint not null,
+  stripe_transfer_id text,
+  created_at timestamptz not null default now()
+);
+
+alter table ad_artist_payouts enable row level security;
+
+drop policy if exists "artists read their own ad payouts" on ad_artist_payouts;
+create policy "artists read their own ad payouts"
+  on ad_artist_payouts for select
+  using (artist_id in (select id from artists where user_id = auth.uid()));
+
+-- ad-creatives (public): sponsored-card images, "<user id>/..." paths.
+insert into storage.buckets (id, name, public)
+values ('ad-creatives', 'ad-creatives', true)
+on conflict (id) do update set public = excluded.public;
+
+drop policy if exists "advertisers upload their own ad images" on storage.objects;
+create policy "advertisers upload their own ad images"
+  on storage.objects for insert
+  with check (bucket_id = 'ad-creatives' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "ad images are publicly readable" on storage.objects;
+create policy "ad images are publicly readable"
+  on storage.objects for select
+  using (bucket_id = 'ad-creatives');
+
+-- Counts one view or click and returns the campaign to 'completed' once its
+-- paid views are used up. Atomic, so two page loads can't overshoot.
+create or replace function record_ad_event(p_campaign uuid, p_kind text, p_placement text, p_artist uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into ad_events (campaign_id, kind, placement, artist_id) values (p_campaign, p_kind, p_placement, p_artist);
+  if p_kind = 'impression' then
+    update ad_campaigns
+      set impressions = impressions + 1,
+          status = case when impressions + 1 >= max_impressions then 'completed' else status end
+      where id = p_campaign;
+  else
+    update ad_campaigns set clicks = clicks + 1 where id = p_campaign;
+  end if;
+end;
+$$;
+
+revoke execute on function record_ad_event(uuid, text, text, uuid) from public, anon, authenticated;
+grant execute on function record_ad_event(uuid, text, text, uuid) to service_role;

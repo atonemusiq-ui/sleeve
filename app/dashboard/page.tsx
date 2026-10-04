@@ -14,6 +14,7 @@ import ArtistHubManager from "./ArtistHubManager";
 import CollapsibleSection from "@/app/CollapsibleSection";
 import NotificationBell from "@/app/NotificationBell";
 import type { VideoTier } from "@/lib/videoTiers";
+import { artistShareCents } from "@/lib/ads";
 
 export default async function DashboardPage() {
   const supabase = createClient();
@@ -100,6 +101,20 @@ export default async function DashboardPage() {
         0
       );
     }
+  }
+
+  // Fyby Engine ads: this artist's 30% share of sponsored cards shown on
+  // their page (lib/ads.ts), and what has already been paid out.
+  let adShareEarnedCents = 0;
+  let adSharePaidCents = 0;
+  if (artist?.id) {
+    const admin = createServiceRoleClient();
+    const [{ count: adViews }, { data: adPayouts }] = await Promise.all([
+      admin.from("ad_events").select("id", { count: "exact", head: true }).eq("artist_id", artist.id).eq("kind", "impression"),
+      admin.from("ad_artist_payouts").select("amount_cents").eq("artist_id", artist.id),
+    ]);
+    adShareEarnedCents = artistShareCents(adViews ?? 0);
+    adSharePaidCents = (adPayouts ?? []).reduce((s, p) => s + (p.amount_cents ?? 0), 0);
   }
 
   // Mailing-list signups (app/actions/artistHub.ts's joinMailingList,
@@ -234,6 +249,10 @@ export default async function DashboardPage() {
           <p className="font-mono text-[10px] text-paper/40 mt-0.5">
             Track and album sales, year to date. Super Fan subscriptions aren&apos;t included --
             see your Stripe dashboard for that.
+          </p>
+          <p className="font-mono text-[10px] text-paper/50 mt-2">
+            Ad share (30% of sponsored cards on your page): ${(adShareEarnedCents / 100).toFixed(2)} earned · $
+            {(adSharePaidCents / 100).toFixed(2)} paid out
           </p>
         </div>
         <form action={connectStripeAccount}>
