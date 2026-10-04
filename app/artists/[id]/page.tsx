@@ -20,6 +20,7 @@ import { COVERS_GENRE } from "@/lib/genres";
 import FanReferralLink from "./FanReferralLink";
 import FollowButton from "./FollowButton";
 import MerchProductCard from "@/app/merch/MerchProductCard";
+import { connectRoleLabel } from "@/lib/connectRoles";
 
 // Powers the og:title/og:description a crawler shows alongside the image
 // from this same folder's opengraph-image.tsx when a plain artist link is
@@ -192,6 +193,15 @@ export default async function ArtistPage({
     .eq("active", true)
     .order("created_at", { ascending: false });
   const merchProducts = (merchRows ?? []) as any[];
+
+  // Fyby Connect (app/connect): the roles this artist offers, if they've
+  // set up a Connect profile and are taking requests.
+  const { data: connectProfile } = await supabase
+    .from("connect_profiles")
+    .select("roles, available")
+    .eq("user_id", (artist as any).user_id)
+    .maybeSingle();
+  const connectRoles: string[] = connectProfile?.available ? (connectProfile.roles ?? []) : [];
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
@@ -471,6 +481,24 @@ export default async function ArtistPage({
               <MerchProductCard key={p.id} product={p} />
             ))}
           </ul>
+        </section>
+      )}
+
+      {(artist as any).is_active && connectRoles.length > 0 && (
+        <section aria-labelledby="artist-connect-heading" className="mb-10 rounded-lg border border-paper/15 p-5">
+          <h2 id="artist-connect-heading" className="font-display text-xl mb-3">
+            🤝 Available for
+          </h2>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {connectRoles.map((r) => (
+              <span key={r} className="font-mono text-xs px-3 py-1.5 rounded-full border border-flame/50 text-flame">
+                {connectRoleLabel(r)}
+              </span>
+            ))}
+          </div>
+          <Link href={`/connect/${(artist as any).user_id}`} className="font-mono text-xs text-gold hover:underline">
+            Work with {artistName} on Fyby Connect &rarr;
+          </Link>
         </section>
       )}
 
