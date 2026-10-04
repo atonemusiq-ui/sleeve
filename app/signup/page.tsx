@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { signup } from "@/app/actions/auth";
 import FybyLogo, { FybyWordmark } from "@/app/FybyLogo";
+import PasswordInput from "@/app/PasswordInput";
 import { isRadioEnabled } from "@/lib/radio";
 
 export default function SignupPage({
@@ -57,9 +58,9 @@ export default function SignupPage({
 
         <div>
           <label className="block font-mono text-xs text-paper/60 mb-1">Password</label>
-          <input
+          <PasswordInput
             name="password"
-            type="password"
+            autoComplete="new-password"
             required
             minLength={6}
             className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper"
@@ -84,6 +85,21 @@ export default function SignupPage({
             </label>
           </div>
         </fieldset>
+
+        {/* Two-step signup (see verifyEmailCode in app/actions/auth.ts).
+            Artists always get an emailed code since they handle payouts;
+            fans skip it by default so checkout stays fast, but can opt in.
+            The checkbox only affects fans — the action ignores it for artists. */}
+        <div className="border border-paper/15 rounded-lg px-4 py-3 font-mono text-xs text-paper/60 flex flex-col gap-2">
+          <p>
+            <span className="text-paper">Two-step signup:</span> artists confirm their email with a
+            6-digit code before their account opens.
+          </p>
+          <label className="flex items-center gap-2 text-paper/80">
+            <input type="checkbox" name="verifyEmail" />
+            Fans: verify my email with a code too
+          </label>
+        </div>
 
         {/* Fyby Radio (Phase 10), explained before they join. Hidden until
             the radio is switched on (NEXT_PUBLIC_RADIO_ENABLED). */}
