@@ -1361,3 +1361,115 @@ create policy "artists can view licenses sold for their tracks"
 -- sales; a row points at exactly one of purchase_id or license_purchase_id.
 alter table contributor_payouts add column if not exists license_purchase_id uuid
   references license_purchases(id) on delete set null;
+
+-- ============================================================================
+-- Merch Booth (Phase 10): print-on-demand merch printed and shipped by
+-- Printful. An artist lists a product (one Printful catalog item in one
+-- color, with their design file); a fan pays at Fyby checkout; the Stripe
+-- webhook records a merch_orders row, sends the order to Printful, and
+-- transfers the artist's share. Fee math lives in lib/merch.ts.
+-- ============================================================================
+create table if not exists merch_products (
+  id uuid primary key default gen_random_uuid(),
+  artist_id uuid not null references artists(id) on delete cascade,
+  -- Key into lib/merchCatalog.ts (tee, hoodie, hat, tote, mug).
+  product_key text not null,
+  color text not null,
+  title text not null,
+  description text,
+  -- Public URL of the artist's print file in the merch-designs bucket.
+  -- Printful downloads it from here when an order is placed.
+  design_url text not null,
+  -- Price of the base size. Bigger sizes add Printful's own size upcharge
+  -- on top, so the artist's profit is the same on every size.
+  price_cents integer not null check (price_cents > 0),
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists merch_products_artist_idx on merch_products (artist_id);
+
+alter table merch_products enable row level security;
+
+drop policy if exists "active merch is publicly readable" on merch_products;
+create policy "active merch is publicly readable"
+  on merch_products for select
+  using (active = true or artist_id in (select id from artists where user_id = auth.uid()));
+
+drop policy if exists "artists manage their own merch" on merch_products;
+create policy "artists manage their own merch"
+  on merch_products for all
+  using (artist_id in (select id from artists where user_id = auth.uid()))
+  with check (artist_id in (select id from artists where user_id = auth.uid()));
+
+-- One row per paid checkout. Written only by the Stripe webhook (service
+-- role); there is deliberately no insert/update policy.
+create table if not exists merch_orders (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid references merch_products(id) on delete set null,
+  artist_id uuid not null references artists(id) on delete cascade,
+  fan_id uuid references profiles(id) on delete set null,
+  buyer_email text,
+  product_title text not null,
+  variant_id integer not null,
+  variant_label text not null,
+  quantity integer not null check (quantity > 0),
+  unit_price_cents integer not null,
+  unit_cost_cents integer not null,
+  shipping_cents integer not null default 0,
+  amount_cents integer not null,
+  platform_fee_cents integer not null,
+  -- Estimated Stripe card fee on the whole charge, and the artist's half of
+  -- it (the fan's half is already inside unit_price_cents). See lib/merch.ts.
+  card_fee_cents integer not null default 0,
+  artist_card_share_cents integer not null default 0,
+  artist_payout_cents integer not null,
+  plan text,
+  shipping_address jsonb,
+  stripe_session_id text not null unique,
+  stripe_payment_intent_id text,
+  stripe_transfer_id text,
+  printful_order_id text,
+  status text not null default 'paid' check (status in (
+    'paid', 'sent_to_printer', 'test_mode', 'print_failed', 'shipped', 'disputed', 'refunded'
+  )),
+  carrier text,
+  tracking_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists merch_orders_artist_idx on merch_orders (artist_id);
+create index if not exists merch_orders_fan_idx on merch_orders (fan_id);
+create index if not exists merch_orders_payment_intent_idx on merch_orders (stripe_payment_intent_id);
+
+alter table merch_orders enable row level security;
+
+drop policy if exists "artists view their own merch orders" on merch_orders;
+create policy "artists view their own merch orders"
+  on merch_orders for select
+  using (artist_id in (select id from artists where user_id = auth.uid()));
+
+drop policy if exists "fans view their own merch orders" on merch_orders;
+create policy "fans view their own merch orders"
+  on merch_orders for select
+  using (fan_id = auth.uid());
+
+-- merch-designs (public): print files. Printful must be able to fetch them
+-- by URL, so the bucket is public. Same "<artist_id>/..." path rule as covers.
+insert into storage.buckets (id, name, public)
+values ('merch-designs', 'merch-designs', true)
+on conflict (id) do update set public = excluded.public;
+
+drop policy if exists "artists upload their own merch designs" on storage.objects;
+create policy "artists upload their own merch designs"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'merch-designs'
+    and (storage.foldername(name))[1] in (select id::text from artists where user_id = auth.uid())
+  );
+
+drop policy if exists "merch designs are publicly readable" on storage.objects;
+create policy "merch designs are publicly readable"
+  on storage.objects for select
+  using (bucket_id = 'merch-designs');

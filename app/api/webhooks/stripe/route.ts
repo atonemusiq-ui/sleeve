@@ -8,6 +8,7 @@ import { videoPremiereWindow } from "@/lib/fybyTvServer";
 import { premiereWindow } from "@/lib/radioPremiere";
 import { sendGiftClaimEmail } from "@/lib/email";
 import { LICENSE_TIERS, isLicenseTier } from "@/lib/licensing";
+import { handleMerchCheckout, reverseMerchOrders, setMerchDisputeStatus } from "@/lib/merchFulfillment";
 import { randomUUID } from "crypto";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
@@ -385,6 +386,13 @@ export async function POST(req: Request) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
+
+    // Merch Booth order (app/actions/merch.ts's startMerchCheckout): record
+    // it, send it to Printful, pay the artist. All in lib/merchFulfillment.ts.
+    if (session.metadata?.type === "merch") {
+      const result = await handleMerchCheckout(session);
+      return NextResponse.json(result.body, { status: result.status });
+    }
 
     // The bio video feature (app/actions/video.ts's startVideoUnlockCheckout)
     // is a flat Fyby platform fee, not a fan purchase — no track/album, no
@@ -1141,6 +1149,13 @@ export async function POST(req: Request) {
       await reverseNonPurchasePayouts(supabase, paymentIntentId);
     }
 
+    // Merch orders have no `purchases` row either. reverseMerchOrders
+    // skips (and logs) a partial refund itself.
+    await reverseMerchOrders(supabase, paymentIntentId, {
+      refundedCents: charge.amount_refunded,
+      reason: "refund",
+    });
+
     const { data: purchases } = await supabase
       .from("purchases")
       .select(
@@ -1212,6 +1227,8 @@ export async function POST(req: Request) {
 
     const supabase = createServiceRoleClient();
 
+    await setMerchDisputeStatus(supabase, paymentIntentId, true);
+
     // A disputed license sale is suspended the same way (lib/licensing.ts).
     await supabase
       .from("license_purchases")
@@ -1261,6 +1278,7 @@ export async function POST(req: Request) {
     const supabase = createServiceRoleClient();
 
     if (dispute.status === "won") {
+      await setMerchDisputeStatus(supabase, paymentIntentId, false);
       await supabase
         .from("license_purchases")
         .update({ status: "complete" })
@@ -1280,6 +1298,7 @@ export async function POST(req: Request) {
     // charge.refunded branch — neither has a `purchases` row to be found by
     // the query below.
     await reverseNonPurchasePayouts(supabase, paymentIntentId);
+    await reverseMerchOrders(supabase, paymentIntentId, { reason: "dispute_lost" });
 
     const { data: purchases } = await supabase
       .from("purchases")

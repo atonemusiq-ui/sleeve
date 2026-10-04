@@ -169,6 +169,19 @@ export default async function DashboardPage() {
         <span className="font-mono text-xs text-gold flex-shrink-0">Open &rarr;</span>
       </Link>
 
+      <Link
+        href="/dashboard/merch"
+        className="flex items-center justify-between gap-4 border border-flame/40 rounded-lg px-6 py-5 mb-10 bg-flame/5 hover:bg-flame/10"
+      >
+        <div>
+          <h2 className="font-display text-lg text-flame">👕 Merch</h2>
+          <p className="font-mono text-xs text-paper/60 mt-1">
+            Sell shirts, hoodies, hats, totes and mugs. Printed when a fan orders; nothing to stock or ship.
+          </p>
+        </div>
+        <span className="font-mono text-xs text-flame flex-shrink-0">Open &rarr;</span>
+      </Link>
+
             <Link
                       href="/dashboard/subscription"
                       className="flex items-center justify-between gap-4 border border-paper/15 rounded-lg px-6 py-5 mb-10 bg-paper/5 hover:bg-paper/10"
