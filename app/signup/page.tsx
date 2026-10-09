@@ -3,8 +3,10 @@ import { signup } from "@/app/actions/auth";
 import FybyLogo, { FybyWordmark } from "@/app/FybyLogo";
 import PasswordInput from "@/app/PasswordInput";
 import { isRadioEnabled } from "@/lib/radio";
+import { createClient } from "@/lib/supabase/server";
+import { FOUNDING, formatPlanPrice } from "@/lib/plans";
 
-export default function SignupPage({
+export default async function SignupPage({
   searchParams,
 }: {
   searchParams: { error?: string; next?: string; email?: string };
@@ -15,6 +17,12 @@ export default function SignupPage({
   // here to buy/claim a purchase, not to sell — default the role picker to
   // Fan in either case instead of Artist.
   const cameFromBuying = Boolean(searchParams.next) || Boolean(searchParams.email);
+
+  // Founding Artist countdown (supabase/schema.sql, founding_spots_left).
+  // Hidden if the lookup fails or the spots are gone.
+  const supabase = createClient();
+  const { data: spotsLeft } = await supabase.rpc("founding_spots_left");
+  const foundingOpen = typeof spotsLeft === "number" && spotsLeft > 0;
 
   return (
     <main className="max-w-md mx-auto px-6 py-16">
@@ -27,6 +35,18 @@ export default function SignupPage({
       <p className="font-mono text-xs text-paper/50 text-center mb-8">
         Join Fyby to start selling your music, or supporting the artists you love.
       </p>
+
+      {foundingOpen && (
+        <div className="mb-8 rounded-lg border border-gold/50 bg-gold/10 px-4 py-3 text-center">
+          <p className="font-display text-gold">
+            {spotsLeft} of {FOUNDING.spots} Founding Artist spots left
+          </p>
+          <p className="font-mono text-[11px] text-paper/70 mt-1">
+            Sign up as an artist now and lock in Pro at {formatPlanPrice(FOUNDING.priceCents.pro)}/mo for as long
+            as you&apos;re on Fyby.
+          </p>
+        </div>
+      )}
 
       {searchParams.error && (
         <p className="font-mono text-sm text-rust mb-6">{searchParams.error}</p>

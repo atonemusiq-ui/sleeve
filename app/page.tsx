@@ -14,6 +14,7 @@ import FybyTV from "./FybyTV";
 import { fetchFybyTvVideos } from "@/lib/fybyTvServer";
 import { radioPreviewTrack } from "@/lib/radioPreview";
 import FybyLogo, { FybyWordmark } from "./FybyLogo";
+import { featureMap, featureOn } from "@/lib/phaseServer";
 
 export default async function StorefrontPage() {
   const supabase = createClient();
@@ -43,6 +44,8 @@ export default async function StorefrontPage() {
 
   const normalizedTracks = (tracks ?? []).map((track: any) => ({
     ...track,
+    // The Verified badge ships in Phase 2 (lib/phases.ts); hide it before then.
+    verification_status: featureOn("verified") ? track.verification_status : null,
     artists: Array.isArray(track.artists)
       ? {
           ...track.artists[0],
@@ -97,8 +100,11 @@ export default async function StorefrontPage() {
     role = profile?.role ?? null;
   }
 
+  // Which release-phase features are on for this request (lib/phases.ts).
+  const features = featureMap();
+
   // Fyby TV (Phase 10): the homepage video player.
-  const tvVideos = await fetchFybyTvVideos();
+  const tvVideos = features.tv ? await fetchFybyTvVideos() : [];
 
   // Sample song for the radio "Coming soon" preview (lib/radioPreview.ts).
   const previewTrack = radioPreviewTrack(normalizedTracks);
@@ -118,24 +124,36 @@ export default async function StorefrontPage() {
               <Link href="/discover" className="hover:text-gold">
                 Discover
               </Link>
-              <Link href="/radio" className="hover:text-gold" title="Fyby Radio">
-                📻 Radio
-              </Link>
-              <Link href="/tv" className="hover:text-gold" title="Fyby TV">
-                📺 TV
-              </Link>
-              <Link href="/merch" className="hover:text-gold" title="Fyby Merch Booth">
-                👕 Merch
-              </Link>
-              <Link href="/connect" className="hover:text-gold" title="Fyby Connect">
-                🤝 Connect
-              </Link>
-              <Link href="/advertise" className="hover:text-gold" title="Advertise with Fyby">
-                Advertise
-              </Link>
-              <Link href="/ai-music" className="hover:text-gold">
-                AI Music
-              </Link>
+              {features.radio && (
+                <Link href="/radio" className="hover:text-gold" title="Fyby Radio">
+                  📻 Radio
+                </Link>
+              )}
+              {features.tv && (
+                <Link href="/tv" className="hover:text-gold" title="Fyby TV">
+                  📺 TV
+                </Link>
+              )}
+              {features.merch && (
+                <Link href="/merch" className="hover:text-gold" title="Fyby Merch Booth">
+                  👕 Merch
+                </Link>
+              )}
+              {features.connect && (
+                <Link href="/connect" className="hover:text-gold" title="Fyby Connect">
+                  🤝 Connect
+                </Link>
+              )}
+              {features.ads && (
+                <Link href="/advertise" className="hover:text-gold" title="Advertise with Fyby">
+                  Advertise
+                </Link>
+              )}
+              {features.aiMusic && (
+                <Link href="/ai-music" className="hover:text-gold">
+                  AI Music
+                </Link>
+              )}
               <Link href="/library" className="hover:text-gold">
                 My Music
               </Link>
@@ -151,24 +169,36 @@ export default async function StorefrontPage() {
               <Link href="/discover" className="hover:text-gold">
                 Discover
               </Link>
-              <Link href="/radio" className="hover:text-gold" title="Fyby Radio">
-                📻 Radio
-              </Link>
-              <Link href="/tv" className="hover:text-gold" title="Fyby TV">
-                📺 TV
-              </Link>
-              <Link href="/merch" className="hover:text-gold" title="Fyby Merch Booth">
-                👕 Merch
-              </Link>
-              <Link href="/connect" className="hover:text-gold" title="Fyby Connect">
-                🤝 Connect
-              </Link>
-              <Link href="/advertise" className="hover:text-gold" title="Advertise with Fyby">
-                Advertise
-              </Link>
-              <Link href="/ai-music" className="hover:text-gold">
-                AI Music
-              </Link>
+              {features.radio && (
+                <Link href="/radio" className="hover:text-gold" title="Fyby Radio">
+                  📻 Radio
+                </Link>
+              )}
+              {features.tv && (
+                <Link href="/tv" className="hover:text-gold" title="Fyby TV">
+                  📺 TV
+                </Link>
+              )}
+              {features.merch && (
+                <Link href="/merch" className="hover:text-gold" title="Fyby Merch Booth">
+                  👕 Merch
+                </Link>
+              )}
+              {features.connect && (
+                <Link href="/connect" className="hover:text-gold" title="Fyby Connect">
+                  🤝 Connect
+                </Link>
+              )}
+              {features.ads && (
+                <Link href="/advertise" className="hover:text-gold" title="Advertise with Fyby">
+                  Advertise
+                </Link>
+              )}
+              {features.aiMusic && (
+                <Link href="/ai-music" className="hover:text-gold">
+                  AI Music
+                </Link>
+              )}
                           <Link href="/artists" className="hover:text-gold">Artists</Link>
               <Link href="/login" className="hover:text-gold">
                 Log in
@@ -189,10 +219,10 @@ export default async function StorefrontPage() {
       {/* Fyby Radio (Phase 10): for everyone, logged in or not. Shows a
           "Coming soon" preview until the radio is switched on; the preview's
           sample player uses the newest real track on Fyby. */}
-      <RadioHero previewTrack={previewTrack} />
+      {features.radio && <RadioHero previewTrack={previewTrack} />}
 
       {/* Fyby TV (Phase 10): premieres, What's New, and How-To videos. */}
-      <FybyTV videos={tvVideos} isLoggedIn={Boolean(user)} />
+      {features.tv && <FybyTV videos={tvVideos} isLoggedIn={Boolean(user)} />}
 
       {!user && normalizedTracks.length > 0 && (
         <FeaturedTracks
@@ -205,11 +235,15 @@ export default async function StorefrontPage() {
       <p className="text-paper/40 font-mono text-xs mb-10 max-w-xl">
         Artists disclose it themselves when a track involves AI-generated vocals, instrumentation,
         or production — look for the &quot;AI-Assisted&quot;/&quot;Fully AI-Generated&quot; label
-        on those tracks, browse the AI Music row below, or visit the{" "}
-        <Link href="/ai-music" className="text-gold">
-          dedicated AI Music marketplace
-        </Link>{" "}
-        for tracks that are 100% AI-generated. Want more ways to browse — trending tracks, or a
+        on those tracks{features.aiMusic ? ", browse the AI Music row below, or visit the " : "."}
+        {features.aiMusic && (
+          <>
+            <Link href="/ai-music" className="text-gold">
+              dedicated AI Music marketplace
+            </Link>{" "}
+            for tracks that are 100% AI-generated.
+          </>
+        )} Want more ways to browse — trending tracks, or a
         feed picked for you? Head to{" "}
         <Link href="/discover" className="text-gold">
           Discover
