@@ -108,6 +108,26 @@ reach you).
   transfer to the artist's connected account should show up alongside the original
   payment.
 
+## Release phases and the investor demo
+
+Fyby launches lean and turns features on one release at a time (`lib/phases.ts`):
+
+| Phase | Name | Turns on |
+| --- | --- | --- |
+| 1 | Launch | Storefront, checkout, payouts, contributor splits, plans, AI disclosure |
+| 2 | Vinyl + Trust | Verified badge |
+| 3 | Fyby Radio | Radio and Radio Premieres |
+| 4 | Fyby TV + AI Music | Video player, video premieres, AI Music section |
+| 5 | Merch Booth + Connect | Merch and collaborator search |
+| 6 | The Experience | Advertiser program and Fyby AI matching |
+
+- **Live site:** set `FYBY_PHASE` in Vercel (1-6) and redeploy. Unset = 6, the full app.
+- **Investor demo:** log in with the admin account and a phase switcher appears at the bottom of every page. Click 1-6 to see the app at that release; "Back to live" returns to normal. Only the admin sees the preview; the public site never changes.
+
+## Founding Artists
+
+The first 500 artists to sign up get locked-in plan prices (Artist $4.99, Pro $7.99 a month; `FOUNDING` in `lib/plans.ts`). Their spot number is assigned automatically by the database when their artist account is created (`claim_founding_spot` in `supabase/schema.sql`). Accounts that existed before this was added don't get a spot; grant one by hand with `select claim_founding_spot('<artist id>');`.
+
 ## Cost note
 
 The Supabase free tier (500MB DB, 1GB storage, 50k monthly active users) covers this

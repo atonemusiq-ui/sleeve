@@ -22,6 +22,7 @@ import FollowButton from "./FollowButton";
 import MerchProductCard from "@/app/merch/MerchProductCard";
 import { connectRoleLabel } from "@/lib/connectRoles";
 import SponsoredCard from "@/app/SponsoredCard";
+import { featureOn } from "@/lib/phaseServer";
 
 // Powers the og:title/og:description a crawler shows alongside the image
 // from this same folder's opengraph-image.tsx when a plain artist link is
@@ -484,7 +485,7 @@ export default async function ArtistPage({
 
       {!isOwner && (artist as any).is_active && <div className="ticket-divider my-10" />}
 
-      {(artist as any).is_active && merchProducts.length > 0 && (
+      {featureOn("merch") && (artist as any).is_active && merchProducts.length > 0 && (
         <section aria-labelledby="artist-merch-heading" className="mb-10">
           <h2 id="artist-merch-heading" className="font-display text-2xl mb-4">
             👕 Merch
@@ -497,7 +498,7 @@ export default async function ArtistPage({
         </section>
       )}
 
-      {(artist as any).is_active && connectRoles.length > 0 && (
+      {featureOn("connect") && (artist as any).is_active && connectRoles.length > 0 && (
         <section aria-labelledby="artist-connect-heading" className="mb-10 rounded-lg border border-paper/15 p-5">
           <h2 id="artist-connect-heading" className="font-display text-xl mb-3">
             🤝 Available for

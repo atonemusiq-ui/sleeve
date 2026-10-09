@@ -1684,3 +1684,116 @@ $$;
 
 revoke execute on function record_ad_event(uuid, text, text, uuid) from public, anon, authenticated;
 grant execute on function record_ad_event(uuid, text, text, uuid) to service_role;
+
+-- ============================================================================
+-- Founding Artists: the first 500 artists to sign up get discounted plan
+-- prices locked in for as long as they keep their account (lib/plans.ts,
+-- FOUNDING). founding_number is their spot in line (1-500); null = not a
+-- Founding Artist. Assigned automatically when the artist row is created,
+-- so it can't be claimed or skipped from the app.
+--
+-- Existing artist rows (test accounts made before launch) are NOT given a
+-- spot. To make someone a Founding Artist by hand, run as an admin in the
+-- SQL editor:  select claim_founding_spot('<artist id>');
+-- ============================================================================
+alter table artists add column if not exists founding_number integer unique
+  check (founding_number between 1 and 500);
+alter table artists add column if not exists founding_claimed_at timestamptz;
+
+create or replace function claim_founding_spot(p_artist uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  existing integer;
+  taken integer;
+begin
+  select founding_number into existing from artists where id = p_artist;
+  if existing is not null then return existing; end if;
+
+  -- Serializes claims so two signups at the same instant can't take the
+  -- same number or push past 500.
+  perform pg_advisory_xact_lock(hashtext('fyby_founding_spots'));
+  select count(*) into taken from artists where founding_number is not null;
+  if taken >= 500 then return null; end if;
+
+  update artists
+     set founding_number = taken + 1, founding_claimed_at = now()
+   where id = p_artist and founding_number is null;
+  return taken + 1;
+end;
+$$;
+
+revoke execute on function claim_founding_spot(uuid) from public, anon, authenticated;
+grant execute on function claim_founding_spot(uuid) to service_role;
+
+create or replace function assign_founding_spot()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform claim_founding_spot(new.id);
+  return new;
+end;
+$$;
+
+drop trigger if exists on_artist_created_assign_founding on artists;
+create trigger on_artist_created_assign_founding
+  after insert on artists
+  for each row execute function assign_founding_spot();
+
+-- How many Founding spots are left, readable by anyone (the signup page and
+-- plans page show the countdown) without exposing who holds them.
+create or replace function founding_spots_left()
+returns integer
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select greatest(0, 500 - count(*))::integer from artists where founding_number is not null;
+$$;
+
+grant execute on function founding_spots_left() to anon, authenticated;
+
+-- Billing columns can only be changed by the server (Stripe webhooks and
+-- admin tools run as service_role). Before this, the "users can update their
+-- own artist row" policy let a logged-in artist set their own plan to 'pro'
+-- -- a 5% cut without paying -- straight through the Supabase API. Any
+-- change to these columns from a user session is silently kept at the old
+-- value; every other column (bio, links, visibility...) still updates.
+create or replace function protect_artist_billing_columns()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  -- pg_trigger_depth() > 1 means this write came from another trigger or
+  -- function (claim_founding_spot running after signup), which is trusted.
+  if coalesce(auth.role(), '') in ('authenticated', 'anon') and pg_trigger_depth() <= 1 then
+    if tg_op = 'INSERT' then
+      new.plan := 'free';
+      new.plan_updated_at := null;
+      new.plan_subscription_id := null;
+      new.founding_number := null;
+      new.founding_claimed_at := null;
+    else
+      new.plan := old.plan;
+      new.plan_updated_at := old.plan_updated_at;
+      new.plan_subscription_id := old.plan_subscription_id;
+      new.founding_number := old.founding_number;
+      new.founding_claimed_at := old.founding_claimed_at;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists protect_artist_billing on artists;
+create trigger protect_artist_billing
+  before insert or update on artists
+  for each row execute function protect_artist_billing_columns();

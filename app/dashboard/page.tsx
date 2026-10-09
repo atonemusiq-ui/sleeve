@@ -15,6 +15,7 @@ import CollapsibleSection from "@/app/CollapsibleSection";
 import NotificationBell from "@/app/NotificationBell";
 import type { VideoTier } from "@/lib/videoTiers";
 import { artistShareCents } from "@/lib/ads";
+import { featureOn } from "@/lib/phaseServer";
 
 export default async function DashboardPage() {
   const supabase = createClient();
@@ -154,9 +155,11 @@ export default async function DashboardPage() {
         </div>
         <div className="flex flex-wrap items-center gap-4 font-mono text-sm">
           <NotificationBell notifications={notificationRows ?? []} />
-          <Link href="/connect/me" className="hover:text-gold" title="Fyby Connect">
-            🤝 Connect
-          </Link>
+          {featureOn("connect") && (
+            <Link href="/connect/me" className="hover:text-gold" title="Fyby Connect">
+              🤝 Connect
+            </Link>
+          )}
           {artist?.id && (
             <Link href={`/artists/${artist.id}`} className="hover:text-gold">
               View public profile
@@ -187,6 +190,7 @@ export default async function DashboardPage() {
         <span className="font-mono text-xs text-gold flex-shrink-0">Open &rarr;</span>
       </Link>
 
+      {featureOn("merch") && (
       <Link
         href="/dashboard/merch"
         className="flex items-center justify-between gap-4 border border-flame/40 rounded-lg px-6 py-5 mb-10 bg-flame/5 hover:bg-flame/10"
@@ -199,6 +203,7 @@ export default async function DashboardPage() {
         </div>
         <span className="font-mono text-xs text-flame flex-shrink-0">Open &rarr;</span>
       </Link>
+      )}
 
             <Link
                       href="/dashboard/subscription"
