@@ -30,6 +30,7 @@ export function featureMap(): Record<Feature, boolean> {
   const phase = currentPhase();
   return {
     verified: isFeatureOn("verified", phase),
+    vinyl: isFeatureOn("vinyl", phase),
     radio: isFeatureOn("radio", phase),
     tv: isFeatureOn("tv", phase),
     aiMusic: isFeatureOn("aiMusic", phase),

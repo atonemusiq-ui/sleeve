@@ -1797,3 +1797,12 @@ drop trigger if exists protect_artist_billing on artists;
 create trigger protect_artist_billing
   before insert or update on artists
   for each row execute function protect_artist_billing_columns();
+
+-- ============================================================================
+-- Get it on Vinyl: a per-track link to the artist's on-demand pressing
+-- (elasticStage or similar). Fyby only links out; the fan buys the record
+-- on that service's page. Set from the catalog (app/actions/vinyl.ts);
+-- validated as an https URL there and again here.
+-- ============================================================================
+alter table tracks add column if not exists vinyl_url text
+  check (vinyl_url is null or (vinyl_url ~ '^https://' and length(vinyl_url) <= 500));

@@ -26,7 +26,7 @@ export const PHASES: Record<Phase, { name: string; target: string; summary: stri
     target: "Jan 2027",
     summary: "Storefront, checkout, 80%+ payouts in days, contributor splits, plans, AI disclosure",
   },
-  2: { name: "Vinyl + Trust", target: "Apr 2027", summary: "Verified badge and human verification" },
+  2: { name: "Vinyl + Trust", target: "Apr 2027", summary: "Get it on Vinyl links and the Verified badge" },
   3: { name: "Fyby Radio", target: "Jul 2027", summary: "Nonstop radio and Radio Premieres" },
   4: { name: "Fyby TV + AI Music", target: "Oct 2027", summary: "Video player, video premieres, 100% AI music section" },
   5: { name: "Merch Booth + Connect", target: "Jan 2028", summary: "Print-on-demand merch and collaborator search" },
@@ -38,6 +38,7 @@ export const PHASES: Record<Phase, { name: string; target: string; summary: stri
 // gifts, Super Fan, booking, licensing...) is part of Phase 1.
 export const FEATURE_PHASE = {
   verified: 2,
+  vinyl: 2,
   radio: 3,
   tv: 4,
   aiMusic: 4,

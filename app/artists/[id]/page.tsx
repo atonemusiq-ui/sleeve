@@ -94,7 +94,7 @@ export default async function ArtistPage({
   const { data: tracks } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, cover_url, preview_url, created_at, genre, custom_tag, ai_disclosure, explicit, lyrics, release_at, license_enabled, license_beat_cents, license_standard_cents, license_commercial_cents"
+      "id, title, price_cents, cover_url, preview_url, created_at, genre, custom_tag, ai_disclosure, explicit, lyrics, release_at, license_enabled, license_beat_cents, license_standard_cents, license_commercial_cents, vinyl_url"
     )
     // A frozen track (app/admin/moderation/page.tsx's freezeTrack) is hidden
     // here for everyone, owner included — the artist already sees why in
@@ -450,6 +450,18 @@ export default async function ArtistPage({
                     {(Math.min(...offeredTiers(track as any).map((o) => o.priceCents)) / 100).toFixed(0)}
                   </Link>
                 )}
+              {/* Get it on Vinyl (lib/vinyl.ts): a link-out to the artist's
+                  on-demand pressing. Fyby doesn't sell or ship the record. */}
+              {featureOn("vinyl") && (artist as any).is_active && (track as any).vinyl_url && (
+                <a
+                  href={(track as any).vinyl_url}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  className="mt-2 font-mono text-xs text-flame hover:underline self-end"
+                >
+                  💿 Get it on Vinyl &rarr;
+                </a>
+              )}
             </div>
           ))}
         </div>

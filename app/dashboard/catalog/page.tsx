@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { featureOn } from "@/lib/phaseServer";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -43,7 +44,7 @@ export default async function CatalogPage() {
   const { data: tracks, error } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, created_at, audio_path, audio_url, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, explicit, verification_status, verification_note, frozen, frozen_reason, radio_opt_in, mood, release_at, license_enabled, license_beat_cents, license_standard_cents, license_commercial_cents"
+      "id, title, price_cents, created_at, audio_path, audio_url, cover_url, preview_url, genre, subgenre, custom_tag, ai_disclosure, explicit, verification_status, verification_note, frozen, frozen_reason, radio_opt_in, mood, release_at, license_enabled, license_beat_cents, license_standard_cents, license_commercial_cents, vinyl_url"
     )
     .eq("artist_id", artist?.id)
     .order("created_at", { ascending: false });
@@ -210,6 +211,7 @@ export default async function CatalogPage() {
           allGenres={allGenres}
           premiereEndsByTrack={premiereEndsByTrack}
           isPro={artist.plan === "pro"}
+          vinylEnabled={featureOn("vinyl")}
         />
       )}
     </main>

@@ -12,6 +12,7 @@ import { startVerificationCheckout } from "@/app/actions/verification";
 import { VERIFICATION_FEE_CENTS, verificationBadgeLabel } from "@/lib/verification";
 import ContributorManager, { type Contributor } from "./ContributorManager";
 import LicenseSettings from "./LicenseSettings";
+import VinylLinkSettings from "./VinylLinkSettings";
 import { formatReleaseDate, isPreorder } from "@/lib/preorder";
 
 // Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
@@ -48,6 +49,8 @@ type Track = {
   license_standard_cents?: number | null;
   license_commercial_cents?: number | null;
   mood?: string | null;
+  // "Get it on Vinyl" link-out (lib/vinyl.ts).
+  vinyl_url?: string | null;
 };
 
 export default function TrackList({
@@ -57,6 +60,7 @@ export default function TrackList({
   allGenres,
   premiereEndsByTrack = {},
   isPro = false,
+  vinylEnabled = true,
 }: {
   tracks: Track[];
   artistId: string;
@@ -64,6 +68,8 @@ export default function TrackList({
   allGenres: string[];
   premiereEndsByTrack?: Record<string, string>;
   isPro?: boolean;
+  // False until the release phase that ships vinyl (lib/phases.ts).
+  vinylEnabled?: boolean;
 }) {
   if (tracks.length === 0) return null;
 
@@ -78,6 +84,7 @@ export default function TrackList({
           allGenres={allGenres}
           premiereEndsAt={premiereEndsByTrack[track.id] ?? null}
           isPro={isPro}
+          vinylEnabled={vinylEnabled}
         />
       ))}
     </div>
@@ -91,6 +98,7 @@ function TrackRow({
   allGenres,
   premiereEndsAt,
   isPro,
+  vinylEnabled,
 }: {
   track: Track;
   artistId: string;
@@ -98,6 +106,7 @@ function TrackRow({
   allGenres: string[];
   premiereEndsAt: string | null;
   isPro: boolean;
+  vinylEnabled: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(track.title);
@@ -655,6 +664,8 @@ function TrackRow({
           }}
         />
       )}
+
+      {vinylEnabled && <VinylLinkSettings trackId={track.id} vinylUrl={track.vinyl_url ?? null} />}
 
       <ContributorManager trackId={track.id} contributors={contributors} />
     </div>

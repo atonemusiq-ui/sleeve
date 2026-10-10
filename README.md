@@ -124,6 +124,10 @@ Fyby launches lean and turns features on one release at a time (`lib/phases.ts`)
 - **Live site:** set `FYBY_PHASE` in Vercel (1-6) and redeploy. Unset = 6, the full app.
 - **Investor demo:** log in with the admin account and a phase switcher appears at the bottom of every page. Click 1-6 to see the app at that release; "Back to live" returns to normal. Only the admin sees the preview; the public site never changes.
 
+## Get it on Vinyl
+
+Artists set up an on-demand pressing (for example on elasticStage), then paste the record's link on the track in their catalog ("💿 Add a vinyl link"). Fans see a "Get it on Vinyl" button on the artist page and buy the record on the pressing service's site. Fyby doesn't sell or ship the record. Part of Phase 2.
+
 ## Founding Artists
 
 The first 500 artists to sign up get locked-in plan prices (Artist $4.99, Pro $7.99 a month; `FOUNDING` in `lib/plans.ts`). Their spot number is assigned automatically by the database when their artist account is created (`claim_founding_spot` in `supabase/schema.sql`). Accounts that existed before this was added don't get a spot; grant one by hand with `select claim_founding_spot('<artist id>');`.
