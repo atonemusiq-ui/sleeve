@@ -197,4 +197,4 @@ const LAST_UPDATED = "September 2026";
 // TODO: point this at a real support inbox before relying on these pages —
 // using the founder's personal address as a placeholder for now rather than
 // inventing a domain that doesn't exist yet.
-const CONTACT_EMAIL = "atonemusiq@gmail.com";
+const CONTACT_EMAIL = "support@getfyby.com";
