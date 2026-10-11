@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { SOURCE_COOKIE, parseSignupSource } from "@/lib/signupSource";
 
 export async function signup(formData: FormData) {
   const email = formData.get("email") as string;
@@ -19,6 +21,52 @@ export async function signup(formData: FormData) {
   const fanWantsCode = formData.get("verifyEmail") === "on";
 
   const supabase = createClient();
+  const admin = createServiceRoleClient();
+
+  // Which marketing video sent them, if any (set by getfyby.com/mic, see
+  // app/mic/route.ts). Saved on the account so sign-ups can be counted per
+  // platform and video.
+  const signupSource = parseSignupSource(cookies().get(SOURCE_COOKIE)?.value);
+  const metadata = {
+    role,
+    display_name: displayName,
+    ...(signupSource ? { signup_source: signupSource } : {}),
+  };
+
+  // Fans who didn't ask for a code are created already confirmed and signed
+  // straight in. Creating them confirmed in one step (instead of signUp()
+  // and then confirming) means there's no window where Supabase still thinks
+  // the email is unconfirmed -- that race is what sent fans to "check your
+  // email" in production -- and no confirmation email goes out for nothing.
+  if (role === "fan" && !fanWantsCode) {
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: metadata,
+    });
+
+    if (createError || !created.user) {
+      const taken = createError && /already|registered|exists/i.test(createError.message);
+      const message = taken
+        ? "An account with that email already exists. Log in instead."
+        : createError?.message ?? "Sign up failed";
+      return redirect(`/signup?error=${encodeURIComponent(message)}`);
+    }
+
+    await claimPastPurchases(created.user.id, email);
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (!signInError) {
+      redirect(next && next.startsWith("/") ? next : "/");
+    }
+    console.error("[signup] fan sign-in after create failed", {
+      userId: created.user.id,
+      message: signInError.message,
+    });
+    const loginNext = next ? `&next=${encodeURIComponent(next)}` : "";
+    return redirect(`/login?error=${encodeURIComponent("Your account is ready. Please log in.")}${loginNext}`);
+  }
 
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -29,10 +77,7 @@ export async function signup(formData: FormData) {
       // create the matching `profiles` (and, for artists, `artists`) rows.
       // Note the key is `display_name` (snake_case), matching what the
       // trigger reads — not `displayName`.
-      data: {
-        role,
-        display_name: displayName,
-      },
+      data: metadata,
     },
   });
 
@@ -42,83 +87,7 @@ export async function signup(formData: FormData) {
 
   // `profiles`/`artists` rows are created by the database trigger above, so
   // there's nothing left to insert here.
-
-  const admin = createServiceRoleClient();
-
-  // Claim any purchases already sitting under this email with no fan_id —
-  // a guest/anonymous checkout from before buying required an account, or
-  // someone completing the "create a free account" prompt on /success
-  // right after paying (see app/success/page.tsx). Uses the service-role
-  // client since there's no purchases UPDATE policy for RLS to allow this
-  // for a brand-new account. Same trust model this app already accepts for
-  // fan signups generally (auto-confirmed with no inbox round trip) — this
-  // doesn't verify the signer actually owns that inbox, it just reunites a
-  // purchase with an account claiming the email that paid for it.
-  const { error: claimError } = await admin
-    .from("purchases")
-    .update({ fan_id: data.user.id })
-    .eq("buyer_email", email)
-    .is("fan_id", null);
-
-  if (claimError) {
-    console.error("[signup] failed to claim past purchases by email", {
-      userId: data.user.id,
-      email,
-      message: claimError.message,
-    });
-  }
-
-  // Artists still confirm their email before they can log in — they handle
-  // real money via Stripe Connect, so that's worth the friction. Fans
-  // don't: email confirmation was exactly the extra step in "get bounced to
-  // sign up mid-checkout, then come back and buy" (see
-  // app/actions/checkout.ts), so a fan gets auto-confirmed and signed in
-  // immediately instead. This uses the service-role admin API — a trusted,
-  // server-only operation — rather than touching the project-wide "confirm
-  // email" setting, which would also turn off confirmation for artists.
-  if (role === "fan" && !fanWantsCode) {
-    const { error: confirmError } = await admin.auth.admin.updateUserById(data.user.id, {
-      email_confirm: true,
-    });
-
-    if (confirmError) {
-      console.error("[signup] fan auto-confirm failed", {
-        userId: data.user.id,
-        email,
-        message: confirmError.message,
-      });
-    } else {
-      // Immediately signing in right after admin-confirming can occasionally
-      // race ahead of that confirmation propagating through Supabase's auth
-      // backend, which surfaces as a spurious "Email not confirmed" on the
-      // very next call. One short retry absorbs that lag instead of bouncing
-      // a fan to "check your email" over a race condition that isn't theirs.
-      let signInError = (await supabase.auth.signInWithPassword({ email, password })).error;
-
-      if (signInError) {
-        console.error("[signup] fan sign-in after auto-confirm failed, retrying once", {
-          userId: data.user.id,
-          email,
-          message: signInError.message,
-        });
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        signInError = (await supabase.auth.signInWithPassword({ email, password })).error;
-      }
-
-      if (!signInError) {
-        redirect(next && next.startsWith("/") ? next : "/");
-      } else {
-        console.error("[signup] fan sign-in after auto-confirm failed twice", {
-          userId: data.user.id,
-          email,
-          message: signInError.message,
-        });
-      }
-    }
-    // If auto-confirm or sign-in failed for any reason, fall through to the
-    // same "check your email" path an artist gets — worst case a fan sees
-    // one extra step, not a broken signup.
-  }
+  await claimPastPurchases(data.user.id, email);
 
   // Email confirmation is required, so signUp() didn't return an active
   // session yet. Two-step signup: the confirmation email Supabase just sent
@@ -126,6 +95,24 @@ export async function signup(formData: FormData) {
   // and /verify-email takes it and signs them straight in — no need to go
   // find the link and then log in separately.
   redirect(verifyEmailUrl(email, next));
+}
+
+// Claim any purchases already sitting under this email with no fan_id -- a
+// guest checkout from before buying required an account, or someone
+// completing the "create a free account" prompt on /success right after
+// paying (see app/success/page.tsx). Uses the service-role client since
+// there's no purchases UPDATE policy for RLS to allow this for a brand-new
+// account. This doesn't verify the signer owns that inbox; it reunites a
+// purchase with an account claiming the email that paid for it.
+async function claimPastPurchases(userId: string, email: string) {
+  const { error } = await createServiceRoleClient()
+    .from("purchases")
+    .update({ fan_id: userId })
+    .eq("buyer_email", email)
+    .is("fan_id", null);
+  if (error) {
+    console.error("[signup] failed to claim past purchases by email", { userId, message: error.message });
+  }
 }
 
 function verifyEmailUrl(email: string, next: string | null, extra?: { error?: string; message?: string }) {
