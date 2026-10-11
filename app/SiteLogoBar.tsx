@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import FybyLogo, { FybyWordmark } from "./FybyLogo";
+import type { Feature } from "@/lib/phases";
 
 // Pages that already show the logo in their own header, plus the embeddable
 // player (it runs inside other people's sites, so it stays unbranded here).
 const HIDDEN_ON = ["/", "/login", "/signup"];
 
 // The Fyby logo at the top of every page, linking back to the storefront.
-export default function SiteLogoBar() {
+export default function SiteLogoBar({ features }: { features: Record<Feature, boolean> }) {
   const pathname = usePathname() ?? "/";
   if (HIDDEN_ON.includes(pathname) || pathname.startsWith("/embed")) return null;
 
@@ -20,30 +21,38 @@ export default function SiteLogoBar() {
         <FybyWordmark className="text-2xl" />
       </Link>
       <nav className="flex items-center gap-2">
+      {features.radio && (
       <Link
         href="/radio"
         className="inline-flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-full border border-paper/20 text-paper/70 hover:border-gold/60 hover:text-gold"
       >
         📻 <span className="hidden sm:inline">Radio</span>
       </Link>
+      )}
+      {features.tv && (
       <Link
         href="/tv"
         className="inline-flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-full border border-paper/20 text-paper/70 hover:border-gold/60 hover:text-gold"
       >
         📺 <span className="hidden sm:inline">TV</span>
       </Link>
+      )}
+      {features.merch && (
       <Link
         href="/merch"
         className="inline-flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-full border border-paper/20 text-paper/70 hover:border-gold/60 hover:text-gold"
       >
         👕 <span className="hidden sm:inline">Merch</span>
       </Link>
+      )}
+      {features.connect && (
       <Link
         href="/connect"
         className="inline-flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-full border border-paper/20 text-paper/70 hover:border-gold/60 hover:text-gold"
       >
         🤝 <span className="hidden sm:inline">Connect</span>
       </Link>
+      )}
       {/* The logo already links home; this makes that obvious. */}
       <Link
         href="/"

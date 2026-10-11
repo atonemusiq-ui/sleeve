@@ -256,4 +256,4 @@ export default function PrivacyPage() {
 }
 
 const LAST_UPDATED = "October 4, 2026";
-const CONTACT_EMAIL = "atonemusiq@gmail.com";
+const CONTACT_EMAIL = "support@getfyby.com";

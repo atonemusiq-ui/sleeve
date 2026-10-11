@@ -163,4 +163,4 @@ export default function ArtistAgreementPage() {
 }
 
 const LAST_UPDATED = "September 2026";
-const CONTACT_EMAIL = "atonemusiq@gmail.com";
+const CONTACT_EMAIL = "support@getfyby.com";

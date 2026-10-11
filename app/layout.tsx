@@ -4,6 +4,9 @@ import GlobalAudioManager from "./GlobalAudioManager";
 import SiteLogoBar from "./SiteLogoBar";
 import FybyDayBanner from "./FybyDayBanner";
 import RadioProvider from "./RadioProvider";
+import PhaseSwitcher from "./PhaseSwitcher";
+import { currentPhase, featureMap, isAdminRequest } from "@/lib/phaseServer";
+import { livePhase } from "@/lib/phases";
 
 export const metadata: Metadata = {
   title: "Fyby",
@@ -11,6 +14,13 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Release phase for this request (lib/phases.ts) -- the live phase, or the
+  // admin's investor-demo preview.
+  const phase = currentPhase();
+  const live = livePhase();
+  const features = featureMap();
+  const admin = isAdminRequest();
+
   return (
     <html lang="en">
       <head>
@@ -25,11 +35,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <GlobalAudioManager />
         {/* Fyby Radio (Phase 10) wraps every page so the music keeps playing
             across navigation. Hidden unless NEXT_PUBLIC_RADIO_ENABLED=true. */}
-        <RadioProvider>
+        <RadioProvider phaseAllows={features.radio}>
           <FybyDayBanner />
-          <SiteLogoBar />
+          <SiteLogoBar features={features} />
           {children}
         </RadioProvider>
+        {/* Investor demo: click through each release phase. Admin only. */}
+        {admin && <PhaseSwitcher phase={phase} livePhase={live} previewing={phase !== live} />}
       </body>
     </html>
   );

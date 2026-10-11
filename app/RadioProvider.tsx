@@ -72,8 +72,15 @@ function newSessionId(): string {
   }
 }
 
-export default function RadioProvider({ children }: { children: React.ReactNode }) {
-  const enabled = isRadioEnabled();
+export default function RadioProvider({
+  children,
+  phaseAllows = true,
+}: {
+  children: React.ReactNode;
+  // False until the release phase that ships Fyby Radio (lib/phases.ts).
+  phaseAllows?: boolean;
+}) {
+  const enabled = isRadioEnabled() && phaseAllows;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recentRef = useRef<string[]>([]);
   const sessionRef = useRef<string>("");

@@ -38,6 +38,37 @@ export const PLANS = {
 
 export const DEFAULT_PLAN: Plan = "free";
 
+// ---------------------------------------------------------------------------
+// Founding Artists: the first 500 artists to sign up (supabase/schema.sql,
+// claim_founding_spot) pay these prices instead, locked in for as long as
+// they keep their account -- including if they cancel and come back, or
+// switch between Artist and Pro. The commission rate is the same as the
+// regular plan; only the monthly price is lower.
+//
+// The cap of 500 also lives in schema.sql (the check constraint and
+// claim_founding_spot); change both together.
+export const FOUNDING = {
+  spots: 500,
+  priceCents: {
+    artist: 499,
+    pro: 799,
+  },
+} as const satisfies { spots: number; priceCents: Record<Exclude<Plan, "free">, number> };
+
+export function isFoundingArtist(foundingNumber: unknown): boolean {
+  return typeof foundingNumber === "number" && foundingNumber >= 1 && foundingNumber <= FOUNDING.spots;
+}
+
+// What this artist pays per month for a plan, in cents.
+export function planPriceCents(plan: Plan, foundingNumber?: unknown): number {
+  if (plan === "free") return 0;
+  return isFoundingArtist(foundingNumber) ? FOUNDING.priceCents[plan] : PLANS[plan].priceCents;
+}
+
+export function formatPlanPrice(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
 export function isPlan(value: unknown): value is Plan {
   return typeof value === "string" && Object.prototype.hasOwnProperty.call(PLANS, value);
 }
@@ -83,8 +114,10 @@ export function payoutCents(
 // cents — the number that makes an upgrade checkable rather than a leap of
 // faith ("Artist pays for itself at $100/month in sales"). Returns null for a
 // plan that costs nothing, or one whose cut isn't actually lower than Free's.
-export function breakEvenCentsPerMonth(plan: Plan): number | null {
-  const { priceCents, rateBps } = PLANS[plan];
+export function breakEvenCentsPerMonth(plan: Plan, priceCentsOverride?: number): number | null {
+  const { rateBps } = PLANS[plan];
+  // A Founding Artist's lower price (planPriceCents) breaks even sooner.
+  const priceCents = priceCentsOverride ?? PLANS[plan].priceCents;
   const saved = PLANS[DEFAULT_PLAN].rateBps - rateBps;
 
   if (priceCents <= 0 || saved <= 0) return null;

@@ -8,6 +8,7 @@ import DiscoverTabs from "./DiscoverTabs";
 import FybyLogo from "../FybyLogo";
 import { recommendTracks } from "@/lib/engine";
 import SponsoredCard from "../SponsoredCard";
+import { featureOn } from "@/lib/phaseServer";
 
 // Phase 9: three ways to browse instead of just one long homepage grid --
 // a plain recency feed (with genre/AI-disclosure filters, same as the
@@ -100,11 +101,16 @@ export default async function DiscoverPage() {
       <h2 className="font-display text-2xl mb-2">Discover</h2>
       <p className="text-paper/40 font-mono text-xs mb-10 max-w-xl">
         Browse what&apos;s new, what&apos;s trending, or what&apos;s picked for you based on who
-        you follow, buy and like.{" "}
-        <Link href="/interests" className="text-gold underline">
-          Tell Fyby what you&apos;re into
-        </Link>
-        .
+        you follow, buy and like.
+        {featureOn("interests") && (
+          <>
+            {" "}
+            <Link href="/interests" className="text-gold underline">
+              Tell Fyby what you&apos;re into
+            </Link>
+            .
+          </>
+        )}
       </p>
 
       <SponsoredCard placement="discover" className="mb-8" />

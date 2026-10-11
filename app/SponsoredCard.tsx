@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { pickAd, recordAdEvent, type AdPlacement } from "@/lib/ads";
+import { featureOn } from "@/lib/phaseServer";
 
 // A sponsored card from the Fyby Engine (lib/ads.ts). Renders nothing when
 // no campaign fits this viewer and page. Each render counts one view; the
@@ -15,6 +16,9 @@ export default async function SponsoredCard({
   pageGenres?: string[];
   className?: string;
 }) {
+  // The advertiser program ships in Phase 6 (lib/phases.ts).
+  if (!featureOn("ads")) return null;
+
   let ad = null;
   try {
     const supabase = createClient();
