@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import TrackAudio from "@/app/TrackAudio";
+import TrackAudio, { UnlessOwned } from "@/app/TrackAudio";
 import Link from "next/link";
 import { aiDisclosureBadge, isAiMusic, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 
@@ -287,7 +287,8 @@ function DiscoverTile({
           <p className="font-mono text-xs text-rust">Pending original songwriter/producer credit.</p>
         ) : (
           <>
-            <span className="font-mono text-forest text-lg">${(track.price_cents / 100).toFixed(2)}</span>
+            <UnlessOwned trackId={track.id} releaseAt={(track as any).release_at ?? null}>
+              <span className="font-mono text-forest text-lg">${(track.price_cents / 100).toFixed(2)}</span>
             <form action={startCheckout}>
               <input type="hidden" name="trackId" value={track.id} />
               <button
@@ -297,6 +298,7 @@ function DiscoverTile({
                 {isLoggedIn ? "Buy this song" : "Log in to buy"}
               </button>
             </form>
+            </UnlessOwned>
           </>
         )}
       </div>

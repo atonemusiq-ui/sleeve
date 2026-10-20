@@ -1,5 +1,5 @@
 import Link from "next/link";
-import TrackAudio from "@/app/TrackAudio";
+import TrackAudio, { UnlessOwned } from "@/app/TrackAudio";
 import { getT } from "@/lib/i18n/server";
 
 // Shown only to logged-out visitors, right up top after the hero (see
@@ -85,7 +85,8 @@ export default function FeaturedTracks({
             </div>
             <TrackAudio trackId={track.id} previewUrl={track.preview_url} releaseAt={(track as any).release_at ?? null} className="w-full" />
             <div className="flex items-center justify-between mt-1">
-              <span className="font-mono text-forest">${(track.price_cents / 100).toFixed(2)}</span>
+              <UnlessOwned trackId={track.id} releaseAt={(track as any).release_at ?? null}>
+                <span className="font-mono text-forest">${(track.price_cents / 100).toFixed(2)}</span>
               <form action={startCheckout}>
                 <input type="hidden" name="trackId" value={track.id} />
                 <button
@@ -95,6 +96,7 @@ export default function FeaturedTracks({
                   {isLoggedIn ? t("store.buySong") : t("store.logInToBuy")}
                 </button>
               </form>
+              </UnlessOwned>
             </div>
           </div>
         ))}

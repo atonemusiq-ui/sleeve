@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import TrackAudio from "@/app/TrackAudio";
+import TrackAudio, { UnlessOwned } from "@/app/TrackAudio";
 import Link from "next/link";
 import { aiDisclosureBadge, isAiMusic, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 import { verificationBadgeLabel } from "@/lib/verification";
@@ -349,7 +349,8 @@ function TrackTile({
           </p>
         ) : (
           <div className="flex items-center justify-between">
-            <span className="font-mono text-forest text-lg">
+            <UnlessOwned trackId={track.id} releaseAt={(track as any).release_at ?? null}>
+              <span className="font-mono text-forest text-lg">
               ${(track.price_cents / 100).toFixed(2)}
             </span>
             <form action={startCheckout}>
@@ -367,6 +368,7 @@ function TrackTile({
                   : t("store.logInToBuy")}
               </button>
             </form>
+            </UnlessOwned>
           </div>
         )}
         {album &&

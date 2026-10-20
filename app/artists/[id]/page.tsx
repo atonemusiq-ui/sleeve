@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import TrackAudio from "@/app/TrackAudio";
+import TrackAudio, { UnlessOwned } from "@/app/TrackAudio";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { tracksNeedingCoverCredit } from "@/lib/coverCompliance";
 import { aiDisclosureBadge } from "@/lib/aiDisclosure";
@@ -486,7 +486,8 @@ export default async function ArtistPage({
                   <p className="font-mono text-xs text-rust">{t("artist.buyingOff")}</p>
                 ) : (
                   <>
-                    <span className="font-mono text-forest text-lg">
+                    <UnlessOwned trackId={track.id} releaseAt={(track as any).release_at ?? null}>
+                      <span className="font-mono text-forest text-lg">
                       ${(track.price_cents / 100).toFixed(2)}
                     </span>
                     <BuyTrackForm
@@ -495,6 +496,7 @@ export default async function ArtistPage({
                       referredByFanId={referredByFanId}
                       isPreorder={isPreorder((track as any).release_at)}
                     />
+                    </UnlessOwned>
                   </>
                 )}
               </div>

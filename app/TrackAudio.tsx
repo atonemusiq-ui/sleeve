@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 // One shared player for every public track listing (storefront, AI Music,
@@ -46,6 +46,52 @@ async function loadOwnedTrackIds(): Promise<Set<string>> {
   return promise;
 }
 
+// True once we know the signed-in listener owns this track (bought or
+// licensed). False while loading and for everyone else.
+export function useOwnsTrack(trackId: string): boolean {
+  const [owned, setOwned] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    loadOwnedTrackIds().then((ids) => {
+      if (alive) setOwned(ids.has(trackId));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [trackId]);
+  return owned;
+}
+
+// Shows its children (price + Buy button) to people who don't own the song;
+// a buyer sees "You own this" with a link to their Library instead, so a
+// song they already paid for never asks them to buy it again.
+export function UnlessOwned({
+  trackId,
+  releaseAt = null,
+  children,
+}: {
+  trackId: string;
+  releaseAt?: string | null;
+  children: ReactNode;
+}) {
+  const owned = useOwnsTrack(trackId);
+  if (!owned) return <>{children}</>;
+  const preordered = Boolean(releaseAt && new Date(releaseAt) > new Date());
+  return (
+    <div className="flex items-center justify-between gap-3 w-full">
+      <span className="font-mono text-xs text-forest">
+        {preordered ? "✓ Pre-ordered — plays in full on release day" : "✓ You own this song"}
+      </span>
+      <a
+        href="/library"
+        className="font-mono text-xs px-3 py-1.5 rounded border border-forest/40 text-forest hover:bg-forest/10"
+      >
+        My Library
+      </a>
+    </div>
+  );
+}
+
 export default function TrackAudio({
   trackId,
   previewUrl,
@@ -59,17 +105,7 @@ export default function TrackAudio({
   // this too).
   releaseAt?: string | null;
 }) {
-  const [owned, setOwned] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    loadOwnedTrackIds().then((ids) => {
-      if (alive) setOwned(ids.has(trackId));
-    });
-    return () => {
-      alive = false;
-    };
-  }, [trackId]);
+  const owned = useOwnsTrack(trackId);
 
   const preordered = Boolean(releaseAt && new Date(releaseAt) > new Date());
   const full = owned && !preordered;
