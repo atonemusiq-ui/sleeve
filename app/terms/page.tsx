@@ -1,4 +1,5 @@
 import Link from "next/link";
+import LegalTranslationNote from "@/app/LegalTranslationNote";
 
 // Baseline Terms of Service reflecting how Fyby actually works today (80/20
 // split, Stripe-processed payments, contributor royalties, cover-song
@@ -10,6 +11,7 @@ export default function TermsPage() {
   return (
     <main className="max-w-3xl mx-auto px-6 py-16">
       <h1 className="font-display text-3xl text-gold mb-2">Terms of Service</h1>
+      <LegalTranslationNote />
       <p className="font-mono text-xs text-paper/40 mb-8">Last updated: {LAST_UPDATED}</p>
 
       <div className="font-body text-paper/80 leading-relaxed flex flex-col gap-6 [&_h2]:font-display [&_h2]:text-xl [&_h2]:text-paper [&_h2]:mt-4 [&_h2]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:flex [&_ul]:flex-col [&_ul]:gap-1">

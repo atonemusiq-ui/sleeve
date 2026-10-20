@@ -14,7 +14,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <>
       {admin && (
-        <div className="border-b border-gold/25 bg-gold/5">
+        <div data-no-translate className="border-b border-gold/25 bg-gold/5">
           <div className="max-w-6xl mx-auto px-6 py-3 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <Link href="/admin" className="inline-flex items-center gap-2 text-gold">
@@ -36,7 +36,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
         </div>
       )}
-      {children}
+      {/* The back office stays in English (app/AutoTranslate.tsx skips it). */}
+      <div data-no-translate>{children}</div>
     </>
   );
 }
