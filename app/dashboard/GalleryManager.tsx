@@ -7,14 +7,12 @@ import { updateGallery } from "@/app/actions/artist";
 
 const SLOT_COUNT = 4;
 
-type Slot = { existingUrl: string | null; file: File | null; removed: boolean };
-
 // A fixed 4-photo gallery shown on the public artist page
 // (app/artists/[id]/page.tsx) — press-kit-style photos beyond the single
-// circular bio photo (BioManager.tsx). Each slot works the same way: pick a
-// photo (or leave it as the dashed "Upload your artwork here" box), Save
-// uploads whatever's new to the same public "artist-photos" bucket the bio
-// photo uses and writes the resulting URLs as one array.
+// circular bio photo (BioManager.tsx). Each photo has its own Add/Replace and
+// Remove button, and every change saves right away (same as the bio photo):
+// a new photo uploads to the public "artist-photos" bucket, then the full
+// list of URLs is written in one call.
 export default function GalleryManager({
   artistId,
   galleryUrls,
@@ -22,75 +20,51 @@ export default function GalleryManager({
   artistId: string;
   galleryUrls: string[];
 }) {
-  const [slots, setSlots] = useState<Slot[]>(() =>
-    Array.from({ length: SLOT_COUNT }, (_, i) => ({
-      existingUrl: galleryUrls[i] ?? null,
-      file: null,
-      removed: false,
-    }))
+  const [urls, setUrls] = useState<(string | null)[]>(() =>
+    Array.from({ length: SLOT_COUNT }, (_, i) => galleryUrls[i] ?? null)
   );
-  const [busy, setBusy] = useState(false);
+  const [busySlot, setBusySlot] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  function previewFor(slot: Slot): string | null {
-    if (slot.file) return URL.createObjectURL(slot.file);
-    if (slot.removed) return null;
-    return slot.existingUrl;
-  }
-
-  function setSlotFile(index: number, file: File | null) {
-    setSlots((prev) =>
-      prev.map((s, i) => (i === index ? { ...s, file, removed: false } : s))
-    );
-  }
-
-  function removeSlot(index: number) {
-    setSlots((prev) =>
-      prev.map((s, i) => (i === index ? { ...s, file: null, removed: true } : s))
-    );
-  }
-
-  async function handleSave() {
+  async function save(next: (string | null)[], slot: number) {
     setError(null);
-    setBusy(true);
-
+    setBusySlot(slot);
     try {
-      const supabase = createClient();
-      const finalUrls: string[] = [];
-
-      for (const slot of slots) {
-        if (slot.file) {
-          const path = `${artistId}/gallery-${Date.now()}-${slot.file.name}`;
-          const { error: uploadError } = await supabase.storage
-            .from("artist-photos")
-            .upload(path, slot.file);
-          if (uploadError) throw new Error(`Photo upload failed: ${uploadError.message}`);
-          finalUrls.push(supabase.storage.from("artist-photos").getPublicUrl(path).data.publicUrl);
-        } else if (!slot.removed && slot.existingUrl) {
-          finalUrls.push(slot.existingUrl);
-        }
-      }
-
       const formData = new FormData();
-      formData.set("galleryUrls", JSON.stringify(finalUrls));
-
+      formData.set("galleryUrls", JSON.stringify(next.filter(Boolean)));
       const result = await updateGallery(formData);
       if (result.error) throw new Error(result.error);
-
-      setSlots(
-        Array.from({ length: SLOT_COUNT }, (_, i) => ({
-          existingUrl: finalUrls[i] ?? null,
-          file: null,
-          removed: false,
-        }))
-      );
+      // Saved photos close up any gaps, same order as on the artist page.
+      const compact = next.filter(Boolean) as string[];
+      setUrls(Array.from({ length: SLOT_COUNT }, (_, i) => compact[i] ?? null));
       router.refresh();
     } catch (err: any) {
       setError(err.message ?? "Something went wrong.");
     } finally {
-      setBusy(false);
+      setBusySlot(null);
     }
+  }
+
+  async function replace(slot: number, file: File | null) {
+    if (!file) return;
+    setError(null);
+    setBusySlot(slot);
+    const supabase = createClient();
+    const path = `${artistId}/gallery-${Date.now()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("artist-photos").upload(path, file);
+    if (uploadError) {
+      setError(`Photo upload failed: ${uploadError.message}`);
+      setBusySlot(null);
+      return;
+    }
+    const url = supabase.storage.from("artist-photos").getPublicUrl(path).data.publicUrl;
+    await save(urls.map((u, i) => (i === slot ? url : u)), slot);
+  }
+
+  async function remove(slot: number) {
+    if (!window.confirm("Remove this photo from your artist page?")) return;
+    await save(urls.map((u, i) => (i === slot ? null : u)), slot);
   }
 
   return (
@@ -98,48 +72,54 @@ export default function GalleryManager({
       {error && <p className="text-rust font-mono text-sm">{error}</p>}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {slots.map((slot, i) => {
-          const preview = previewFor(slot);
+        {urls.map((url, i) => {
+          const busy = busySlot === i;
           return (
             <div key={i} className="flex flex-col gap-1.5">
               <div className="aspect-square rounded-lg bg-paper/10 overflow-hidden border border-dashed border-paper/25 flex items-center justify-center">
-                {preview ? (
+                {url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={preview} alt="" className="w-full h-full object-cover" />
+                  <img src={url} alt="" className={`w-full h-full object-cover ${busy ? "opacity-40" : ""}`} />
                 ) : (
                   <span className="font-mono text-[10px] text-paper/50 text-center px-2">
-                    Upload your artwork here
+                    {busy ? "Saving..." : "Empty"}
                   </span>
                 )}
               </div>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setSlotFile(i, e.target.files?.[0] ?? null)}
-                className="w-full text-paper font-mono text-[11px] file:mr-2 file:px-2 file:py-1 file:rounded file:border-0 file:bg-gold file:text-ink file:font-mono file:text-[11px] file:font-medium file:cursor-pointer hover:file:opacity-90"
-              />
-              {preview && (
-                <button
-                  type="button"
-                  onClick={() => removeSlot(i)}
-                  className="self-start font-mono text-[11px] text-rust hover:underline"
+              <div className="flex items-center gap-2">
+                <label
+                  className={`font-mono text-[11px] px-2 py-1 rounded border border-gold/40 text-gold hover:bg-gold/10 cursor-pointer ${
+                    busySlot !== null ? "opacity-50 pointer-events-none" : ""
+                  }`}
                 >
-                  Remove
-                </button>
-              )}
+                  {busy ? "Saving..." : url ? "📷 Replace" : "📷 Add photo"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={busySlot !== null}
+                    onChange={(e) => {
+                      replace(i, e.target.files?.[0] ?? null);
+                      e.target.value = "";
+                    }}
+                    className="sr-only"
+                  />
+                </label>
+                {url && (
+                  <button
+                    type="button"
+                    onClick={() => remove(i)}
+                    disabled={busySlot !== null}
+                    className="font-mono text-[11px] text-rust hover:underline disabled:opacity-50"
+                  >
+                    🗑 Remove
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
       </div>
-
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={busy}
-        className="self-start font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10 disabled:opacity-50"
-      >
-        {busy ? "Saving..." : "Save gallery"}
-      </button>
+      <p className="font-mono text-[11px] text-paper/40">Changes save right away.</p>
     </div>
   );
 }

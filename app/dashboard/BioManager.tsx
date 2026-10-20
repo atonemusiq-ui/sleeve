@@ -128,13 +128,20 @@ export default function BioManager({
           )}
         </div>
         <div className="flex flex-col gap-1">
-          <input
-            type="file"
-            accept="image/*"
-            disabled={photoBusy}
-            onChange={(e) => handlePhotoChange(e.target.files?.[0] ?? null)}
-            className="text-paper font-mono text-xs disabled:opacity-50"
-          />
+          <label
+            className={`self-start font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10 cursor-pointer ${
+              photoBusy ? "opacity-50 pointer-events-none" : ""
+            }`}
+          >
+            {previewUrl ? "📷 Replace photo" : "📷 Add photo"}
+            <input
+              type="file"
+              accept="image/*"
+              disabled={photoBusy}
+              onChange={(e) => handlePhotoChange(e.target.files?.[0] ?? null)}
+              className="sr-only"
+            />
+          </label>
           {photoBusy && <p className="font-mono text-xs text-paper/50">Saving photo...</p>}
           {!photoBusy && previewUrl && (
             <button
@@ -142,7 +149,7 @@ export default function BioManager({
               onClick={handleRemovePhoto}
               className="self-start font-mono text-xs text-rust hover:underline"
             >
-              Remove photo
+              🗑 Remove photo
             </button>
           )}
         </div>

@@ -1806,3 +1806,66 @@ create trigger protect_artist_billing
 -- ============================================================================
 alter table tracks add column if not exists vinyl_url text
   check (vinyl_url is null or (vinyl_url ~ '^https://' and length(vinyl_url) <= 500));
+
+-- ============================================================================
+-- Artists removing their own songs (app/actions/tracks.ts removeTrack).
+-- A song nobody has bought is deleted outright. A song with sales can't be:
+-- deleting a track cascades to its purchases, which would wipe buyers'
+-- libraries and the payout history. So a sold song is taken down the same
+-- way an admin freeze works (frozen = true hides it everywhere and blocks
+-- new sales; buyers keep it), with frozen_reason set to the marker
+-- '__removed_by_artist__' (lib/trackRemoval.ts) so the artist can restore
+-- it. An admin freeze uses a real reason, and only an admin can lift that.
+--
+-- These two triggers make that hold even outside the app:
+--   1. frozen / frozen_reason / frozen_at can only be changed by the server
+--      (admin tools and removeTrack/restoreTrack run as service_role). Before
+--      this, an artist could un-freeze an admin-frozen track straight
+--      through the Supabase API. A change from a user session is kept at the
+--      old value; every other column still updates.
+--   2. A song with sales can't be deleted from a user session.
+-- ============================================================================
+create or replace function protect_track_moderation_columns()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if coalesce(auth.role(), '') in ('authenticated', 'anon') then
+    if tg_op = 'INSERT' then
+      new.frozen := false;
+      new.frozen_reason := null;
+      new.frozen_at := null;
+    else
+      new.frozen := old.frozen;
+      new.frozen_reason := old.frozen_reason;
+      new.frozen_at := old.frozen_at;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists protect_track_moderation on tracks;
+create trigger protect_track_moderation
+  before insert or update on tracks
+  for each row execute function protect_track_moderation_columns();
+
+create or replace function block_deleting_sold_tracks()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if coalesce(auth.role(), '') in ('authenticated', 'anon')
+     and exists (select 1 from purchases where track_id = old.id) then
+    raise exception 'This song has sales, so it can''t be deleted. Remove it from your catalog instead.';
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists block_deleting_sold_tracks on tracks;
+create trigger block_deleting_sold_tracks
+  before delete on tracks
+  for each row execute function block_deleting_sold_tracks();

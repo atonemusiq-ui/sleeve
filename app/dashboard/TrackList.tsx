@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateTrack, setRadioSettings } from "@/app/actions/tracks";
+import RemoveTrackButton from "./RemoveTrackButton";
+import { isRemovedByArtist } from "@/lib/trackRemoval";
 import { MOODS, PREMIERE_TIERS, PRO_FREE_PREMIERE_EVERY_DAYS, PRO_FREE_PREMIERE_TIER, RADIO_EXCLUDED_GENRES } from "@/lib/radio";
 import { startRadioPremiere } from "@/app/actions/radioPremiere";
 import { MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE, subgenresFor } from "@/lib/genres";
@@ -225,36 +227,6 @@ function TrackRow({
     }
   }
 
-  async function handleDelete() {
-    if (!window.confirm(`Take down "${track.title}"? This can't be undone.`)) {
-      return;
-    }
-
-    setBusy(true);
-    setError(null);
-    const supabase = createClient();
-
-    try {
-      // Delete the row first — RLS ("artists can delete their own tracks")
-      // scopes this to tracks this artist actually owns.
-      const { error: deleteError } = await supabase.from("tracks").delete().eq("id", track.id);
-      if (deleteError) throw new Error(`Delete failed: ${deleteError.message}`);
-
-      // Best-effort storage cleanup. The track is already gone from the
-      // catalog even if this fails, so don't block on it or surface it as a
-      // hard error — an orphaned file in storage is a much smaller problem
-      // than a delete that appears to fail.
-      if (track.audio_path) {
-        await supabase.storage.from("track-audio").remove([track.audio_path]);
-      }
-
-      router.refresh();
-    } catch (err: any) {
-      setError(err.message ?? "Something went wrong.");
-      setBusy(false);
-    }
-  }
-
   if (editing) {
     return (
       <form
@@ -443,13 +415,11 @@ function TrackRow({
           >
             {showEmbed ? "Hide embed" : "Embed this song"}
           </button>
-          <button
-            onClick={handleDelete}
-            disabled={busy}
-            className="font-mono text-xs px-2 py-1 rounded border border-rust/40 text-rust hover:bg-rust/10 disabled:opacity-50"
-          >
-            {busy ? "..." : "Delete"}
-          </button>
+          <RemoveTrackButton
+            trackId={track.id}
+            title={track.title}
+            mode={isRemovedByArtist(track) ? "restore" : "remove"}
+          />
         </div>
       </div>
       {showEmbed && (
@@ -473,7 +443,13 @@ function TrackRow({
           </button>
         </div>
       )}
-      {track.frozen && (
+      {isRemovedByArtist(track) && (
+        <p className="font-mono text-xs text-paper/70 bg-paper/5 border border-paper/20 rounded px-3 py-2">
+          You removed this song. It&apos;s off your page and not for sale, but fans who bought it
+          keep it. Use Restore song to put it back.
+        </p>
+      )}
+      {track.frozen && !isRemovedByArtist(track) && (
         <p className="font-mono text-xs text-rust bg-rust/10 border border-rust/30 rounded px-3 py-2">
           This track was removed from Fyby by an admin
           {track.frozen_reason ? `: ${track.frozen_reason}` : "."} It&apos;s no longer visible to
