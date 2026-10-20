@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import TrackAudio from "@/app/TrackAudio";
 import Link from "next/link";
 import { aiDisclosureBadge, isAiMusic, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 import { verificationBadgeLabel } from "@/lib/verification";
@@ -331,9 +332,7 @@ function TrackTile({
           </div>
         )}
 
-        {track.preview_url && (
-          <audio controls src={track.preview_url} className="w-full h-9 mt-3" preload="none" />
-        )}
+        <TrackAudio trackId={track.id} previewUrl={track.preview_url} releaseAt={(track as any).release_at ?? null} />
         {album && (
           <p className="font-mono text-xs text-paper/50 mt-2">
             {t(albumTrackCount === 1 ? "store.partOfAlbumOne" : "store.partOfAlbumOther", {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import TrackAudio from "@/app/TrackAudio";
 import Link from "next/link";
 import { aiDisclosureBadge, isAiMusic, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 
@@ -279,7 +280,7 @@ function DiscoverTile({
           </div>
         )}
 
-        {track.preview_url && <audio controls src={track.preview_url} className="w-full h-9 mt-3" preload="none" />}
+        <TrackAudio trackId={track.id} previewUrl={track.preview_url} releaseAt={(track as any).release_at ?? null} />
       </div>
       <div className="flex items-center justify-between mt-6">
         {blocked ? (

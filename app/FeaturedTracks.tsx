@@ -1,4 +1,5 @@
 import Link from "next/link";
+import TrackAudio from "@/app/TrackAudio";
 import { getT } from "@/lib/i18n/server";
 
 // Shown only to logged-out visitors, right up top after the hero (see
@@ -82,9 +83,7 @@ export default function FeaturedTracks({
                 <p className="text-paper/60 text-sm">{t("store.unknownArtist")}</p>
               )}
             </div>
-            {track.preview_url && (
-              <audio controls src={track.preview_url} className="w-full h-9" preload="none" />
-            )}
+            <TrackAudio trackId={track.id} previewUrl={track.preview_url} releaseAt={(track as any).release_at ?? null} className="w-full" />
             <div className="flex items-center justify-between mt-1">
               <span className="font-mono text-forest">${(track.price_cents / 100).toFixed(2)}</span>
               <form action={startCheckout}>

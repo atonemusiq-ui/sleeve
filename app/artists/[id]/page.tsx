@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import TrackAudio from "@/app/TrackAudio";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { tracksNeedingCoverCredit } from "@/lib/coverCompliance";
 import { aiDisclosureBadge } from "@/lib/aiDisclosure";
@@ -464,14 +465,7 @@ export default async function ArtistPage({
                     )}
                   </div>
                 )}
-              {track.preview_url && (
-                <audio
-                  controls
-                  src={track.preview_url}
-                  className="w-full h-9 mt-3"
-                  preload="none"
-                />
-              )}
+              <TrackAudio trackId={track.id} previewUrl={track.preview_url} releaseAt={(track as any).release_at ?? null} />
               <LyricsCreditsDialog
                 trackTitle={track.title}
                 lyrics={(track as any).lyrics ?? null}
