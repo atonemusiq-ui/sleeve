@@ -1686,9 +1686,9 @@ revoke execute on function record_ad_event(uuid, text, text, uuid) from public, 
 grant execute on function record_ad_event(uuid, text, text, uuid) to service_role;
 
 -- ============================================================================
--- Founding Artists: the first 500 artists to sign up get discounted plan
+-- Founding Artists: the first 100 artists to sign up get discounted plan
 -- prices locked in for as long as they keep their account (lib/plans.ts,
--- FOUNDING). founding_number is their spot in line (1-500); null = not a
+-- FOUNDING). founding_number is their spot in line (1-100); null = not a
 -- Founding Artist. Assigned automatically when the artist row is created,
 -- so it can't be claimed or skipped from the app.
 --
@@ -1714,10 +1714,12 @@ begin
   if existing is not null then return existing; end if;
 
   -- Serializes claims so two signups at the same instant can't take the
-  -- same number or push past 500.
+  -- same number or push past the cap (100; raise here, in
+  -- founding_spots_left and in lib/plans.ts together -- the check
+  -- constraint above already allows up to 500).
   perform pg_advisory_xact_lock(hashtext('fyby_founding_spots'));
   select count(*) into taken from artists where founding_number is not null;
-  if taken >= 500 then return null; end if;
+  if taken >= 100 then return null; end if;
 
   update artists
      set founding_number = taken + 1, founding_claimed_at = now()
@@ -1755,7 +1757,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select greatest(0, 500 - count(*))::integer from artists where founding_number is not null;
+  select greatest(0, 100 - count(*))::integer from artists where founding_number is not null;
 $$;
 
 grant execute on function founding_spots_left() to anon, authenticated;

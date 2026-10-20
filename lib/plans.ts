@@ -39,16 +39,17 @@ export const PLANS = {
 export const DEFAULT_PLAN: Plan = "free";
 
 // ---------------------------------------------------------------------------
-// Founding Artists: the first 500 artists to sign up (supabase/schema.sql,
+// Founding Artists: the first 100 artists to sign up (supabase/schema.sql,
 // claim_founding_spot) pay these prices instead, locked in for as long as
 // they keep their account -- including if they cancel and come back, or
 // switch between Artist and Pro. The commission rate is the same as the
 // regular plan; only the monthly price is lower.
 //
-// The cap of 500 also lives in schema.sql (the check constraint and
-// claim_founding_spot); change both together.
+// The cap also lives in schema.sql (claim_founding_spot and
+// founding_spots_left); change all three together. The column's check
+// constraint allows up to 500, so raising the cap later is just these edits.
 export const FOUNDING = {
-  spots: 500,
+  spots: 100,
   priceCents: {
     artist: 499,
     pro: 799,

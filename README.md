@@ -130,7 +130,7 @@ Artists set up an on-demand pressing (for example on elasticStage), then paste t
 
 ## Founding Artists
 
-The first 500 artists to sign up get locked-in plan prices (Artist $4.99, Pro $7.99 a month; `FOUNDING` in `lib/plans.ts`). Their spot number is assigned automatically by the database when their artist account is created (`claim_founding_spot` in `supabase/schema.sql`). Accounts that existed before this was added don't get a spot; grant one by hand with `select claim_founding_spot('<artist id>');`.
+The first 100 artists to sign up get locked-in plan prices (Artist $4.99, Pro $7.99 a month; `FOUNDING` in `lib/plans.ts`). Their spot number is assigned automatically by the database when their artist account is created (`claim_founding_spot` in `supabase/schema.sql`). Accounts that existed before this was added don't get a spot; grant one by hand with `select claim_founding_spot('<artist id>');`.
 
 ## Cost note
 

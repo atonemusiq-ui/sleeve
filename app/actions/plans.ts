@@ -14,7 +14,7 @@ import { siteOrigin } from "@/lib/siteUrl";
 // that file; the actual plan change happens once Stripe confirms the
 // subscription in app/api/webhooks/stripe-subscriptions/route.ts, not here.
 //
-// Founding Artists (the first 500, see FOUNDING in lib/plans.ts) are charged
+// Founding Artists (the first 100, see FOUNDING in lib/plans.ts) are charged
 // their locked-in founding price. The price is read from the database here
 // on the server, never from the form, so it can't be chosen by the browser.
 export async function startPlanCheckout(formData: FormData) {
