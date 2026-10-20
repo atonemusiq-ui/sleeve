@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import { artistCirclePhoto } from "@/lib/artistPhoto";
 
 // Public artist directory — every artist who has signed up, whether they've
 // released a track yet or not. Deliberately not gated behind login: both the
@@ -13,7 +14,7 @@ export default async function ArtistsIndexPage() {
   const { data: artists, error } = await supabase
     .from("artists")
     .select(
-      "id, bio, bio_photo_url, created_at, profiles ( display_name ), tracks ( id, title, preview_url, created_at )"
+      "id, bio, bio_photo_url, gallery_urls, created_at, profiles ( display_name ), tracks ( id, title, preview_url, cover_url, frozen, created_at )"
     )
     .order("created_at", { ascending: false });
 
@@ -22,7 +23,9 @@ export default async function ArtistsIndexPage() {
   } = await supabase.auth.getUser();
 
   const normalizedArtists = (artists ?? []).map((artist: any) => {
-    const tracks = Array.isArray(artist.tracks) ? artist.tracks : [];
+    const allTracks = Array.isArray(artist.tracks) ? artist.tracks : [];
+    // Songs taken down (by an admin or by the artist) don't count or show.
+    const tracks = allTracks.filter((t: any) => !t.frozen);
     // Sample the most recently released track that actually has a preview
     // clip — preview_url is the same public, no-purchase-required 15-second
     // clip already used on the storefront (see app/FeaturedTracks.tsx),
@@ -36,6 +39,7 @@ export default async function ArtistsIndexPage() {
       ...artist,
       profiles: Array.isArray(artist.profiles) ? artist.profiles[0] ?? null : artist.profiles,
       trackCount: tracks.length,
+      circlePhoto: artistCirclePhoto({ ...artist, tracks }),
       sampleTrack,
     };
   });
@@ -89,10 +93,10 @@ export default async function ArtistsIndexPage() {
                 className="border border-paper/15 rounded-lg p-5 bg-paper/5 hover:border-gold/40 flex flex-col gap-3"
               >
                 <Link href={`/artists/${artist.id}`} className="flex items-center gap-3">
-                  {artist.bio_photo_url ? (
+                  {artist.circlePhoto ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={artist.bio_photo_url}
+                      src={artist.circlePhoto}
                       alt={artistName}
                       className="w-12 h-12 rounded-full object-cover flex-shrink-0 border border-paper/15"
                     />

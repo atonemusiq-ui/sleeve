@@ -26,6 +26,7 @@ import { featureOn } from "@/lib/phaseServer";
 import RemoveTrackButton from "@/app/dashboard/RemoveTrackButton";
 import { getLang, getT } from "@/lib/i18n/server";
 import { dateLocale } from "@/lib/i18n/config";
+import { artistCirclePhoto } from "@/lib/artistPhoto";
 
 // Powers the og:title/og:description a crawler shows alongside the image
 // from this same folder's opengraph-image.tsx when a plain artist link is
@@ -99,7 +100,7 @@ export default async function ArtistPage({
   const { data: tracks } = await supabase
     .from("tracks")
     .select(
-      "id, title, price_cents, cover_url, preview_url, created_at, genre, custom_tag, ai_disclosure, explicit, lyrics, release_at, license_enabled, license_beat_cents, license_standard_cents, license_commercial_cents, vinyl_url"
+      "id, title, price_cents, cover_url, preview_url, created_at, frozen, genre, custom_tag, ai_disclosure, explicit, lyrics, release_at, license_enabled, license_beat_cents, license_standard_cents, license_commercial_cents, vinyl_url"
     )
     // A frozen track (app/admin/moderation/page.tsx's freezeTrack) is hidden
     // here for everyone, owner included — the artist already sees why in
@@ -110,6 +111,9 @@ export default async function ArtistPage({
     .order("created_at", { ascending: false });
 
   const artistName = (artist as any).profiles?.display_name ?? "Unknown artist";
+  // Round photo at the top: profile photo, else a gallery photo, else the
+  // newest cover art (lib/artistPhoto.ts).
+  const circlePhoto = artistCirclePhoto({ ...(artist as any), tracks: (tracks ?? []) as any[] });
   const galleryUrls: string[] = ((artist as any).gallery_urls ?? []).filter(Boolean);
 
   // Contributor names for the "Lyrics & Credits" dialog (app/LyricsCreditsDialog.tsx).
@@ -288,11 +292,11 @@ export default async function ArtistPage({
 
       <header className="mt-6 mb-10 flex items-start justify-between gap-5">
         <div className="flex items-start gap-5">
-          {(artist as any).bio_photo_url && (
+          {circlePhoto && (
             <div className="relative flex-shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={(artist as any).bio_photo_url}
+                src={circlePhoto}
                 alt={artistName}
                 className="w-20 h-20 rounded-full object-cover border border-paper/15"
               />
