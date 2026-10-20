@@ -17,6 +17,9 @@ import FybyLogo, { FybyWordmark } from "./FybyLogo";
 import { featureMap, featureOn } from "@/lib/phaseServer";
 import { getT } from "@/lib/i18n/server";
 import LanguageMenu from "./LanguageMenu";
+import { cookies } from "next/headers";
+import { ADMIN_UI_COOKIE } from "@/lib/admin";
+import { isAdminRequest } from "@/lib/phaseServer";
 
 export default async function StorefrontPage() {
   const supabase = createClient();
@@ -122,7 +125,23 @@ export default async function StorefrontPage() {
           </h1>
         </div>
         <nav className="font-mono text-sm flex flex-col items-end gap-2">
-          <LanguageMenu />
+          <div className="flex items-center gap-2">
+            {/* Back office shortcut, admins only (lib/admin.ts). The homepage
+                has its own header, so the top-bar one in SiteLogoBar
+                doesn't show here. */}
+            {(isAdminRequest() || cookies().has(ADMIN_UI_COOKIE)) && (
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-full border border-gold/50 text-gold hover:bg-gold/10"
+              >
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5" aria-hidden>
+                  <path d="M10 2.5 16 5v4.5c0 3.8-2.6 6.6-6 8-3.4-1.4-6-4.2-6-8V5l6-2.5Z" strokeLinejoin="round" />
+                </svg>
+                Admin
+              </Link>
+            )}
+            <LanguageMenu />
+          </div>
           {user ? (
             <div className="flex flex-wrap justify-end gap-x-4 gap-y-1">
               <Link href="/discover" className="hover:text-gold">
