@@ -1,4 +1,5 @@
 "use client";
+import { safeFileName } from "@/lib/uploadFile";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -87,7 +88,7 @@ export default function VideoManager({
           throw new Error("Please choose a video file.");
         }
         const supabase = createClient();
-        const path = `${artistId}/${Date.now()}-${videoFile.name}`;
+        const path = `${artistId}/${Date.now()}-${safeFileName(videoFile.name)}`;
         const { error: uploadError } = await supabase.storage.from("artist-videos").upload(path, videoFile);
         if (uploadError) throw new Error(`Video upload failed: ${uploadError.message}`);
         url = supabase.storage.from("artist-videos").getPublicUrl(path).data.publicUrl;

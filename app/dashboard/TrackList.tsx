@@ -1,4 +1,5 @@
 "use client";
+import { safeFileName } from "@/lib/uploadFile";
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -196,7 +197,7 @@ function TrackRow({
       let coverUrl: string | null = null;
       if (coverFile) {
         const supabase = createClient();
-        const coverPath = `${artistId}/${Date.now()}-${coverFile.name}`;
+        const coverPath = `${artistId}/${Date.now()}-${safeFileName(coverFile.name)}`;
         const { error: coverError } = await supabase.storage
           .from("track-covers")
           .upload(coverPath, coverFile);

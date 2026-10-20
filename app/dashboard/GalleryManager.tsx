@@ -1,4 +1,5 @@
 "use client";
+import { safeFileName } from "@/lib/uploadFile";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -51,7 +52,7 @@ export default function GalleryManager({
     setError(null);
     setBusySlot(slot);
     const supabase = createClient();
-    const path = `${artistId}/gallery-${Date.now()}-${file.name}`;
+    const path = `${artistId}/gallery-${Date.now()}-${safeFileName(file.name)}`;
     const { error: uploadError } = await supabase.storage.from("artist-photos").upload(path, file);
     if (uploadError) {
       setError(`Photo upload failed: ${uploadError.message}`);
