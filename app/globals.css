@@ -70,3 +70,9 @@ body.bg-fyby::before {
 .animate-fade-rise {
   animation: fade-rise 0.6s ease-out both;
 }
+
+/* While a non-English page is being translated (app/AutoTranslate.tsx), hide
+   it for the split second so visitors don't see English flash first. */
+html.fyby-translating body {
+  visibility: hidden;
+}

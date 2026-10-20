@@ -9,6 +9,7 @@ import { currentPhase, featureMap, isAdminRequest } from "@/lib/phaseServer";
 import { livePhase } from "@/lib/phases";
 import { getLang } from "@/lib/i18n/server";
 import { I18nProvider } from "./I18nProvider";
+import AutoTranslate from "./AutoTranslate";
 import { cookies } from "next/headers";
 import { ADMIN_UI_COOKIE } from "@/lib/admin";
 
@@ -31,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const lang = getLang();
 
   return (
-    <html lang={lang}>
+    <html lang={lang} className={lang === "en" ? undefined : "fyby-translating"}>
       <head>
         <link
           href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Unbounded:wght@800&display=swap"
@@ -44,7 +45,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <GlobalAudioManager />
         {/* Fyby Radio (Phase 10) wraps every page so the music keeps playing
             across navigation. Hidden unless NEXT_PUBLIC_RADIO_ENABLED=true. */}
+        {lang !== "en" && (
+          // Never leave the page hidden if the translator can't run.
+          <script
+            dangerouslySetInnerHTML={{
+              __html: "setTimeout(function(){document.documentElement.classList.remove('fyby-translating')},2500)",
+            }}
+          />
+        )}
         <I18nProvider lang={lang}>
+          <AutoTranslate />
           <RadioProvider phaseAllows={features.radio}>
             <FybyDayBanner />
             <SiteLogoBar features={features} showAdminLink={showAdminLink} />

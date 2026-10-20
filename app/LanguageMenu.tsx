@@ -1,7 +1,6 @@
 "use client";
 
 import { useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { setLanguage } from "@/app/actions/language";
 import { LANGUAGES } from "@/lib/i18n/config";
 import { useLang, useT } from "./I18nProvider";
@@ -12,7 +11,6 @@ import { useLang, useT } from "./I18nProvider";
 export default function LanguageMenu({ className = "" }: { className?: string }) {
   const lang = useLang();
   const t = useT();
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   return (
@@ -30,7 +28,10 @@ export default function LanguageMenu({ className = "" }: { className?: string })
           const next = e.target.value;
           startTransition(async () => {
             await setLanguage(next);
-            router.refresh();
+            // Full reload rather than router.refresh(): the whole-site
+            // translator (AutoTranslate.tsx) changes text on the page itself,
+            // and a reload is what reliably puts every word in the new language.
+            window.location.reload();
           });
         }}
         className="bg-transparent text-paper/80 outline-none cursor-pointer [&>option]:bg-ink"

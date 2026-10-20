@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LICENSE_TIERS } from "@/lib/licensing";
+import LegalTranslationNote from "@/app/LegalTranslationNote";
 
 export const metadata = { title: "License terms · Fyby" };
 
@@ -11,6 +12,7 @@ export default function LicenseTermsPage() {
   return (
     <main className="max-w-2xl mx-auto px-6 py-12 leading-relaxed">
       <h1 className="font-display text-3xl text-gold mb-2">Fyby license terms</h1>
+      <LegalTranslationNote />
       <p className="font-mono text-xs text-paper/50 mb-8">Version 1 · October 2026</p>
 
       <p className="mb-6 text-paper/80">
