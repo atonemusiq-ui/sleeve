@@ -4,6 +4,7 @@ import Link from "next/link";
 import { formatReleaseDate, isPreorder } from "@/lib/preorder";
 import { licenseTierLabel } from "@/lib/licensing";
 import WaitForPurchase from "./WaitForPurchase";
+import ShareSnippetButton from "./ShareSnippetButton";
 
 export default async function LibraryPage({
   searchParams,
@@ -229,6 +230,17 @@ export default async function LibraryPage({
                 </a>
               </div>
             )}
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-mono text-[11px] text-paper/50">
+                Send a friend a free snippet. They can buy it from the link.
+              </span>
+              <ShareSnippetButton
+                trackId={trackId}
+                title={track.title}
+                artistName={track.artists?.profiles?.display_name ?? "this artist"}
+                fanId={user!.id}
+              />
+            </div>
           </div>
         ))}
       </div>
