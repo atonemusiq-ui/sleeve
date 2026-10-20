@@ -5,6 +5,8 @@ import PasswordInput from "@/app/PasswordInput";
 import { isRadioEnabled } from "@/lib/radio";
 import { createClient } from "@/lib/supabase/server";
 import { FOUNDING, formatPlanPrice } from "@/lib/plans";
+import { getT } from "@/lib/i18n/server";
+import LanguageMenu from "@/app/LanguageMenu";
 
 export default async function SignupPage({
   searchParams,
@@ -21,29 +23,32 @@ export default async function SignupPage({
   // Founding Artist countdown (supabase/schema.sql, founding_spots_left).
   // Hidden if the lookup fails or the spots are gone.
   const supabase = createClient();
+  const t = getT();
   const { data: spotsLeft } = await supabase.rpc("founding_spots_left");
   const foundingOpen = typeof spotsLeft === "number" && spotsLeft > 0;
 
   return (
     <main className="max-w-md mx-auto px-6 py-16">
+      <div className="flex justify-end mb-4">
+        <LanguageMenu />
+      </div>
       <Link href="/" className="flex items-center justify-center gap-2.5 mb-8">
         <FybyLogo className="h-9 w-9" />
         <FybyWordmark className="text-3xl" />
       </Link>
 
-      <h1 className="font-display text-2xl text-paper text-center mb-2">Create your account</h1>
+      <h1 className="font-display text-2xl text-paper text-center mb-2">{t("signup.title")}</h1>
       <p className="font-mono text-xs text-paper/50 text-center mb-8">
-        Join Fyby to start selling your music, or supporting the artists you love.
+        {t("signup.sub")}
       </p>
 
       {foundingOpen && (
         <div className="mb-8 rounded-lg border border-gold/50 bg-gold/10 px-4 py-3 text-center">
           <p className="font-display text-gold">
-            {spotsLeft} of {FOUNDING.spots} Founding Artist spots left
+            {t("signup.foundingLeft", { left: spotsLeft, total: FOUNDING.spots })}
           </p>
           <p className="font-mono text-[11px] text-paper/70 mt-1">
-            Sign up as an artist now and lock in Pro at {formatPlanPrice(FOUNDING.priceCents.pro)}/mo for as long
-            as you&apos;re on Fyby.
+            {t("signup.foundingBody", { price: formatPlanPrice(FOUNDING.priceCents.pro) })}
           </p>
         </div>
       )}
@@ -57,7 +62,7 @@ export default async function SignupPage({
           <input type="hidden" name="next" value={searchParams.next} />
         )}
         <div>
-          <label className="block font-mono text-xs text-paper/60 mb-1">Display name</label>
+          <label className="block font-mono text-xs text-paper/60 mb-1">{t("signup.displayName")}</label>
           <input
             name="displayName"
             required
@@ -66,7 +71,7 @@ export default async function SignupPage({
         </div>
 
         <div>
-          <label className="block font-mono text-xs text-paper/60 mb-1">Email</label>
+          <label className="block font-mono text-xs text-paper/60 mb-1">{t("signup.email")}</label>
           <input
             name="email"
             type="email"
@@ -77,7 +82,7 @@ export default async function SignupPage({
         </div>
 
         <div>
-          <label className="block font-mono text-xs text-paper/60 mb-1">Password</label>
+          <label className="block font-mono text-xs text-paper/60 mb-1">{t("signup.password")}</label>
           <PasswordInput
             name="password"
             autoComplete="new-password"
@@ -88,7 +93,7 @@ export default async function SignupPage({
         </div>
 
         <fieldset>
-          <legend className="block font-mono text-xs text-paper/60 mb-2">I am a...</legend>
+          <legend className="block font-mono text-xs text-paper/60 mb-2">{t("signup.iAmA")}</legend>
           <div className="flex gap-4">
             <label className="flex items-center gap-2 font-body">
               <input
@@ -97,11 +102,11 @@ export default async function SignupPage({
                 value="artist"
                 defaultChecked={!cameFromBuying}
               />
-              Artist
+              {t("signup.artist")}
             </label>
             <label className="flex items-center gap-2 font-body">
               <input type="radio" name="role" value="fan" defaultChecked={cameFromBuying} />
-              Fan
+              {t("signup.fan")}
             </label>
           </div>
         </fieldset>
@@ -112,12 +117,11 @@ export default async function SignupPage({
             The checkbox only affects fans — the action ignores it for artists. */}
         <div className="border border-paper/15 rounded-lg px-4 py-3 font-mono text-xs text-paper/60 flex flex-col gap-2">
           <p>
-            <span className="text-paper">Two-step signup:</span> artists confirm their email with a
-            6-digit code before their account opens.
+            <span className="text-paper">{t("signup.twoStepLabel")}</span> {t("signup.twoStepBody")}
           </p>
           <label className="flex items-center gap-2 text-paper/80">
             <input type="checkbox" name="verifyEmail" />
-            Fans: verify my email with a code too
+            {t("signup.fanVerify")}
           </label>
         </div>
 
@@ -125,15 +129,12 @@ export default async function SignupPage({
             the radio is switched on (NEXT_PUBLIC_RADIO_ENABLED). */}
         {isRadioEnabled() && (
           <div className="border border-gold/30 bg-gold/5 rounded-lg px-4 py-3 font-mono text-xs text-paper/70 flex flex-col gap-2">
-            <p className="text-gold">📻 Fyby Radio comes with every account</p>
+            <p className="text-gold">{t("signup.radioTitle")}</p>
             <p>
-              <span className="text-paper">Fans:</span> listen free, nonstop, by genre or mood, and buy any
-              song you hear with one tap.
+              <span className="text-paper">{t("signup.radioFansLabel")}</span> {t("signup.radioFans")}
             </p>
             <p>
-              <span className="text-paper">Artists:</span> check &quot;Play on Fyby Radio&quot; when you
-              upload. Every new artist gets extra plays free for their first month, and you can premiere a
-              new song for heavy rotation.
+              <span className="text-paper">{t("signup.radioArtistsLabel")}</span> {t("signup.radioArtists")}
             </p>
           </div>
         )}
@@ -142,25 +143,25 @@ export default async function SignupPage({
           type="submit"
           className="mt-4 bg-gold text-ink font-mono text-sm font-medium rounded px-4 py-2.5 hover:opacity-90"
         >
-          Sign up
+          {t("signup.submit")}
         </button>
       </form>
 
       <p className="font-mono text-[11px] text-paper/40 mt-4 text-center">
-        By signing up, you agree to Fyby&apos;s{" "}
+        {t("signup.agreeLead")}{" "}
         <Link href="/terms" className="text-gold hover:underline">
-          Terms
+          {t("signup.terms")}
         </Link>{" "}
-        and{" "}
+        {t("signup.and")}{" "}
         <Link href="/privacy" className="text-gold hover:underline">
-          Privacy Policy
+          {t("signup.privacy")}
         </Link>
         {cameFromBuying ? null : (
           <>
             {" "}
-            — Artists also agree to the{" "}
+            {t("signup.artistsAlso")}{" "}
             <Link href="/artist-agreement" className="text-gold hover:underline">
-              Artist Agreement
+              {t("signup.artistAgreement")}
             </Link>
           </>
         )}
@@ -168,12 +169,12 @@ export default async function SignupPage({
       </p>
 
       <p className="font-mono text-xs text-paper/50 mt-6">
-        Already have an account?{" "}
+        {t("signup.haveAccount")}{" "}
         <a
           href={searchParams.next ? `/login?next=${encodeURIComponent(searchParams.next)}` : "/login"}
           className="text-gold"
         >
-          Log in
+          {t("signup.logIn")}
         </a>
       </p>
     </main>

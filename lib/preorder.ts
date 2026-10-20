@@ -63,8 +63,8 @@ export function releaseAtFromDateInput(
   return { releaseAt: releaseAt.toISOString() };
 }
 
-export function formatReleaseDate(releaseAt: string): string {
-  return new Date(releaseAt).toLocaleDateString("en-US", {
+export function formatReleaseDate(releaseAt: string, locale: string = "en-US"): string {
+  return new Date(releaseAt).toLocaleDateString(locale, {
     month: "long",
     day: "numeric",
     year: "numeric",

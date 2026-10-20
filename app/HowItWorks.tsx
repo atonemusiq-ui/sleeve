@@ -1,23 +1,15 @@
-const STEPS = [
-  {
-    title: "1. Upload your music",
-    body: "Add your tracks, set a price, and release — takes minutes, no label required.",
-  },
-  {
-    title: "2. Fans buy directly",
-    body: "Fans find your music and buy it outright, at the price you set — not a fraction of a cent per stream.",
-  },
-  {
-    title: "3. Get paid fast",
-    body: "You keep 85% or more of every sale (more on paid plans), paid out to your bank account through Stripe in days, not months.",
-  },
-];
+import { getT } from "@/lib/i18n/server";
 
 // Shown only to logged-out visitors (see app/page.tsx).
 export default function HowItWorks() {
+  const t = getT();
+  const STEPS = [1, 2, 3].map((n) => ({
+    title: t(`how.step${n}Title`),
+    body: t(`how.step${n}Body`),
+  }));
   return (
     <section className="mb-16">
-      <h2 className="font-display text-2xl mb-6">How it works</h2>
+      <h2 className="font-display text-2xl mb-6">{t("how.heading")}</h2>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         {STEPS.map((step) => (
           <div key={step.title} className="border border-paper/15 rounded-lg p-5 bg-paper/5">

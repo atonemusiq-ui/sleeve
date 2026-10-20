@@ -15,9 +15,12 @@ import { fetchFybyTvVideos } from "@/lib/fybyTvServer";
 import { radioPreviewTrack } from "@/lib/radioPreview";
 import FybyLogo, { FybyWordmark } from "./FybyLogo";
 import { featureMap, featureOn } from "@/lib/phaseServer";
+import { getT } from "@/lib/i18n/server";
+import LanguageMenu from "./LanguageMenu";
 
 export default async function StorefrontPage() {
   const supabase = createClient();
+  const t = getT();
 
   // artists!inner (rather than the plain artists(...) embed) turns the join
   // into an inner join, which is what lets .eq("artists.is_active", ...)
@@ -118,93 +121,94 @@ export default async function StorefrontPage() {
             <FybyWordmark className="text-3xl" />
           </h1>
         </div>
-        <nav className="font-mono text-sm">
+        <nav className="font-mono text-sm flex flex-col items-end gap-2">
+          <LanguageMenu />
           {user ? (
             <div className="flex flex-wrap justify-end gap-x-4 gap-y-1">
               <Link href="/discover" className="hover:text-gold">
-                Discover
+                {t("nav.discover")}
               </Link>
               {features.radio && (
                 <Link href="/radio" className="hover:text-gold" title="Fyby Radio">
-                  📻 Radio
+                  📻 {t("nav.radio")}
                 </Link>
               )}
               {features.tv && (
                 <Link href="/tv" className="hover:text-gold" title="Fyby TV">
-                  📺 TV
+                  📺 {t("nav.tv")}
                 </Link>
               )}
               {features.merch && (
                 <Link href="/merch" className="hover:text-gold" title="Fyby Merch Booth">
-                  👕 Merch
+                  👕 {t("nav.merch")}
                 </Link>
               )}
               {features.connect && (
                 <Link href="/connect" className="hover:text-gold" title="Fyby Connect">
-                  🤝 Connect
+                  🤝 {t("nav.connect")}
                 </Link>
               )}
               {features.ads && (
                 <Link href="/advertise" className="hover:text-gold" title="Advertise with Fyby">
-                  Advertise
+                  {t("nav.advertise")}
                 </Link>
               )}
               {features.aiMusic && (
                 <Link href="/ai-music" className="hover:text-gold">
-                  AI Music
+                  {t("nav.aiMusic")}
                 </Link>
               )}
               <Link href="/library" className="hover:text-gold">
-                My Music
+                {t("nav.myMusic")}
               </Link>
-                          <Link href="/artists" className="hover:text-gold">Artists</Link>
+                          <Link href="/artists" className="hover:text-gold">{t("nav.artists")}</Link>
               {role === "artist" && (
                 <Link href="/dashboard" className="hover:text-gold">
-                  Dashboard
+                  {t("nav.dashboard")}
                 </Link>
               )}
             </div>
           ) : (
             <div className="flex flex-wrap justify-end gap-x-4 gap-y-1">
               <Link href="/discover" className="hover:text-gold">
-                Discover
+                {t("nav.discover")}
               </Link>
               {features.radio && (
                 <Link href="/radio" className="hover:text-gold" title="Fyby Radio">
-                  📻 Radio
+                  📻 {t("nav.radio")}
                 </Link>
               )}
               {features.tv && (
                 <Link href="/tv" className="hover:text-gold" title="Fyby TV">
-                  📺 TV
+                  📺 {t("nav.tv")}
                 </Link>
               )}
               {features.merch && (
                 <Link href="/merch" className="hover:text-gold" title="Fyby Merch Booth">
-                  👕 Merch
+                  👕 {t("nav.merch")}
                 </Link>
               )}
               {features.connect && (
                 <Link href="/connect" className="hover:text-gold" title="Fyby Connect">
-                  🤝 Connect
+                  🤝 {t("nav.connect")}
                 </Link>
               )}
               {features.ads && (
                 <Link href="/advertise" className="hover:text-gold" title="Advertise with Fyby">
-                  Advertise
+                  {t("nav.advertise")}
                 </Link>
               )}
               {features.aiMusic && (
                 <Link href="/ai-music" className="hover:text-gold">
-                  AI Music
+                  {t("nav.aiMusic")}
                 </Link>
               )}
-                          <Link href="/artists" className="hover:text-gold">Artists</Link>
+                          <Link href="/artists" className="hover:text-gold">{t("nav.artists")}</Link>
               <Link href="/login" className="hover:text-gold">
-                Log in
+                {t("nav.logIn")}
               </Link>
               <Link href="/signup" className="hover:text-gold">
-                Sign up
+                {t("nav.signUp")}
               </Link>
             </div>
           )}
@@ -233,20 +237,19 @@ export default async function StorefrontPage() {
       )}
 
       <p className="text-paper/40 font-mono text-xs mb-10 max-w-xl">
-        Artists disclose it themselves when a track involves AI-generated vocals, instrumentation,
-        or production — look for the &quot;AI-Assisted&quot;/&quot;Fully AI-Generated&quot; label
-        on those tracks{features.aiMusic ? ", browse the AI Music row below, or visit the " : "."}
+        {t("home.aiNote")}
+        {features.aiMusic ? t("home.aiNoteMarketLead") : "."}
         {features.aiMusic && (
           <>
             <Link href="/ai-music" className="text-gold">
-              dedicated AI Music marketplace
-            </Link>{" "}
-            for tracks that are 100% AI-generated.
+              {t("home.aiNoteMarketLink")}
+            </Link>
+            {t("home.aiNoteMarketTail")}
           </>
-        )} Want more ways to browse — trending tracks, or a
-        feed picked for you? Head to{" "}
+        )}
+        {t("home.discoverLead")}
         <Link href="/discover" className="text-gold">
-          Discover
+          {t("home.discoverLink")}
         </Link>
         .
       </p>
@@ -254,11 +257,11 @@ export default async function StorefrontPage() {
       <div className="ticket-divider mb-10" />
 
       {error && (
-        <p className="text-rust font-mono text-sm">Couldn&apos;t load tracks: {error.message}</p>
+        <p className="text-rust font-mono text-sm">{t("home.loadError", { message: error.message })}</p>
       )}
 
       {!error && (!tracks || tracks.length === 0) && (
-        <p className="text-paper/50 font-mono text-sm">No tracks released yet.</p>
+        <p className="text-paper/50 font-mono text-sm">{t("store.noTracks")}</p>
       )}
 
       {!error && tracks && tracks.length > 0 && (

@@ -7,6 +7,8 @@ import RadioProvider from "./RadioProvider";
 import PhaseSwitcher from "./PhaseSwitcher";
 import { currentPhase, featureMap, isAdminRequest } from "@/lib/phaseServer";
 import { livePhase } from "@/lib/phases";
+import { getLang } from "@/lib/i18n/server";
+import { I18nProvider } from "./I18nProvider";
 
 export const metadata: Metadata = {
   title: "Fyby",
@@ -20,9 +22,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const live = livePhase();
   const features = featureMap();
   const admin = isAdminRequest();
+  // Interface language (lib/i18n): the visitor's 🌐 pick, else their browser's.
+  const lang = getLang();
 
   return (
-    <html lang="en">
+    <html lang={lang}>
       <head>
         <link
           href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Unbounded:wght@800&display=swap"
@@ -35,11 +39,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <GlobalAudioManager />
         {/* Fyby Radio (Phase 10) wraps every page so the music keeps playing
             across navigation. Hidden unless NEXT_PUBLIC_RADIO_ENABLED=true. */}
-        <RadioProvider phaseAllows={features.radio}>
-          <FybyDayBanner />
-          <SiteLogoBar features={features} />
-          {children}
-        </RadioProvider>
+        <I18nProvider lang={lang}>
+          <RadioProvider phaseAllows={features.radio}>
+            <FybyDayBanner />
+            <SiteLogoBar features={features} />
+            {children}
+          </RadioProvider>
+        </I18nProvider>
         {/* Investor demo: click through each release phase. Admin only. */}
         {admin && <PhaseSwitcher phase={phase} livePhase={live} previewing={phase !== live} />}
       </body>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { startCheckout } from "@/app/actions/checkout";
+import { useT } from "@/app/I18nProvider";
 
 // The storefront Buy button (app/artists/[id]/page.tsx), plus an optional
 // "this is a gift" toggle that reveals a recipient-email field. Pulled out
@@ -27,6 +28,7 @@ export default function BuyTrackForm({
   isPreorder?: boolean;
 }) {
   const [isGift, setIsGift] = useState(false);
+  const t = useT();
 
   return (
     <form action={startCheckout} className="flex flex-col items-end gap-2">
@@ -51,7 +53,7 @@ export default function BuyTrackForm({
             onChange={(e) => setIsGift(e.target.checked)}
             className="accent-gold"
           />
-          This is a gift
+          {t("buy.gift")}
         </label>
       )}
 
@@ -71,13 +73,13 @@ export default function BuyTrackForm({
       >
         {!isLoggedIn
           ? isPreorder
-            ? "Log in to pre-order"
-            : "Log in to buy"
+            ? t("store.logInToPreorder")
+            : t("store.logInToBuy")
           : isGift
-          ? "Send as a gift"
+          ? t("buy.sendGift")
           : isPreorder
-          ? "Pre-order"
-          : "Buy"}
+          ? t("store.preorder")
+          : t("store.buy")}
       </button>
     </form>
   );

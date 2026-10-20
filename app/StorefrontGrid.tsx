@@ -5,6 +5,8 @@ import Link from "next/link";
 import { aiDisclosureBadge, isAiMusic, type AiDisclosureLevel } from "@/lib/aiDisclosure";
 import { verificationBadgeLabel } from "@/lib/verification";
 import { formatReleaseDate, isPreorder } from "@/lib/preorder";
+import { useLang, useT } from "./I18nProvider";
+import { dateLocale } from "@/lib/i18n/config";
 
 type Track = {
   id: string;
@@ -63,6 +65,7 @@ export default function StorefrontGrid({
   // skips rendering it entirely rather than showing the same tracks twice.
   hideAiRow?: boolean;
 }) {
+  const t = useT();
   const [query, setQuery] = useState("");
 
   const blockedSet = useMemo(() => new Set(blockedTrackIds), [blockedTrackIds]);
@@ -135,14 +138,14 @@ export default function StorefrontGrid({
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search tracks or artists..."
-        aria-label="Search tracks or artists"
+        placeholder={t("store.search")}
+        aria-label={t("store.search")}
         className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper font-mono text-sm mb-8"
       />
 
       {searchResults ? (
         searchResults.length === 0 ? (
-          <p className="text-paper/50 font-mono text-sm">No tracks match &quot;{query}&quot;.</p>
+          <p className="text-paper/50 font-mono text-sm">{t("store.noMatch", { query })}</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
             {searchResults.map((track) => (
@@ -151,14 +154,14 @@ export default function StorefrontGrid({
           </div>
         )
       ) : tracks.length === 0 ? (
-        <p className="text-paper/50 font-mono text-sm">No tracks released yet.</p>
+        <p className="text-paper/50 font-mono text-sm">{t("store.noTracks")}</p>
       ) : (
         <div>
           {newReleases.length > 0 && (
-            <GenreRow title="New Releases" tracks={newReleases} {...tileProps} />
+            <GenreRow title={t("store.newReleases")} tracks={newReleases} {...tileProps} />
           )}
           {aiMusicTracks.length > 0 && (
-            <GenreRow title="AI Music" tracks={aiMusicTracks} {...tileProps} />
+            <GenreRow title={t("store.aiMusic")} tracks={aiMusicTracks} {...tileProps} />
           )}
           {genreRows.map((row) => (
             <GenreRow
@@ -191,6 +194,7 @@ function GenreRow({
   showSubgenreTabs,
   ...tileProps
 }: { title: string; tracks: Track[]; showSubgenreTabs?: boolean } & TileProps) {
+  const t = useT();
   const [activeSubgenre, setActiveSubgenre] = useState<string | null>(null);
 
   // Only offered when the row's own tracks actually carry subgenres (e.g. a
@@ -218,7 +222,7 @@ function GenreRow({
                 : "border-paper/20 text-paper/60 hover:bg-paper/10"
             }`}
           >
-            All
+            {t("store.all")}
           </button>
           {subgenres.map((sg) => (
             <button
@@ -258,12 +262,14 @@ function TrackTile({
   blockedSet,
   blockedAlbumIds,
 }: { track: Track } & TileProps) {
+  const t = useT();
+  const lang = useLang();
   const album = albumByTrackId[track.id];
   const albumTrackCount = album ? albumTrackCounts[album.id] ?? 0 : 0;
   const trackBlocked = blockedSet.has(track.id);
   const albumBlocked = album ? blockedAlbumIds.has(album.id) : false;
-  const aiBadge = aiDisclosureBadge(track.ai_disclosure);
-  const verifiedBadge = verificationBadgeLabel(track.verification_status);
+  const aiBadge = aiDisclosureBadge(track.ai_disclosure) ? t(`badges.${track.ai_disclosure}`) : null;
+  const verifiedBadge = verificationBadgeLabel(track.verification_status) ? t("badges.verified") : null;
 
   return (
     <div className="h-full border border-paper/15 rounded-lg p-5 bg-paper/5 flex flex-col justify-between">
@@ -281,7 +287,7 @@ function TrackTile({
         <h3 className="font-display text-xl">{track.title}</h3>
         {isPreorder(track.release_at) && (
           <p className="font-mono text-xs text-flame mt-1">
-            Pre-order · Out {formatReleaseDate(track.release_at as string)}
+            {t("store.preorderOut", { date: formatReleaseDate(track.release_at as string, dateLocale(lang)) })}
           </p>
         )}
         {track.artists?.id ? (
@@ -289,10 +295,10 @@ function TrackTile({
             href={`/artists/${track.artists.id}`}
             className="text-paper/60 text-sm mt-1 hover:text-gold inline-block"
           >
-            {track.artists.profiles?.display_name ?? "Unknown artist"}
+            {track.artists.profiles?.display_name ?? t("store.unknownArtist")}
           </Link>
         ) : (
-          <p className="text-paper/60 text-sm mt-1">Unknown artist</p>
+          <p className="text-paper/60 text-sm mt-1">{t("store.unknownArtist")}</p>
         )}
 
         {(track.genre || track.custom_tag || aiBadge || verifiedBadge || track.explicit) && (
@@ -319,7 +325,7 @@ function TrackTile({
             )}
             {track.explicit && (
               <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-rust/50 text-rust">
-                Explicit
+                {t("badges.explicit")}
               </span>
             )}
           </div>
@@ -330,15 +336,17 @@ function TrackTile({
         )}
         {album && (
           <p className="font-mono text-xs text-paper/50 mt-2">
-            Part of the album <span className="text-paper/70">{album.title}</span> (
-            {albumTrackCount} track{albumTrackCount === 1 ? "" : "s"})
+            {t(albumTrackCount === 1 ? "store.partOfAlbumOne" : "store.partOfAlbumOther", {
+              title: album.title,
+              count: albumTrackCount,
+            })}
           </p>
         )}
       </div>
       <div className="flex flex-col gap-2 mt-6">
         {trackBlocked ? (
           <p className="font-mono text-xs text-rust">
-            This cover is pending the original songwriter/producer credit — check back soon.
+            {t("store.coverPending")}
           </p>
         ) : (
           <div className="flex items-center justify-between">
@@ -353,11 +361,11 @@ function TrackTile({
               >
                 {isPreorder(track.release_at)
                   ? isLoggedIn
-                    ? "Pre-order"
-                    : "Log in to pre-order"
+                    ? t("store.preorder")
+                    : t("store.logInToPreorder")
                   : isLoggedIn
-                  ? "Buy this song"
-                  : "Log in to buy"}
+                  ? t("store.buySong")
+                  : t("store.logInToBuy")}
               </button>
             </form>
           </div>
@@ -365,12 +373,12 @@ function TrackTile({
         {album &&
           (albumBlocked ? (
             <p className="font-mono text-xs text-rust border-t border-paper/10 pt-2">
-              Full album pending a songwriter/producer credit on one of its covers.
+              {t("store.albumPending")}
             </p>
           ) : (
             <div className="flex items-center justify-between border-t border-paper/10 pt-2">
               <span className="font-mono text-forest text-sm">
-                Album ${(album.price_cents / 100).toFixed(2)}
+                {t("store.album", { price: `$${(album.price_cents / 100).toFixed(2)}` })}
               </span>
               <form action={startAlbumCheckout}>
                 <input type="hidden" name="albumId" value={album.id} />
@@ -378,7 +386,7 @@ function TrackTile({
                   type="submit"
                   className="font-mono text-xs px-3 py-1.5 rounded bg-gold text-ink font-medium hover:opacity-90"
                 >
-                  {isLoggedIn ? "Buy full album" : "Log in to buy"}
+                  {isLoggedIn ? t("store.buyAlbum") : t("store.logInToBuy")}
                 </button>
               </form>
             </div>

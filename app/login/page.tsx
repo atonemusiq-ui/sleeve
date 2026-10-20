@@ -2,22 +2,28 @@ import Link from "next/link";
 import { login } from "@/app/actions/auth";
 import FybyLogo, { FybyWordmark } from "@/app/FybyLogo";
 import PasswordInput from "@/app/PasswordInput";
+import { getT } from "@/lib/i18n/server";
+import LanguageMenu from "@/app/LanguageMenu";
 
 export default function LoginPage({
   searchParams,
 }: {
   searchParams: { error?: string; message?: string; next?: string };
 }) {
+  const t = getT();
   return (
     <main className="max-w-md mx-auto px-6 py-16">
+      <div className="flex justify-end mb-4">
+        <LanguageMenu />
+      </div>
       <Link href="/" className="flex items-center justify-center gap-2.5 mb-8">
         <FybyLogo className="h-9 w-9" />
         <FybyWordmark className="text-3xl" />
       </Link>
 
-      <h1 className="font-display text-2xl text-paper text-center mb-2">Welcome back</h1>
+      <h1 className="font-display text-2xl text-paper text-center mb-2">{t("login.title")}</h1>
       <p className="font-mono text-xs text-paper/50 text-center mb-8">
-        Log in to keep selling — or keep supporting the artists you love.
+        {t("login.sub")}
       </p>
 
       {searchParams.message && (
@@ -33,7 +39,7 @@ export default function LoginPage({
           <input type="hidden" name="next" value={searchParams.next} />
         )}
         <div>
-          <label className="block font-mono text-xs text-paper/60 mb-1">Email</label>
+          <label className="block font-mono text-xs text-paper/60 mb-1">{t("login.email")}</label>
           <input
             name="email"
             type="email"
@@ -43,7 +49,7 @@ export default function LoginPage({
         </div>
 
         <div>
-          <label className="block font-mono text-xs text-paper/60 mb-1">Password</label>
+          <label className="block font-mono text-xs text-paper/60 mb-1">{t("login.password")}</label>
           <PasswordInput
             name="password"
             autoComplete="current-password"
@@ -56,22 +62,22 @@ export default function LoginPage({
           type="submit"
           className="mt-4 bg-gold text-ink font-mono text-sm font-medium rounded px-4 py-2.5 hover:opacity-90"
         >
-          Log in
+          {t("login.submit")}
         </button>
       </form>
 
       <p className="font-mono text-xs text-paper/50 mt-6">
-        Don&apos;t have an account?{" "}
+        {t("login.noAccount")}{" "}
         <a
           href={searchParams.next ? `/signup?next=${encodeURIComponent(searchParams.next)}` : "/signup"}
           className="text-gold"
         >
-          Sign up
+          {t("login.signUp")}
         </a>
       </p>
       <p className="font-mono text-xs text-paper/50 mt-2">
         <a href="/forgot-password" className="text-gold">
-          Forgot your password?
+          {t("login.forgot")}
         </a>
       </p>
 
@@ -82,13 +88,12 @@ export default function LoginPage({
       <div className="ticket-divider my-10" />
 
       <p className="font-body text-paper/70 text-sm leading-relaxed italic">
-        &quot;I built Fyby so independent artists can sell directly to the people who actually
-        want to support them — no label taking a cut, no algorithm deciding who gets heard.&quot;
+        {t("login.quote")}
       </p>
       <p className="font-mono text-xs text-gold mt-2">
-        — Anthony &quot;A-Tone&quot; Bryant, Founder ·{" "}
+        {t("login.quoteBy")} ·{" "}
         <Link href="/#why-i-built-this" className="underline hover:text-gold/80">
-          Read the full story
+          {t("login.readStory")}
         </Link>
       </p>
     </main>

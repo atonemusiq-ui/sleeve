@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "./I18nProvider";
 
 // The "Lyrics & Credits" dialog shown on a track card (app/artists/[id]/
 // page.tsx) -- same idea as Apple Music's lyrics+credits sheet. Credits are
@@ -18,6 +19,7 @@ export default function LyricsCreditsDialog({
   credits: string[];
 }) {
   const [open, setOpen] = useState(false);
+  const t = useT();
 
   if (!lyrics && credits.length === 0) return null;
 
@@ -28,7 +30,7 @@ export default function LyricsCreditsDialog({
         onClick={() => setOpen(true)}
         className="font-mono text-xs text-paper/50 hover:text-gold underline mt-2"
       >
-        Lyrics & Credits
+        {t("lyrics.button")}
       </button>
 
       {open && (
@@ -43,7 +45,7 @@ export default function LyricsCreditsDialog({
             <h3 className="font-display text-lg text-gold mb-4">{trackTitle}</h3>
 
             {lyrics && (
-              <p className="font-mono text-xs text-paper/40 uppercase mb-2">Lyrics</p>
+              <p className="font-mono text-xs text-paper/40 uppercase mb-2">{t("lyrics.lyrics")}</p>
             )}
             {lyrics && (
               <p className="font-body text-sm text-paper/80 whitespace-pre-wrap mb-6">
@@ -52,7 +54,7 @@ export default function LyricsCreditsDialog({
             )}
 
             {credits.length > 0 && (
-              <p className="font-mono text-xs text-paper/40 uppercase mb-2">Credits</p>
+              <p className="font-mono text-xs text-paper/40 uppercase mb-2">{t("lyrics.credits")}</p>
             )}
             {credits.length > 0 && (
               <p className="font-body text-sm text-paper/80 whitespace-pre-line">
@@ -65,7 +67,7 @@ export default function LyricsCreditsDialog({
               onClick={() => setOpen(false)}
               className="font-mono text-xs text-gold underline mt-6"
             >
-              Close
+              {t("lyrics.close")}
             </button>
           </div>
         </div>

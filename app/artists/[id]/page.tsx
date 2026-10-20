@@ -24,6 +24,8 @@ import { connectRoleLabel } from "@/lib/connectRoles";
 import SponsoredCard from "@/app/SponsoredCard";
 import { featureOn } from "@/lib/phaseServer";
 import RemoveTrackButton from "@/app/dashboard/RemoveTrackButton";
+import { getLang, getT } from "@/lib/i18n/server";
+import { dateLocale } from "@/lib/i18n/config";
 
 // Powers the og:title/og:description a crawler shows alongside the image
 // from this same folder's opengraph-image.tsx when a plain artist link is
@@ -61,6 +63,8 @@ export default async function ArtistPage({
   searchParams: { superfan?: string; gift?: string; ref?: string };
 }) {
   const supabase = createClient();
+  const t = getT();
+  const lang = getLang();
 
   const { data: artist } = await supabase
     .from("artists")
@@ -210,16 +214,16 @@ export default async function ArtistPage({
     <main className="max-w-5xl mx-auto px-6 py-12">
       <div className="flex items-center justify-between mb-6">
         <Link href="/" className="font-mono text-xs text-paper/50 hover:text-gold">
-          &larr; Back to Fyby
+          {t("artist.back")}
         </Link>
         <nav className="font-mono text-xs">
           {user ? (
             <Link href="/library" className="hover:text-gold">
-              My Music
+              {t("artist.myMusic")}
             </Link>
           ) : (
             <Link href="/login" className="hover:text-gold">
-              Log in
+              {t("artist.logIn")}
             </Link>
           )}
         </nav>
@@ -228,10 +232,9 @@ export default async function ArtistPage({
       {isOwner && !(artist as any).is_active && (
         <div className="mb-8 border border-rust/40 rounded-lg p-4 bg-rust/5">
           <p className="font-mono text-xs text-rust">
-            Your page is hidden — this is a preview only. Fans can&apos;t see this page or buy your
-            music right now.{" "}
+            {t("artist.hidden")}{" "}
             <Link href="/dashboard" className="underline hover:text-gold">
-              Reactivate it from your dashboard
+              {t("artist.reactivate")}
             </Link>
             .
           </p>
@@ -245,8 +248,7 @@ export default async function ArtistPage({
       {searchParams.superfan === "success" && (
         <div className="mb-8 border border-forest/40 rounded-lg p-4 bg-forest/10">
           <p className="font-mono text-sm text-forest">
-            You&apos;re a Super Fan of {artistName} — thank you. Your first month is paid,
-            and {artistName} has been notified.
+            {t("artist.superfanThanks", { name: artistName })}
           </p>
         </div>
       )}
@@ -254,7 +256,7 @@ export default async function ArtistPage({
       {searchParams.gift === "success" && (
         <div className="mb-8 border border-forest/40 rounded-lg p-4 bg-forest/10">
           <p className="font-mono text-sm text-forest">
-            Your gift is on its way to {artistName} — thank you.
+            {t("artist.giftThanks", { name: artistName })}
           </p>
         </div>
       )}
@@ -262,24 +264,24 @@ export default async function ArtistPage({
       {/* Only the artist sees this: quick ways to change their own page. */}
       {isOwner && (
         <div className="mb-6 flex flex-wrap items-center gap-2 border border-gold/30 bg-gold/5 rounded-lg px-4 py-3">
-          <span className="font-mono text-xs text-paper/60 mr-1">This is your page:</span>
+          <span className="font-mono text-xs text-paper/60 mr-1">{t("artist.yourPage")}</span>
           <Link
             href="/dashboard?edit=photos#photos"
             className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
           >
-            📷 Edit photos
+            {t("artist.editPhotos")}
           </Link>
           <Link
             href="/dashboard/catalog"
             className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
           >
-            🎵 Manage songs
+            {t("artist.manageSongs")}
           </Link>
           <Link
             href="/dashboard"
             className="font-mono text-xs px-3 py-1.5 rounded border border-paper/20 text-paper/70 hover:bg-paper/10"
           >
-            ✏️ Edit bio &amp; links
+            {t("artist.editBio")}
           </Link>
         </div>
       )}
@@ -297,7 +299,7 @@ export default async function ArtistPage({
               {isOwner && (
                 <Link
                   href="/dashboard?edit=photos#photos"
-                  title="Replace or remove this photo"
+                  title={t("artist.editPhotoTitle")}
                   className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-ink border border-gold/50 flex items-center justify-center text-xs hover:bg-gold/20"
                 >
                   ✏️
@@ -322,14 +324,14 @@ export default async function ArtistPage({
             {galleryUrls.map((url, i) => (
               <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-paper/10">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt={`${artistName} photo ${i + 1}`} className="w-full h-full object-cover" />
+                <img src={url} alt={t("artist.photoAlt", { name: artistName, n: i + 1 })} className="w-full h-full object-cover" />
                 {isOwner && (
                   <Link
                     href="/dashboard?edit=photos#gallery"
-                    title="Replace or remove this photo"
+                    title={t("artist.editPhotoTitle")}
                     className="absolute top-2 right-2 font-mono text-[11px] px-2 py-1 rounded bg-ink/80 border border-gold/50 text-gold hover:bg-ink"
                   >
-                    ✏️ Edit
+                    {t("artist.edit")}
                   </Link>
                 )}
               </div>
@@ -375,14 +377,14 @@ export default async function ArtistPage({
 
             {tourDates && (
               <div>
-                <p className="font-mono text-xs text-paper/40 uppercase mb-2">Tour dates</p>
+                <p className="font-mono text-xs text-paper/40 uppercase mb-2">{t("artist.tourDates")}</p>
                 <p className="font-body text-sm text-paper/80 whitespace-pre-wrap">{tourDates}</p>
               </div>
             )}
 
             {mailingListEnabled && (
               <div>
-                <p className="font-mono text-xs text-paper/40 uppercase mb-2">Mailing list</p>
+                <p className="font-mono text-xs text-paper/40 uppercase mb-2">{t("artist.mailingList")}</p>
                 <MailingListForm artistId={artist.id} artistName={artistName} />
               </div>
             )}
@@ -393,7 +395,7 @@ export default async function ArtistPage({
       <div className="ticket-divider mb-10" />
 
       {(!tracks || tracks.length === 0) && (
-        <p className="text-paper/50 font-mono text-sm">No tracks released yet.</p>
+        <p className="text-paper/50 font-mono text-sm">{t("artist.noTracks")}</p>
       )}
 
       {tracks && tracks.length > 0 && (
@@ -417,7 +419,7 @@ export default async function ArtistPage({
                 <h2 className="font-display text-xl">{track.title}</h2>
                 {isPreorder((track as any).release_at) && (
                   <p className="font-mono text-xs text-flame mt-1">
-                    Pre-order · Out {formatReleaseDate((track as any).release_at)}
+                    {t("store.preorderOut", { date: formatReleaseDate((track as any).release_at, dateLocale(lang)) })}
                   </p>
                 )}
                 {(track.genre ||
@@ -437,12 +439,12 @@ export default async function ArtistPage({
                     )}
                     {aiDisclosureBadge(track.ai_disclosure) && (
                       <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-gold/40 text-gold">
-                        {aiDisclosureBadge(track.ai_disclosure)}
+                        {t(`badges.${track.ai_disclosure}`)}
                       </span>
                     )}
                     {(track as any).explicit && (
                       <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-rust/50 text-rust">
-                        Explicit
+                        {t("badges.explicit")}
                       </span>
                     )}
                   </div>
@@ -469,10 +471,10 @@ export default async function ArtistPage({
               <div className="flex items-center justify-between mt-6">
                 {blockedTrackIds.has(track.id) ? (
                   <p className="font-mono text-xs text-rust">
-                    Pending original songwriter/producer credit — check back soon.
+                    {t("artist.coverPending")}
                   </p>
                 ) : !(artist as any).is_active ? (
-                  <p className="font-mono text-xs text-rust">Buying is off while your page is hidden.</p>
+                  <p className="font-mono text-xs text-rust">{t("artist.buyingOff")}</p>
                 ) : (
                   <>
                     <span className="font-mono text-forest text-lg">
@@ -497,8 +499,9 @@ export default async function ArtistPage({
                     href={`/license/${track.id}`}
                     className="mt-3 font-mono text-xs text-gold hover:underline self-end"
                   >
-                    💼 License this song · from $
-                    {(Math.min(...offeredTiers(track as any).map((o) => o.priceCents)) / 100).toFixed(0)}
+                    {t("artist.license", {
+                      price: (Math.min(...offeredTiers(track as any).map((o) => o.priceCents)) / 100).toFixed(0),
+                    })}
                   </Link>
                 )}
               {/* Get it on Vinyl (lib/vinyl.ts): a link-out to the artist's
@@ -510,7 +513,7 @@ export default async function ArtistPage({
                   rel="noopener noreferrer nofollow"
                   className="mt-2 font-mono text-xs text-flame hover:underline self-end"
                 >
-                  💿 Get it on Vinyl &rarr;
+                  {t("artist.vinyl")}
                 </a>
               )}
             </div>
@@ -551,7 +554,7 @@ export default async function ArtistPage({
       {featureOn("merch") && (artist as any).is_active && merchProducts.length > 0 && (
         <section aria-labelledby="artist-merch-heading" className="mb-10">
           <h2 id="artist-merch-heading" className="font-display text-2xl mb-4">
-            👕 Merch
+            {t("artist.merch")}
           </h2>
           <ul className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {merchProducts.map((p) => (
@@ -564,7 +567,7 @@ export default async function ArtistPage({
       {featureOn("connect") && (artist as any).is_active && connectRoles.length > 0 && (
         <section aria-labelledby="artist-connect-heading" className="mb-10 rounded-lg border border-paper/15 p-5">
           <h2 id="artist-connect-heading" className="font-display text-xl mb-3">
-            🤝 Available for
+            {t("artist.availableFor")}
           </h2>
           <div className="flex flex-wrap gap-2 mb-3">
             {connectRoles.map((r) => (
@@ -574,14 +577,14 @@ export default async function ArtistPage({
             ))}
           </div>
           <Link href={`/connect/${(artist as any).user_id}`} className="font-mono text-xs text-gold hover:underline">
-            Work with {artistName} on Fyby Connect &rarr;
+            {t("artist.workWith", { name: artistName })}
           </Link>
         </section>
       )}
 
       <CollapsibleSection
-        title="Book or collaborate with this artist"
-        description="Send a booking or collaboration inquiry straight to the artist — they'll reach out at the email you give below."
+        title={t("artist.bookTitle")}
+        description={t("artist.bookDescription")}
       >
         <BookingForm artistId={artist.id} />
       </CollapsibleSection>
