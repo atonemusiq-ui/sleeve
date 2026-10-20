@@ -1,7 +1,7 @@
 "use client";
 import { safeFileName } from "@/lib/uploadFile";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateTrack, setRadioSettings } from "@/app/actions/tracks";
@@ -64,6 +64,7 @@ export default function TrackList({
   premiereEndsByTrack = {},
   isPro = false,
   vinylEnabled = true,
+  highlightTrackId = null,
 }: {
   tracks: Track[];
   artistId: string;
@@ -73,7 +74,16 @@ export default function TrackList({
   isPro?: boolean;
   // False until the release phase that ships vinyl (lib/phases.ts).
   vinylEnabled?: boolean;
+  // The song the artist just uploaded: scrolled into view and highlighted.
+  highlightTrackId?: string | null;
 }) {
+  useEffect(() => {
+    if (!highlightTrackId) return;
+    document
+      .getElementById(`track-${highlightTrackId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightTrackId]);
+
   if (tracks.length === 0) return null;
 
   return (
@@ -88,6 +98,7 @@ export default function TrackList({
           premiereEndsAt={premiereEndsByTrack[track.id] ?? null}
           isPro={isPro}
           vinylEnabled={vinylEnabled}
+          highlighted={track.id === highlightTrackId}
         />
       ))}
     </div>
@@ -102,6 +113,7 @@ function TrackRow({
   premiereEndsAt,
   isPro,
   vinylEnabled,
+  highlighted = false,
 }: {
   track: Track;
   artistId: string;
@@ -110,6 +122,7 @@ function TrackRow({
   premiereEndsAt: string | null;
   isPro: boolean;
   vinylEnabled: boolean;
+  highlighted?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(track.title);
@@ -375,7 +388,17 @@ function TrackRow({
   const needsCoverCredit = track.genre === COVERS_GENRE && contributors.length === 0;
 
   return (
-    <div className="border border-paper/15 rounded-lg px-5 py-4 bg-paper/5 flex flex-col gap-3">
+    <div
+      id={`track-${track.id}`}
+      className={`scroll-mt-24 border rounded-lg px-5 py-4 flex flex-col gap-3 transition-colors ${
+        highlighted ? "border-green-500/60 bg-green-500/10 ring-2 ring-green-500/30" : "border-paper/15 bg-paper/5"
+      }`}
+    >
+      {highlighted && (
+        <span className="self-start rounded-full bg-green-500/20 px-2.5 py-0.5 font-mono text-[11px] text-green-400">
+          Just uploaded
+        </span>
+      )}
       {error && <p className="text-rust font-mono text-sm">{error}</p>}
       {needsCoverCredit && (
         <p className="font-mono text-xs text-rust bg-rust/10 border border-rust/30 rounded px-3 py-2">

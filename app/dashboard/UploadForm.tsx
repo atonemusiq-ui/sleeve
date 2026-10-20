@@ -4,7 +4,7 @@ import { generateAudioFingerprint } from "@/lib/fingerprint/generateFingerprint"
 import { publishTrack } from "@/app/actions/upload";
 import { suggestGenre } from "@/app/actions/genres";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { MAX_CUSTOM_TAG_LENGTH, COVERS_GENRE, subgenresFor, MAX_GENRE_SUGGESTION_LENGTH } from "@/lib/genres";
@@ -163,6 +163,9 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
 
     setUploading(true);
     const supabase = createClient();
+    // Set once the song is live, so the form keeps its "Uploaded!" status
+    // showing while the page moves to the Catalog instead of flashing back.
+    let published = false;
 
     try {
       // Fingerprint the file up front, before any storage upload — if it
@@ -282,12 +285,18 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
       setAudioFile(null);
       setCoverFile(null);
       setEmbeddedArtwork(null);
-      router.refresh();
+      // Confirm the upload and take the artist to the Catalog, scrolled to
+      // and highlighting the song they just released.
+      setUploadStep("Uploaded! Taking you to your song");
+      published = true;
+      router.push(`/dashboard/catalog?uploaded=${result.trackId}#track-${result.trackId}`);
     } catch (err: any) {
       setError(err.message ?? "Something went wrong.");
     } finally {
-      setUploading(false);
-      setUploadStep(null);
+      if (!published) {
+        setUploading(false);
+        setUploadStep(null);
+      }
     }
   }
 
@@ -298,10 +307,18 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
     if (file) handleAudioChange(file);
   }
 
+  // Errors print at the top of a long form — bring them into view so an
+  // artist at the bottom (on a phone especially) actually sees why the
+  // upload stopped.
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (error || flagged !== null) errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [error, flagged]);
+
   return (
     <CollapsibleSection title="Release a track">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      {error && <p className="text-rust font-mono text-sm">{error}</p>}
+      <p ref={errorRef} className={error ? "text-rust font-mono text-sm" : "hidden"}>{error}</p>
 
       {flagged !== null && (
         <p className="text-rust font-mono text-sm">

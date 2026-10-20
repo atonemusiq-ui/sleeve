@@ -36,7 +36,7 @@ export type PublishTrackInput = {
 };
 
 export type PublishTrackResult =
-  | { status: "published" }
+  | { status: "published"; trackId: string }
   | { status: "flagged"; similarity: number }
   | { status: "error"; message: string };
 
@@ -146,7 +146,7 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
   // lib/extractEmbeddedArtwork.ts) if provided, otherwise the generic Fyby
   // cover, rather than showing no artwork at all on the storefront/embed
   // widget.
-  const { error } = await admin.from("tracks").insert({
+  const { data: inserted, error } = await admin.from("tracks").insert({
     artist_id: input.artistId,
     title: input.title,
     price_cents: input.priceCents,
@@ -167,12 +167,15 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
     // Only written for a pre-order, so a normal upload's insert is exactly
     // what it was before this column existed.
     ...(release.releaseAt ? { release_at: release.releaseAt } : {}),
-  });
+  }).select("id").single();
 
   if (error) {
     return { status: "error", message: `Saving track failed: ${error.message}` };
   }
 
   revalidatePath("/dashboard");
-  return { status: "published" };
+  revalidatePath("/dashboard/catalog");
+  // The new id lets the upload form send the artist straight to this song
+  // in their Catalog, with a "your song is uploaded" confirmation.
+  return { status: "published", trackId: inserted.id };
 }

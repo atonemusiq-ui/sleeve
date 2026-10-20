@@ -53,8 +53,10 @@ export function releaseAtFromDateInput(
   }
   const releaseAt = new Date(`${raw}T00:00:00${pacificOffset(probe)}`);
 
+  // Today (or an earlier date) just means "release it now" — an artist who
+  // picks today's date expects the song out today, not an error.
   if (releaseAt.getTime() <= now.getTime()) {
-    return { releaseAt: null, error: "A pre-order release date has to be in the future. Leave it blank to release now." };
+    return { releaseAt: null };
   }
   if (releaseAt.getTime() - now.getTime() > MAX_PREORDER_DAYS * 24 * 60 * 60 * 1000) {
     return { releaseAt: null, error: `Pre-orders can be set up to ${MAX_PREORDER_DAYS} days ahead.` };

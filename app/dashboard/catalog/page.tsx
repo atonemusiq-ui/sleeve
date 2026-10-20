@@ -14,7 +14,13 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60;
 // Library page (app/dashboard/library/page.tsx) — that page is for adding
 // new music and bundling albums, this one's for managing what's already
 // out, so each has its own focused page instead of one long combined view.
-export default async function CatalogPage() {
+export default async function CatalogPage({
+  searchParams,
+}: {
+  // ?uploaded=<trackId> is set by the upload form right after a song is
+  // released, to confirm it and point the artist at it.
+  searchParams?: { uploaded?: string };
+}) {
   const supabase = createClient();
 
   const {
@@ -137,6 +143,13 @@ export default async function CatalogPage() {
         .order("starts_at")
     : { data: [] as any[] };
 
+  const justUploaded = searchParams?.uploaded
+    ? (tracks ?? []).find((t: any) => t.id === searchParams.uploaded) ?? null
+    : null;
+  const justUploadedIsPreorder = Boolean(
+    justUploaded?.release_at && new Date(justUploaded.release_at) > new Date()
+  );
+
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
       <header className="mb-12">
@@ -145,6 +158,40 @@ export default async function CatalogPage() {
         </Link>
         <h1 className="font-display text-3xl text-gold mt-2">Your Catalog</h1>
       </header>
+
+      {justUploaded && (
+        <div
+          role="status"
+          className="mb-10 rounded-lg border border-green-500/40 bg-green-500/10 px-5 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <p className="font-display text-lg text-green-400">✓ Your song is uploaded</p>
+            <p className="font-mono text-xs text-paper/70 mt-1">
+              <span className="text-paper">&ldquo;{justUploaded.title}&rdquo;</span>{" "}
+              {justUploadedIsPreorder
+                ? "is set up as a pre-order. Fans can order it now, and it releases on its date."
+                : "is live on Fyby. It's highlighted below, where you can edit it, add contributors and share it."}
+              {justUploaded.ai_disclosure === "ai_generated" && (
+                <>
+                  {" "}Because it&apos;s marked 100% AI, it&apos;s also in the{" "}
+                  <Link href="/ai-music" className="text-gold hover:underline">
+                    AI Music section
+                  </Link>
+                  .
+                </>
+              )}
+            </p>
+          </div>
+          <div className="flex gap-4 font-mono text-xs flex-shrink-0">
+            <a href={`#track-${justUploaded.id}`} className="text-gold hover:underline">
+              See my song
+            </a>
+            <Link href="/dashboard/library" className="text-paper/60 hover:text-gold">
+              Upload another
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Phase 10: how Fyby Radio works for artists, right where the
           per-song radio controls live. */}
@@ -212,6 +259,7 @@ export default async function CatalogPage() {
           premiereEndsByTrack={premiereEndsByTrack}
           isPro={artist.plan === "pro"}
           vinylEnabled={featureOn("vinyl")}
+          highlightTrackId={justUploaded?.id ?? null}
         />
       )}
     </main>
