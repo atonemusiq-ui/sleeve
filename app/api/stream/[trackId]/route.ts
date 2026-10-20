@@ -47,14 +47,10 @@ export async function GET(req: Request, { params }: { params: { trackId: string 
     license = data;
   }
 
-  if (!purchase && !license) {
-    return NextResponse.json({ error: "You haven't purchased this track." }, { status: 403 });
-  }
-
   const admin = createServiceRoleClient();
   const { data: track } = await admin
     .from("tracks")
-    .select("audio_path, audio_url, release_at")
+    .select("audio_path, audio_url, release_at, artists ( user_id )")
     .eq("id", params.trackId)
     .maybeSingle();
 
@@ -62,10 +58,21 @@ export async function GET(req: Request, { params }: { params: { trackId: string 
     return NextResponse.json({ error: "Track not found." }, { status: 404 });
   }
 
+  // The artist who uploaded the song can always play their own song in
+  // full, without buying it (including their own pre-orders).
+  const trackArtist: any = Array.isArray((track as any).artists)
+    ? (track as any).artists[0]
+    : (track as any).artists;
+  const isOwnSong = trackArtist?.user_id === user.id;
+
+  if (!purchase && !license && !isOwnSong) {
+    return NextResponse.json({ error: "You haven't purchased this track." }, { status: 403 });
+  }
+
   // A pre-order (lib/preorder.ts) is paid for but stays locked until its
   // release date -- this route is the only way to the full audio, so this one
   // check is what enforces it everywhere (library player and download).
-  if (isPreorder((track as any).release_at)) {
+  if (!isOwnSong && isPreorder((track as any).release_at)) {
     return NextResponse.json(
       { error: `Pre-ordered — this song unlocks on ${formatReleaseDate((track as any).release_at)}.` },
       { status: 403 }

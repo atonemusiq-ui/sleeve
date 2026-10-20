@@ -13,34 +13,44 @@ import { createClient } from "@/lib/supabase/client";
 // Which track ids the signed-in listener owns, fetched once per account per
 // page load and shared by every player on the page (a storefront can show
 // dozens). Keyed by user id so switching accounts never shows stale results.
-const ownedByUser = new Map<string, Promise<Set<string>>>();
+type Owned = { bought: Set<string>; mine: Set<string> };
+const EMPTY: Owned = { bought: new Set(), mine: new Set() };
+const ownedByUser = new Map<string, Promise<Owned>>();
 
-async function loadOwnedTrackIds(): Promise<Set<string>> {
+async function loadOwnedTrackIds(): Promise<Owned> {
   const supabase = createClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
   const userId = session?.user?.id;
-  if (!userId) return new Set<string>();
+  if (!userId) return EMPTY;
 
   const cached = ownedByUser.get(userId);
   if (cached) return cached;
 
   const promise = (async () => {
     // RLS already limits both tables to the caller's own rows.
-    const [{ data: purchases }, { data: licenses }] = await Promise.all([
+    const [{ data: purchases }, { data: licenses }, { data: myArtists }] = await Promise.all([
       supabase.from("purchases").select("track_id").eq("fan_id", userId).eq("status", "complete"),
       supabase.from("license_purchases").select("track_id").eq("buyer_id", userId).eq("status", "complete"),
+      supabase.from("artists").select("id").eq("user_id", userId),
     ]);
-    const ids = new Set<string>();
+    const bought = new Set<string>();
     for (const row of [...(purchases ?? []), ...(licenses ?? [])]) {
-      if (row?.track_id) ids.add(row.track_id);
+      if (row?.track_id) bought.add(row.track_id);
     }
-    return ids;
+    // An artist's own uploads play in full for them too.
+    const mine = new Set<string>();
+    const artistIds = (myArtists ?? []).map((a) => a.id);
+    if (artistIds.length) {
+      const { data: myTracks } = await supabase.from("tracks").select("id").in("artist_id", artistIds);
+      for (const row of myTracks ?? []) mine.add(row.id);
+    }
+    return { bought, mine };
   })().catch(() => {
     // A failed lookup just falls back to previews; try again next time.
     ownedByUser.delete(userId);
-    return new Set<string>();
+    return EMPTY;
   });
   ownedByUser.set(userId, promise);
   return promise;
@@ -48,12 +58,13 @@ async function loadOwnedTrackIds(): Promise<Set<string>> {
 
 // True once we know the signed-in listener owns this track (bought or
 // licensed). False while loading and for everyone else.
-export function useOwnsTrack(trackId: string): boolean {
-  const [owned, setOwned] = useState(false);
+// "mine" = the listener is the artist who uploaded it.
+export function useOwnsTrack(trackId: string): "bought" | "mine" | null {
+  const [owned, setOwned] = useState<"bought" | "mine" | null>(null);
   useEffect(() => {
     let alive = true;
-    loadOwnedTrackIds().then((ids) => {
-      if (alive) setOwned(ids.has(trackId));
+    loadOwnedTrackIds().then(({ bought, mine }) => {
+      if (alive) setOwned(mine.has(trackId) ? "mine" : bought.has(trackId) ? "bought" : null);
     });
     return () => {
       alive = false;
@@ -76,6 +87,19 @@ export function UnlessOwned({
 }) {
   const owned = useOwnsTrack(trackId);
   if (!owned) return <>{children}</>;
+  if (owned === "mine") {
+    return (
+      <div className="flex items-center justify-between gap-3 w-full">
+        <span className="font-mono text-xs text-gold">★ Your song</span>
+        <a
+          href="/dashboard/catalog"
+          className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
+        >
+          Manage
+        </a>
+      </div>
+    );
+  }
   const preordered = Boolean(releaseAt && new Date(releaseAt) > new Date());
   return (
     <div className="flex items-center justify-between gap-3 w-full">
@@ -108,7 +132,8 @@ export default function TrackAudio({
   const owned = useOwnsTrack(trackId);
 
   const preordered = Boolean(releaseAt && new Date(releaseAt) > new Date());
-  const full = owned && !preordered;
+  // The artist hears their own song in full even before a pre-order release.
+  const full = owned === "mine" || (owned === "bought" && !preordered);
   const src = full ? `/api/stream/${trackId}` : previewUrl;
   if (!src) return null;
 
@@ -116,7 +141,11 @@ export default function TrackAudio({
     <div className={className}>
       {/* key forces a fresh <audio> when switching preview -> full song */}
       <audio key={src} controls src={src} className="w-full h-9" preload="none" />
-      {full && <p className="font-mono text-[11px] text-forest mt-1">✓ You own this — playing the full song</p>}
+      {full && (
+        <p className="font-mono text-[11px] text-forest mt-1">
+          {owned === "mine" ? "★ Your song — playing in full" : "✓ You own this — playing the full song"}
+        </p>
+      )}
     </div>
   );
 }
