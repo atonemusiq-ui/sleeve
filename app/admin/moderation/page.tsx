@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { REMOVED_BY_ARTIST } from "@/lib/trackRemoval";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -40,6 +41,9 @@ export default async function ContentModerationPage() {
         .from("tracks")
         .select("id, title, frozen_reason, frozen_at, artists ( profiles ( display_name ) )")
         .eq("frozen", true)
+        // Songs artists removed themselves (lib/trackRemoval.ts) aren't
+        // moderation actions, so they're left out of this list.
+        .or(`frozen_reason.is.null,frozen_reason.neq.${REMOVED_BY_ARTIST}`)
         .order("frozen_at", { ascending: false }),
     ]);
 

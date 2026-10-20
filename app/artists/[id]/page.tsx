@@ -23,6 +23,7 @@ import MerchProductCard from "@/app/merch/MerchProductCard";
 import { connectRoleLabel } from "@/lib/connectRoles";
 import SponsoredCard from "@/app/SponsoredCard";
 import { featureOn } from "@/lib/phaseServer";
+import RemoveTrackButton from "@/app/dashboard/RemoveTrackButton";
 
 // Powers the og:title/og:description a crawler shows alongside the image
 // from this same folder's opengraph-image.tsx when a plain artist link is
@@ -258,15 +259,51 @@ export default async function ArtistPage({
         </div>
       )}
 
+      {/* Only the artist sees this: quick ways to change their own page. */}
+      {isOwner && (
+        <div className="mb-6 flex flex-wrap items-center gap-2 border border-gold/30 bg-gold/5 rounded-lg px-4 py-3">
+          <span className="font-mono text-xs text-paper/60 mr-1">This is your page:</span>
+          <Link
+            href="/dashboard?edit=photos#photos"
+            className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
+          >
+            📷 Edit photos
+          </Link>
+          <Link
+            href="/dashboard/catalog"
+            className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
+          >
+            🎵 Manage songs
+          </Link>
+          <Link
+            href="/dashboard"
+            className="font-mono text-xs px-3 py-1.5 rounded border border-paper/20 text-paper/70 hover:bg-paper/10"
+          >
+            ✏️ Edit bio &amp; links
+          </Link>
+        </div>
+      )}
+
       <header className="mt-6 mb-10 flex items-start justify-between gap-5">
         <div className="flex items-start gap-5">
           {(artist as any).bio_photo_url && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={(artist as any).bio_photo_url}
-              alt={artistName}
-              className="w-20 h-20 rounded-full object-cover flex-shrink-0 border border-paper/15"
-            />
+            <div className="relative flex-shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={(artist as any).bio_photo_url}
+                alt={artistName}
+                className="w-20 h-20 rounded-full object-cover border border-paper/15"
+              />
+              {isOwner && (
+                <Link
+                  href="/dashboard?edit=photos#photos"
+                  title="Replace or remove this photo"
+                  className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-ink border border-gold/50 flex items-center justify-center text-xs hover:bg-gold/20"
+                >
+                  ✏️
+                </Link>
+              )}
+            </div>
           )}
           <div>
             <h1 className="font-display text-3xl text-gold">{artistName}</h1>
@@ -283,9 +320,18 @@ export default async function ArtistPage({
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
             {galleryUrls.map((url, i) => (
-              <div key={i} className="aspect-square rounded-lg overflow-hidden bg-paper/10">
+              <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-paper/10">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={url} alt={`${artistName} photo ${i + 1}`} className="w-full h-full object-cover" />
+                {isOwner && (
+                  <Link
+                    href="/dashboard?edit=photos#gallery"
+                    title="Replace or remove this photo"
+                    className="absolute top-2 right-2 font-mono text-[11px] px-2 py-1 rounded bg-ink/80 border border-gold/50 text-gold hover:bg-ink"
+                  >
+                    ✏️ Edit
+                  </Link>
+                )}
               </div>
             ))}
           </div>
@@ -414,6 +460,11 @@ export default async function ArtistPage({
                 lyrics={(track as any).lyrics ?? null}
                 credits={creditsByTrack[track.id] ?? []}
               />
+              {isOwner && (
+                <div className="mt-3">
+                  <RemoveTrackButton trackId={track.id} title={track.title} compact />
+                </div>
+              )}
               </div>
               <div className="flex items-center justify-between mt-6">
                 {blockedTrackIds.has(track.id) ? (

@@ -15,8 +15,10 @@ export default function CollapsibleSection({
   badge,
   description,
   defaultOpen = false,
+  id,
   children,
 }: {
+  id?: string;
   title: string;
   badge?: ReactNode;
   description?: ReactNode;
@@ -24,7 +26,7 @@ export default function CollapsibleSection({
   children: ReactNode;
 }) {
   return (
-    <details open={defaultOpen} className="group border border-paper/15 rounded-lg mb-6">
+    <details id={id} open={defaultOpen} className="group border border-paper/15 rounded-lg mb-6 scroll-mt-6">
       <summary className="flex items-center justify-between gap-4 px-6 py-4 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden [&::marker]:hidden">
         <span className="flex items-center gap-3 min-w-0">
           <span className="font-display text-lg truncate">{title}</span>

@@ -17,7 +17,14 @@ import type { VideoTier } from "@/lib/videoTiers";
 import { artistShareCents } from "@/lib/ads";
 import { featureOn } from "@/lib/phaseServer";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: { edit?: string };
+}) {
+  // "Edit photos" on the artist's own public page links here with
+  // ?edit=photos#photos, which opens the photo sections straight away.
+  const editingPhotos = searchParams?.edit === "photos";
   const supabase = createClient();
 
   const {
@@ -270,7 +277,7 @@ export default async function DashboardPage() {
         </form>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Bio" defaultOpen={!artist?.bio}>
+      <CollapsibleSection id="photos" title="Bio & profile photo" defaultOpen={editingPhotos || !artist?.bio}>
         <p className="font-mono text-xs text-paper/60">
           Shown on your public artist page — {artist?.id ? (
             <Link href={`/artists/${artist.id}`} className="text-gold">
@@ -325,6 +332,8 @@ export default async function DashboardPage() {
       </CollapsibleSection>
 
       <CollapsibleSection
+        id="gallery"
+        defaultOpen={editingPhotos}
         title="Photo gallery"
         badge={
           <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border border-paper/20 text-paper/50">

@@ -65,7 +65,7 @@ export async function startRadioPremiere(formData: FormData) {
   if (!track || !artist || artist.user_id !== user.id) {
     throw new Error("That track doesn't belong to your account.");
   }
-  if (track.frozen) throw new Error("This track was removed by an admin and can't be premiered.");
+  if (track.frozen) throw new Error("This song has been taken down and can't be premiered.");
   // Radio skips a pre-order until it's released (lib/radioCatalog.ts), so a
   // premiere bought now would pay for airtime the song can't get.
   if (isPreorder((track as any).release_at)) {
