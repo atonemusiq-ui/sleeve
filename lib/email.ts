@@ -176,3 +176,90 @@ function escapeHtml(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+// New-release email to an artist's mailing list (app/actions/upload.ts).
+// Sent through Resend's batch endpoint, 100 emails per request, each with
+// the fan's own unsubscribe link. Never throws.
+const RESEND_BATCH_URL = "https://api.resend.com/emails/batch";
+
+export async function sendNewReleaseEmails({
+  fans,
+  artistName,
+  trackTitle,
+  coverUrl,
+  songUrl,
+  siteUrl,
+  isPreorder,
+}: {
+  fans: { email: string; unsubscribeToken: string }[];
+  artistName: string;
+  trackTitle: string;
+  coverUrl: string | null;
+  songUrl: string;
+  siteUrl: string;
+  isPreorder: boolean;
+}): Promise<{ sent: number; failed: number }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.error("[email] RESEND_API_KEY is not set — skipped new-release emails.");
+    return { sent: 0, failed: fans.length };
+  }
+
+  const subject = isPreorder
+    ? `${artistName} has a new song coming — pre-order "${trackTitle}"`
+    : `New from ${artistName}: "${trackTitle}"`;
+
+  function html(unsubscribeUrl: string) {
+    return `
+    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; color: #16121a;">
+      ${coverUrl ? `<img src="${coverUrl}" alt="" width="240" height="240" style="border-radius: 10px; display: block; margin: 0 auto 20px;" />` : ""}
+      <h1 style="font-size: 20px; margin-bottom: 8px; text-align: center;">${escapeHtml(trackTitle)}</h1>
+      <p style="font-size: 15px; line-height: 1.5; text-align: center;">
+        ${isPreorder ? "A new song is on the way from" : "A new song just dropped from"}
+        <strong>${escapeHtml(artistName)}</strong>.
+        ${isPreorder ? "Pre-order it now and it's yours on release day." : "Hear a snippet and grab it on Fyby."}
+      </p>
+      <p style="margin: 28px 0; text-align: center;">
+        <a href="${songUrl}" style="display: inline-block; background: #C9A227; color: #16121a; padding: 12px 20px; border-radius: 6px; text-decoration: none; font-weight: 600;">
+          ${isPreorder ? "Pre-order the song" : "Listen now"}
+        </a>
+      </p>
+      <p style="font-size: 12px; color: #888; text-align: center;">
+        You're getting this because you joined ${escapeHtml(artistName)}'s mailing list on Fyby.<br />
+        <a href="${unsubscribeUrl}" style="color: #888;">Unsubscribe</a>
+      </p>
+    </div>`;
+  }
+
+  let sent = 0;
+  let failed = 0;
+  for (let i = 0; i < fans.length; i += 100) {
+    const chunk = fans.slice(i, i + 100);
+    const payload = chunk.map((fan) => {
+      const unsubscribeUrl = `${siteUrl}/unsubscribe/${fan.unsubscribeToken}`;
+      return {
+        from: `${artistName.replace(/[<>"]/g, "")} via Fyby <music@getfyby.com>`,
+        to: fan.email,
+        subject,
+        html: html(unsubscribeUrl),
+        headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
+      };
+    });
+    try {
+      const res = await fetch(RESEND_BATCH_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) sent += chunk.length;
+      else {
+        failed += chunk.length;
+        console.error("[email] Resend batch error:", res.status, await res.text());
+      }
+    } catch (err: any) {
+      failed += chunk.length;
+      console.error("[email] Resend batch failed:", err.message);
+    }
+  }
+  return { sent, failed };
+}

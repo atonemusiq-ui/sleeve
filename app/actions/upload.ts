@@ -10,6 +10,8 @@ import { DEFAULT_TRACK_COVER_URL } from "@/lib/defaultCover";
 import { isValidMood } from "@/lib/radio";
 import { releaseAtFromDateInput } from "@/lib/preorder";
 import { revalidatePath } from "next/cache";
+import { sendNewReleaseEmails } from "@/lib/email";
+import { siteOrigin } from "@/lib/siteUrl";
 
 export type PublishTrackInput = {
   artistId: string;
@@ -171,6 +173,43 @@ export async function publishTrack(input: PublishTrackInput): Promise<PublishTra
 
   if (error) {
     return { status: "error", message: `Saving track failed: ${error.message}` };
+  }
+
+  // Mailing list: if the artist has "Email my fans when I release a song"
+  // on (artists.notify_fans_on_release, default on), everyone on their list
+  // who hasn't unsubscribed gets an email linking to the song's snippet page.
+  // Best-effort — a mail problem never undoes the upload.
+  try {
+    const { data: artistRow } = await admin
+      .from("artists")
+      .select("notify_fans_on_release, mailing_list_enabled, profiles ( display_name )")
+      .eq("id", input.artistId)
+      .maybeSingle();
+    if (artistRow && (artistRow as any).notify_fans_on_release !== false) {
+      const { data: fans } = await admin
+        .from("artist_fans")
+        .select("fan_email, unsubscribe_token")
+        .eq("artist_id", input.artistId)
+        .is("unsubscribed_at", null);
+      if (fans && fans.length > 0) {
+        const profile: any = Array.isArray((artistRow as any).profiles)
+          ? (artistRow as any).profiles[0]
+          : (artistRow as any).profiles;
+        const site = siteOrigin();
+        const result = await sendNewReleaseEmails({
+          fans: fans.map((f: any) => ({ email: f.fan_email, unsubscribeToken: f.unsubscribe_token })),
+          artistName: profile?.display_name?.trim() || "An artist you follow",
+          trackTitle: input.title,
+          coverUrl: input.coverUrl || DEFAULT_TRACK_COVER_URL,
+          songUrl: `${site}/s/${inserted.id}`,
+          siteUrl: site,
+          isPreorder: Boolean(release.releaseAt),
+        });
+        console.log(`[release email] ${input.title}: sent ${result.sent}, failed ${result.failed}`);
+      }
+    }
+  } catch (mailErr: any) {
+    console.error("New-release emails failed:", mailErr?.message);
   }
 
   revalidatePath("/dashboard");

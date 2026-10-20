@@ -5,6 +5,7 @@ import {
   updateCustomLinks,
   updateTourDates,
   updateMailingListEnabled,
+  updateNotifyFansOnRelease,
   type CustomLink,
 } from "@/app/actions/artistHub";
 
@@ -20,11 +21,13 @@ export default function ArtistHubManager({
   customLinks,
   tourDates,
   mailingListEnabled,
+  notifyFansOnRelease = true,
   fanEmails,
 }: {
   customLinks: CustomLink[];
   tourDates: string | null;
   mailingListEnabled: boolean;
+  notifyFansOnRelease?: boolean;
   fanEmails: string[];
 }) {
   const [copied, setCopied] = useState(false);
@@ -40,6 +43,18 @@ export default function ArtistHubManager({
 
   const [enabled, setEnabled] = useState(mailingListEnabled);
   const [enabledPending, startEnabledTransition] = useTransition();
+
+  const [releaseEmails, setReleaseEmails] = useState(notifyFansOnRelease);
+  const [releasePending, startReleaseTransition] = useTransition();
+  function toggleReleaseEmails(next: boolean) {
+    setReleaseEmails(next);
+    const formData = new FormData();
+    formData.set("enabled", String(next));
+    startReleaseTransition(async () => {
+      const result = await updateNotifyFansOnRelease(formData);
+      if (result.error) setReleaseEmails(!next);
+    });
+  }
 
   function updateLink(index: number, field: "label" | "url", value: string) {
     setLinks((prev) => prev.map((l, i) => (i === index ? { ...l, [field]: value } : l)));
@@ -181,8 +196,8 @@ export default function ArtistHubManager({
         <div>
           <p className="font-mono text-xs text-paper">Mailing list signup</p>
           <p className="font-mono text-xs text-paper/60 mt-1">
-            When on, your public page shows an email signup box. Addresses go straight to you —
-            there&apos;s no bulk-send tool here, just the list.
+            When on, your public page shows an email signup box. You get a notification each time
+            someone joins.
           </p>
         </div>
         <button
@@ -196,6 +211,29 @@ export default function ArtistHubManager({
           }`}
         >
           {enabled ? "On" : "Off"}
+        </button>
+      </div>
+
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="font-mono text-xs text-paper">Email my fans when I release a song</p>
+          <p className="font-mono text-xs text-paper/60 mt-1">
+            When on, everyone on your mailing list automatically gets an email with your new song
+            (cover, a snippet link and a Buy button) the moment you release it. Fans can unsubscribe
+            anytime.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => toggleReleaseEmails(!releaseEmails)}
+          disabled={releasePending}
+          className={`flex-shrink-0 font-mono text-xs px-3 py-1.5 rounded border disabled:opacity-50 ${
+            releaseEmails
+              ? "border-forest/40 text-forest hover:bg-forest/10"
+              : "border-paper/20 text-paper/50 hover:bg-paper/10"
+          }`}
+        >
+          {releaseEmails ? "On" : "Off"}
         </button>
       </div>
 

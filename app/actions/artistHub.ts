@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { createNotification } from "@/lib/notifications";
 
 export type ArtistHubActionResult = { error?: string; success?: boolean };
 
@@ -150,5 +152,58 @@ export async function joinMailingList(formData: FormData): Promise<ArtistHubActi
     .insert({ artist_id: artistId, fan_email: fanEmail });
 
   if (error && error.code !== "23505") return { error: error.message };
+
+  const admin = createServiceRoleClient();
+
+  if (error) {
+    // Already on the list. If they'd unsubscribed earlier, signing up again
+    // turns new-release emails back on; otherwise it's a harmless repeat.
+    const { data: rejoined } = await admin
+      .from("artist_fans")
+      .update({ unsubscribed_at: null })
+      .eq("artist_id", artistId)
+      .eq("fan_email", fanEmail)
+      .not("unsubscribed_at", "is", null)
+      .select("id");
+    if (!rejoined || rejoined.length === 0) return { success: true };
+  }
+
+  // Let the artist know someone joined (the bell in their dashboard).
+  // Best-effort: a failed notification never fails the signup itself.
+  try {
+    const { data: owner } = await admin.from("artists").select("user_id").eq("id", artistId).maybeSingle();
+    const { count } = await admin
+      .from("artist_fans")
+      .select("id", { count: "exact", head: true })
+      .eq("artist_id", artistId)
+      .is("unsubscribed_at", null);
+    if (owner?.user_id) {
+      await createNotification(admin, {
+        userId: owner.user_id,
+        type: "mailing_list_signup",
+        title: "New fan joined your mailing list",
+        body: `${fanEmail} signed up.${count ? ` You now have ${count} on your list.` : ""}`,
+        link: "/dashboard",
+      });
+    }
+  } catch (notifyErr: any) {
+    console.error("Mailing list signup notification failed:", notifyErr?.message);
+  }
+
+  return { success: true };
+}
+
+// Whether the artist's mailing list automatically gets an email each time
+// they release a song (app/actions/upload.ts). On by default.
+export async function updateNotifyFansOnRelease(formData: FormData): Promise<ArtistHubActionResult> {
+  const owned = await getOwnArtistOrError();
+  if ("error" in owned) return owned;
+  const { supabase, artistId } = owned;
+
+  const enabled = formData.get("enabled") === "true";
+  const { error } = await supabase.from("artists").update({ notify_fans_on_release: enabled }).eq("id", artistId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard");
   return { success: true };
 }

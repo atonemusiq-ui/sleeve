@@ -49,7 +49,7 @@ export default async function DashboardPage({
   const { data: artist } = await supabase
     .from("artists")
     .select(
-            "id, plan, stripe_account_id, bio, bio_photo_url, gallery_urls, video_tier, bio_video_url, bio_video_type, is_active, custom_links, tour_dates, mailing_list_enabled"
+            "id, plan, stripe_account_id, bio, bio_photo_url, gallery_urls, video_tier, bio_video_url, bio_video_type, is_active, custom_links, tour_dates, mailing_list_enabled, notify_fans_on_release"
     )
     .eq("user_id", user.id)
     .single();
@@ -134,6 +134,7 @@ export default async function DashboardPage({
         .from("artist_fans")
         .select("fan_email")
         .eq("artist_id", artist.id)
+        .is("unsubscribed_at", null)
         .order("created_at", { ascending: true })
     : { data: [] as any[] };
   const fanEmails: string[] = (fanRows ?? []).map((r: any) => r.fan_email);
@@ -320,6 +321,7 @@ export default async function DashboardPage({
             customLinks={((artist as any).custom_links as { label: string; url: string }[]) ?? []}
             tourDates={(artist as any).tour_dates ?? null}
             mailingListEnabled={(artist as any).mailing_list_enabled !== false}
+            notifyFansOnRelease={(artist as any).notify_fans_on_release !== false}
             fanEmails={fanEmails}
           />
         )}

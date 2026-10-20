@@ -1903,3 +1903,12 @@ alter table admin_log enable row level security;
 create index if not exists admin_log_created_at_idx on admin_log (created_at desc);
 
 revoke all on admin_users, admin_log from anon, authenticated;
+
+-- Mailing list: new-release emails. Artists choose (on by default) whether
+-- their mailing list gets an email whenever they release a song
+-- (app/actions/upload.ts -> lib/email.ts sendNewReleaseEmails). Every fan
+-- row carries its own unsubscribe link token (app/unsubscribe/[token]).
+alter table artists add column if not exists notify_fans_on_release boolean not null default true;
+alter table artist_fans add column if not exists unsubscribe_token uuid not null default gen_random_uuid();
+alter table artist_fans add column if not exists unsubscribed_at timestamptz;
+create unique index if not exists artist_fans_unsubscribe_token_key on artist_fans (unsubscribe_token);
