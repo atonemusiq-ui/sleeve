@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { joinMailingList } from "@/app/actions/artistHub";
+import { useT } from "@/app/I18nProvider";
 
 export default function MailingListForm({
   artistId,
@@ -14,6 +15,7 @@ export default function MailingListForm({
   defaultEmail?: string;
 }) {
   const [busy, setBusy] = useState(false);
+  const t = useT();
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
 
@@ -35,7 +37,7 @@ export default function MailingListForm({
   if (joined) {
     return (
       <p className="font-mono text-xs text-forest">
-        You&apos;re on the list — {artistName} will reach out at the email you gave.
+        {t("mailing.joined", { name: artistName })}
       </p>
     );
   }
@@ -55,7 +57,7 @@ export default function MailingListForm({
         disabled={busy}
         className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10 disabled:opacity-50 flex-shrink-0"
       >
-        {busy ? "Joining…" : "Join mailing list"}
+        {busy ? t("mailing.joining") : t("mailing.join")}
       </button>
       {error && <p className="font-mono text-xs text-rust sm:self-center">{error}</p>}
     </form>

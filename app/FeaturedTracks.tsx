@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getT } from "@/lib/i18n/server";
 
 // Shown only to logged-out visitors, right up top after the hero (see
 // app/page.tsx) — real tracks actually for sale on Fyby today, not a mockup.
@@ -29,11 +30,12 @@ export default function FeaturedTracks({
   isLoggedIn: boolean;
 }) {
   if (tracks.length === 0) return null;
+  const t = getT();
 
   return (
     <section className="mb-16">
-      <h2 className="font-display text-2xl mb-1">Hear it for yourself</h2>
-      <p className="text-paper/50 font-mono text-xs mb-6">Real tracks, on sale right now — no sample loops, no mockups.</p>
+      <h2 className="font-display text-2xl mb-1">{t("featured.heading")}</h2>
+      <p className="text-paper/50 font-mono text-xs mb-6">{t("featured.sub")}</p>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         {tracks.map((track) => (
@@ -74,10 +76,10 @@ export default function FeaturedTracks({
                   href={`/artists/${track.artists.id}`}
                   className="text-paper/60 text-sm hover:text-gold inline-block"
                 >
-                  {track.artists.profiles?.display_name ?? "Unknown artist"}
+                  {track.artists.profiles?.display_name ?? t("store.unknownArtist")}
                 </Link>
               ) : (
-                <p className="text-paper/60 text-sm">Unknown artist</p>
+                <p className="text-paper/60 text-sm">{t("store.unknownArtist")}</p>
               )}
             </div>
             {track.preview_url && (
@@ -91,7 +93,7 @@ export default function FeaturedTracks({
                   type="submit"
                   className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
                 >
-                  {isLoggedIn ? "Buy this song" : "Log in to buy"}
+                  {isLoggedIn ? t("store.buySong") : t("store.logInToBuy")}
                 </button>
               </form>
             </div>

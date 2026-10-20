@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toggleFollow } from "@/app/actions/follows";
+import { useT } from "@/app/I18nProvider";
 
 // Follow/Following toggle on the artist page (app/artists/[id]/page.tsx).
 // Optimistic locally — flips immediately on click rather than waiting on
@@ -17,6 +18,7 @@ export default function FollowButton({
   isFollowing: boolean;
 }) {
   const [following, setFollowing] = useState(isFollowing);
+  const t = useT();
   const [isPending, startTransition] = useTransition();
 
   function handleClick() {
@@ -51,7 +53,7 @@ export default function FollowButton({
           : "font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10 disabled:opacity-50"
       }
     >
-      {following ? "Following" : "Follow"}
+      {following ? t("follow.following") : t("follow.follow")}
     </button>
   );
 }
