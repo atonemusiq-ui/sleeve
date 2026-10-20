@@ -3,8 +3,15 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { formatReleaseDate, isPreorder } from "@/lib/preorder";
 import { licenseTierLabel } from "@/lib/licensing";
+import WaitForPurchase from "./WaitForPurchase";
 
-export default async function LibraryPage({ searchParams }: { searchParams?: { licensed?: string } }) {
+export default async function LibraryPage({
+  searchParams,
+}: {
+  // bought / album / session_id are set by app/success/page.tsx right after
+  // checkout, so the new purchase can be confirmed and highlighted here.
+  searchParams?: { licensed?: string; bought?: string; album?: string; session_id?: string };
+}) {
   const supabase = createClient();
 
   const {
@@ -41,6 +48,29 @@ export default async function LibraryPage({ searchParams }: { searchParams?: { l
       track: purchase.tracks as any,
     }));
 
+  // Just came from checkout: which songs were bought, and are they saved yet?
+  let justBoughtIds: string[] = [];
+  if (searchParams?.bought) {
+    justBoughtIds = [searchParams.bought];
+  } else if (searchParams?.album) {
+    const { data: albumTracks } = await supabase
+      .from("album_tracks")
+      .select("track_id")
+      .eq("album_id", searchParams.album);
+    justBoughtIds = (albumTracks ?? []).map((r: any) => r.track_id);
+  }
+  const justBought = new Set(justBoughtIds);
+  const justBoughtSaved = justBoughtIds.length > 0 && tracks.some((t) => justBought.has(t.trackId));
+  const justBoughtTitles = tracks.filter((t) => justBought.has(t.trackId)).map((t) => t.track?.title ?? "your song");
+  // Newly bought songs first, then everything else newest-first.
+  const orderedTracks = [
+    ...tracks.filter((t) => justBought.has(t.trackId)),
+    ...tracks.filter((t) => !justBought.has(t.trackId)),
+  ];
+  const receiptHref = searchParams?.session_id
+    ? `/success?session_id=${encodeURIComponent(searchParams.session_id)}&receipt=1`
+    : null;
+
   return (
     <main className="max-w-3xl mx-auto px-6 py-12">
       <header className="flex items-center justify-between mb-12">
@@ -51,6 +81,35 @@ export default async function LibraryPage({ searchParams }: { searchParams?: { l
       </header>
 
       <div className="ticket-divider mb-10" />
+
+      {justBoughtIds.length > 0 &&
+        (justBoughtSaved ? (
+          <div
+            role="status"
+            className="mb-8 rounded-lg border border-forest/40 bg-forest/10 px-5 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div>
+              <p className="font-display text-lg text-forest">✓ Thank you! It&apos;s in your library</p>
+              <p className="font-mono text-xs text-paper/70 mt-1">
+                <span className="text-paper">{justBoughtTitles.length === 1 ? `\u201c${justBoughtTitles[0]}\u201d` : `${justBoughtTitles.length} songs`}</span>{" "}
+                {justBoughtTitles.length === 1 ? "is" : "are"} ready to play below, in full, anytime. The artist gets paid directly.
+              </p>
+            </div>
+            {receiptHref && (
+              <Link href={receiptHref} className="font-mono text-xs text-gold hover:underline flex-shrink-0">
+                Share it / receipt
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div role="status" className="mb-8 rounded-lg border border-gold/30 bg-gold/5 px-5 py-4">
+            <WaitForPurchase />
+            <p className="font-display text-lg text-gold">Adding your song to your library…</p>
+            <p className="font-mono text-xs text-paper/60 mt-1">
+              Your payment went through. This takes a few seconds — the page will update on its own.
+            </p>
+          </div>
+        ))}
 
       {searchParams?.licensed && (
         <p className="font-mono text-sm text-forest border border-forest/40 bg-forest/10 rounded px-4 py-3 mb-8">
@@ -112,11 +171,18 @@ export default async function LibraryPage({ searchParams }: { searchParams?: { l
       )}
 
       <div className="flex flex-col gap-4">
-        {tracks.map(({ purchaseId, trackId, track }) => (
+        {orderedTracks.map(({ purchaseId, trackId, track }) => (
           <div
             key={purchaseId}
-            className="border border-paper/15 rounded-lg px-5 py-4 bg-paper/5 flex flex-col gap-3"
+            className={`rounded-lg px-5 py-4 flex flex-col gap-3 border ${
+              justBought.has(trackId) ? "border-forest/60 bg-forest/10 ring-2 ring-forest/30" : "border-paper/15 bg-paper/5"
+            }`}
           >
+            {justBought.has(trackId) && (
+              <span className="self-start rounded-full bg-forest/20 px-2.5 py-0.5 font-mono text-[11px] text-forest">
+                Just added
+              </span>
+            )}
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded bg-paper/10 flex-shrink-0 overflow-hidden">
                 {track.cover_url ? (

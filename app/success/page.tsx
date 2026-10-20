@@ -4,6 +4,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { formatPresentmentAmount } from "@/lib/currency";
 import ShareReceiptSection from "./ShareReceiptSection";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import MailingListForm from "@/app/artists/[id]/MailingListForm";
 import { formatReleaseDate, isPreorder } from "@/lib/preorder";
 import { siteOrigin } from "@/lib/siteUrl";
@@ -92,7 +93,7 @@ function AccountPrompt({ buyerEmail }: { buyerEmail: string | null }) {
 export default async function SuccessPage({
   searchParams,
 }: {
-  searchParams: { session_id?: string };
+  searchParams: { session_id?: string; receipt?: string };
 }) {
   const sessionId = searchParams.session_id;
 
@@ -157,6 +158,17 @@ export default async function SuccessPage({
     data: { user },
   } = await sessionSupabase.auth.getUser();
   const buyerEmail = session.customer_details?.email ?? null;
+
+  // A signed-in buyer goes straight to My Library, where the song they just
+  // bought is waiting at the top, ready to play. (?receipt=1 — linked from
+  // the Library banner — shows this thank-you page instead, for sharing
+  // and the artist's mailing list.)
+  if (user && !searchParams.receipt) {
+    const params = new URLSearchParams({ session_id: sessionId });
+    if (albumId) params.set("album", albumId);
+    else if (trackId) params.set("bought", trackId);
+    redirect(`/library?${params.toString()}`);
+  }
 
   if (albumId) {
     const { data: album } = await admin
