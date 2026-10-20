@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/server";
 import { redirect } from "next/navigation";
+import { siteOrigin } from "@/lib/siteUrl";
 
 // The v2 Core Accounts "recipient" configuration that reproduces the old
 // `capabilities.transfers` behavior of a `type: "express"` account. This is
@@ -135,7 +136,7 @@ export async function connectStripeAccount() {
   // once you actually reached this call, so it's removed: set
   // NEXT_PUBLIC_SITE_URL to an HTTPS URL (e.g. an ngrok/tunnel URL while
   // developing locally) rather than relying on a fallback.
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const siteUrl = siteOrigin();
   if (!siteUrl || !siteUrl.startsWith("https://")) {
     throw new Error(
       "NEXT_PUBLIC_SITE_URL must be set to an HTTPS URL to create a Stripe onboarding link (Account Links v2 rejects http:// return/refresh URLs, even for localhost)."

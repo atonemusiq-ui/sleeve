@@ -5,6 +5,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { SOURCE_COOKIE, parseSignupSource } from "@/lib/signupSource";
+import { siteOrigin } from "@/lib/siteUrl";
 
 export async function signup(formData: FormData) {
   const email = formData.get("email") as string;
@@ -210,7 +211,7 @@ export async function requestPasswordReset(formData: FormData) {
   const email = formData.get("email") as string;
 
   const supabase = createClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = siteOrigin();
 
   // Errors here (including "no account with that email") are deliberately
   // not surfaced — same message either way, so this can't be used to probe

@@ -24,10 +24,17 @@ export async function middleware(request: NextRequest) {
         get(name: string) {
           return request.cookies.get(name)?.value;
         },
+        // A refreshed session goes to the browser (pendingCookies) AND onto
+        // this request, so the page or server action that runs next sees the
+        // new tokens instead of trying to refresh the already-used one again,
+        // which could log the visitor out mid-flow (e.g. right after
+        // returning from Stripe checkout).
         set(name: string, value: string, options: CookieOptions) {
+          request.cookies.set(name, value);
           pendingCookies.push({ name, value, options });
         },
         remove(name: string, options: CookieOptions) {
+          request.cookies.set(name, "");
           pendingCookies.push({ name, value: "", options });
         },
       },

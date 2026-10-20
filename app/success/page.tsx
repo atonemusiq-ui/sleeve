@@ -6,6 +6,7 @@ import ShareReceiptSection from "./ShareReceiptSection";
 import Link from "next/link";
 import MailingListForm from "@/app/artists/[id]/MailingListForm";
 import { formatReleaseDate, isPreorder } from "@/lib/preorder";
+import { siteOrigin } from "@/lib/siteUrl";
 
 // One hour is plenty for a single sitting (stream + download), and keeps
 // the signed URL from being usable long after the buyer's browser tab is
@@ -287,7 +288,7 @@ export default async function SuccessPage({
   // still be in flight when this page first renders (Stripe's redirect and
   // its webhook delivery aren't ordered against each other), so this simply
   // doesn't render the share section rather than blocking on it.
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = siteOrigin();
   let purchaseId: string | null = null;
   const paymentIntentId =
     typeof session.payment_intent === "string" ? session.payment_intent : null;

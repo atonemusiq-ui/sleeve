@@ -17,6 +17,7 @@ import {
 } from "@/lib/fybyTv";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { siteOrigin } from "@/lib/siteUrl";
 
 // Same one-person allowlist as the other admin pages (app/admin/*).
 const ADMIN_EMAILS = ["atonemusiq@gmail.com"];
@@ -151,7 +152,7 @@ export async function startVideoPremiere(formData: FormData) {
   }
 
   const tierInfo = VIDEO_PREMIERE_TIERS[tier];
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = siteOrigin();
 
   // Stripe metadata values are capped at 500 characters, which the title,
   // description and URL limits stay well inside.

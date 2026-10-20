@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/server";
 import { redirect } from "next/navigation";
 import { isUuid } from "@/lib/uuid";
+import { siteOrigin } from "@/lib/siteUrl";
 
 // $9/month Super Fan subscription for one specific artist. Same inline
 // price_data pattern as app/actions/checkout.ts's startAlbumCheckout, just
@@ -69,7 +70,7 @@ export async function startSuperFanCheckout(formData: FormData) {
   }
 
   const artistName = (artist as any).profiles?.display_name ?? "this artist";
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = siteOrigin();
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
@@ -183,7 +184,7 @@ export async function startGiftCheckout(formData: FormData) {
 
   const artistName = (artist as any).profiles?.display_name ?? "this artist";
   const amountCents = Math.round(amountDollars * 100);
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = siteOrigin();
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
