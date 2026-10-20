@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/server";
 import { commissionCents, isFybyDay, payoutCents, planOf } from "@/lib/plans";
 import { trackNeedsCoverCredit } from "@/lib/coverCompliance";
+import { siteOrigin } from "@/lib/siteUrl";
 
 export type CheckoutSessionResult = { url: string } | { error: string };
 
@@ -84,7 +85,7 @@ export async function createTrackCheckoutSession(
   const platformFeeCents = commissionCents(amountCents, plan, { fybyDay });
   const artistPayoutCents = payoutCents(amountCents, plan, { fybyDay });
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = siteOrigin();
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
