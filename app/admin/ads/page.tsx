@@ -4,8 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { approveAdCampaign, payArtistAdShares, rejectAdCampaign } from "@/app/actions/ads";
 import { artistShareCents, describeTargets } from "@/lib/ads";
+import { adminForEmail } from "@/lib/admin";
 
-const ADMIN_EMAILS = ["atonemusiq@gmail.com"];
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export default async function AdsAdminPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user?.email || !ADMIN_EMAILS.includes(user.email)) redirect("/");
+  if (!(await adminForEmail(user?.email))) redirect("/admin/login");
 
   const admin = createServiceRoleClient();
   const [{ data: queue }, { data: running }, { data: artistEvents }, { data: payouts }] = await Promise.all([

@@ -29,6 +29,10 @@ export default function TrustFooter() {
         ·{" "}
         <Link href="/artist-agreement" className="hover:text-gold">
           {t("trust.artistAgreement")}
+        </Link>{" "}
+        ·{" "}
+        <Link href="/admin/login" className="hover:text-gold">
+          Admin login
         </Link>
       </p>
     </section>

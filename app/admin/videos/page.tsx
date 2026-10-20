@@ -3,10 +3,10 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { dismissVideoReport, removeReportedVideo } from "@/app/actions/admin";
+import { adminForEmail } from "@/lib/admin";
 
 // Same one-person allowlist as app/admin/flagged/page.tsx — see that file
 // for why this is email-based rather than a `role` column.
-const ADMIN_EMAILS = ["atonemusiq@gmail.com"];
 
 export default async function ReportedVideosPage() {
   const supabase = createClient();
@@ -14,8 +14,8 @@ export default async function ReportedVideosPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user?.email || !ADMIN_EMAILS.includes(user.email)) {
-    redirect("/");
+  if (!(await adminForEmail(user?.email))) {
+    redirect("/admin/login");
   }
 
   const admin = createServiceRoleClient();
