@@ -13,6 +13,7 @@ import { extractEmbeddedArtwork, type EmbeddedArtwork } from "@/lib/extractEmbed
 import { DEFAULT_TRACK_COVER_URL } from "@/lib/defaultCover";
 import CollapsibleSection from "@/app/CollapsibleSection";
 import { MOODS, RADIO_OPT_IN_TEXT, RADIO_EXCLUDED_GENRES } from "@/lib/radio";
+import { AUDIO_ACCEPT, isAudioFile, safeFileName, uploadWithProgress, friendlyUploadError } from "@/lib/uploadFile";
 
 // Fixed price menu — matches ALLOWED_TRACK_PRICE_CENTS in
 // app/actions/tracks.ts, which is what actually enforces this server-side.
@@ -59,6 +60,9 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadStep, setUploadStep] = useState<string | null>(null);
+  const [uploadPercent, setUploadPercent] = useState(0);
+  const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [flagged, setFlagged] = useState<number | null>(null);
   // Artwork Fyby found already embedded in the audio file's own tags (see
@@ -95,8 +99,13 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
   }
 
   async function handleAudioChange(file: File | null) {
-    setAudioFile(file);
     setEmbeddedArtwork(null);
+    if (file && !isAudioFile(file)) {
+      setAudioFile(null);
+      setError(`"${file.name}" isn't an audio file. Choose a WAV, MP3, M4A, AIFF or FLAC.`);
+      return;
+    }
+    setAudioFile(file);
     if (!file) return;
     if (file.size > MAX_AUDIO_MB * 1024 * 1024) {
       setError(tooBigMessage(file));
@@ -183,12 +192,13 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
       // artist (see app/dashboard/page.tsx). Path convention:
       // <artist_id>/<timestamp>-<filename>, matched by the storage RLS
       // policies in supabase/schema.sql.
-      const audioPath = `${artistId}/${Date.now()}-${audioFile.name}`;
-      const { error: audioError } = await supabase.storage
-        .from("track-audio")
-        .upload(audioPath, audioFile);
-
-      if (audioError) throw new Error(`Audio upload failed: ${audioError.message}`);
+      // safeFileName(): iPhone names often carry curly apostrophes, and
+      // accents/emoji in titles make Supabase reject the path outright.
+      const audioPath = `${artistId}/${Date.now()}-${safeFileName(audioFile.name, "track")}`;
+      setUploadStep("Uploading your song");
+      setUploadPercent(0);
+      await uploadWithProgress(supabase, "track-audio", audioPath, audioFile, setUploadPercent);
+      setUploadStep("Making the preview clip");
 
       let previewUrl: string | null = null;
       try {
@@ -211,16 +221,18 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
       // to serve directly, unlike the paid audio.
       let coverUrl: string | null = null;
       if (coverFile) {
-        const coverPath = `${artistId}/${Date.now()}-${coverFile.name}`;
+        setUploadStep("Uploading cover art");
+        const coverPath = `${artistId}/${Date.now()}-${safeFileName(coverFile.name, "cover")}`;
         const { error: coverError } = await supabase.storage
           .from("track-covers")
           .upload(coverPath, coverFile);
 
-        if (coverError) throw new Error(`Cover upload failed: ${coverError.message}`);
+        if (coverError) throw new Error(`Cover upload failed: ${friendlyUploadError(0, coverError.message)}`);
 
         coverUrl = supabase.storage.from("track-covers").getPublicUrl(coverPath).data.publicUrl;
       }
 
+      setUploadStep("Publishing");
       // The actual `tracks` row insert happens server-side in publishTrack()
       // so the duplicate-fingerprint check can't be bypassed by a client
       // that just skips calling it.
@@ -275,7 +287,15 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
       setError(err.message ?? "Something went wrong.");
     } finally {
       setUploading(false);
+      setUploadStep(null);
     }
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleAudioChange(file);
   }
 
   return (
@@ -518,13 +538,37 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
         <label className="block font-mono text-xs text-paper/60 mb-1">
           Audio file (WAV, MP3, FLAC, AIFF or M4A · up to {MAX_AUDIO_MB} MB)
         </label>
-        <input
-          type="file"
-          accept="audio/*"
-          onChange={(e) => handleAudioChange(e.target.files?.[0] ?? null)}
-          required
-          className="w-full text-paper font-mono text-sm file:mr-3 file:px-4 file:py-2.5 file:rounded file:border-0 file:bg-gold file:text-ink file:font-mono file:text-sm file:font-medium file:cursor-pointer hover:file:opacity-90"
-        />
+        {/* Drop zone on computers; on phones the whole box is a tap target
+            that opens the picker. Not `required` -- a dropped file never
+            fills the hidden input, so handleSubmit() checks instead. */}
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+          className={`relative rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors ${
+            dragging ? "border-gold bg-gold/10" : "border-paper/25 hover:border-gold/60"
+          }`}
+        >
+          <input
+            type="file"
+            accept={AUDIO_ACCEPT}
+            onChange={(e) => {
+              handleAudioChange(e.target.files?.[0] ?? null);
+              e.target.value = ""; // lets the artist re-pick the same file after an error
+            }}
+            aria-label="Choose your song file"
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          />
+          <p className="font-mono text-sm text-paper">
+            {audioFile ? "Song ready ✓" : "Tap to choose your song"}
+          </p>
+          <p className="font-mono text-xs text-paper/50 mt-1 hidden sm:block">
+            or drag and drop it here from your computer
+          </p>
+        </div>
         {audioFile && (
           <p
             className={`font-mono text-xs mt-1 ${
@@ -537,6 +581,16 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
         {checkingArtwork && (
           <p className="font-mono text-xs text-paper/50 mt-1">Checking file for embedded artwork...</p>
         )}
+        <details className="mt-2 font-mono text-xs text-paper/60">
+          <summary className="cursor-pointer text-gold">Can&apos;t find your song on your phone?</summary>
+          <div className="mt-2 flex flex-col gap-1.5 pl-1">
+            <p>Your phone can only send songs saved in its Files (iPhone) or Downloads (Android). To get a song there:</p>
+            <p>• <span className="text-paper">From a computer:</span> AirDrop it to your iPhone and tap &quot;Save to Files&quot;, or put it in Google Drive, Dropbox or iCloud Drive — those show up when you tap Browse.</p>
+            <p>• <span className="text-paper">From email or a text:</span> open the attachment, tap the Share button, then &quot;Save to Files&quot;.</p>
+            <p>• <span className="text-paper">From Voice Memos:</span> tap the memo, tap Share, then &quot;Save to Files&quot;.</p>
+            <p>Songs in Apple Music or iTunes can&apos;t be uploaded — Apple locks that library. Use your own original file.</p>
+          </div>
+        </details>
       </div>
 
       {embeddedArtwork && (
@@ -620,6 +674,20 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
       >
         {uploading ? "Releasing..." : "Release"}
       </button>
+      {uploading && uploadStep && (
+        <div className="-mt-1">
+          <p className="font-mono text-xs text-paper/60 mb-1">
+            {uploadStep}
+            {uploadStep === "Uploading your song" ? ` · ${uploadPercent}%` : "..."}
+          </p>
+          {uploadStep === "Uploading your song" && (
+            <div className="h-1.5 rounded bg-paper/10 overflow-hidden">
+              <div className="h-full bg-gold transition-all" style={{ width: `${uploadPercent}%` }} />
+            </div>
+          )}
+          <p className="font-mono text-xs text-paper/40 mt-1">Keep this page open until it finishes.</p>
+        </div>
+      )}
       </form>
     </CollapsibleSection>
   );

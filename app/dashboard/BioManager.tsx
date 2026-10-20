@@ -1,4 +1,5 @@
 "use client";
+import { safeFileName } from "@/lib/uploadFile";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -42,7 +43,7 @@ export default function BioManager({
 
     try {
       const supabase = createClient();
-      const photoPath = `${artistId}/${Date.now()}-${file.name}`;
+      const photoPath = `${artistId}/${Date.now()}-${safeFileName(file.name)}`;
       const { error: uploadError } = await supabase.storage
         .from("artist-photos")
         .upload(photoPath, file);
