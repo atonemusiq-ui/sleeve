@@ -8,6 +8,7 @@ import BookingRequestsList, { type BookingRequest } from "./BookingRequestsList"
 import BioManager from "./BioManager";
 import ShareCard from "./ShareCard";
 import GalleryManager from "./GalleryManager";
+import ArtistNameEditor from "./ArtistNameEditor";
 import VideoManager from "./VideoManager";
 import ArtistVisibilityManager from "./ArtistVisibilityManager";
 import ArtistHubManager from "./ArtistHubManager";
@@ -158,7 +159,7 @@ export default async function DashboardPage({
       <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-12">
         <div>
           <h1 className="font-display text-3xl text-gold">Artist Studio</h1>
-          <p className="font-mono text-sm text-paper/60 mt-1">{profile.display_name}</p>
+          <ArtistNameEditor name={profile.display_name} className="mt-1" />
         </div>
         <div className="flex flex-wrap items-center gap-4 font-mono text-sm">
           <NotificationBell notifications={notificationRows ?? []} />
@@ -277,7 +278,8 @@ export default async function DashboardPage({
         </form>
       </CollapsibleSection>
 
-      <CollapsibleSection id="photos" title="Bio & profile photo" defaultOpen={editingPhotos || !artist?.bio}>
+      <CollapsibleSection id="photos" title="Name, profile photo & bio" defaultOpen={editingPhotos || !artist?.bio}>
+        <ArtistNameEditor name={profile.display_name} size="lg" />
         <p className="font-mono text-xs text-paper/60">
           Shown on your public artist page — {artist?.id ? (
             <Link href={`/artists/${artist.id}`} className="text-gold">

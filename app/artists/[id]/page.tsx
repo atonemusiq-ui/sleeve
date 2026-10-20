@@ -282,7 +282,7 @@ export default async function ArtistPage({
             {t("artist.manageSongs")}
           </Link>
           <Link
-            href="/dashboard"
+            href="/dashboard?edit=photos#photos"
             className="font-mono text-xs px-3 py-1.5 rounded border border-paper/20 text-paper/70 hover:bg-paper/10"
           >
             {t("artist.editBio")}
@@ -312,7 +312,18 @@ export default async function ArtistPage({
             </div>
           )}
           <div>
-            <h1 className="font-display text-3xl text-gold">{artistName}</h1>
+            <h1 className="font-display text-3xl text-gold flex items-center gap-2">
+              {artistName}
+              {isOwner && (
+                <Link
+                  href="/dashboard?edit=photos#photos"
+                  title={t("artist.editNameTitle")}
+                  className="font-mono text-xs px-2 py-1 rounded border border-gold/40 text-gold hover:bg-gold/10"
+                >
+                  ✏️
+                </Link>
+              )}
+            </h1>
             {artist.bio && <p className="text-paper/70 mt-3 max-w-xl">{artist.bio}</p>}
           </div>
         </div>
