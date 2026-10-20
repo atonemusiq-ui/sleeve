@@ -18,6 +18,21 @@ import { MOODS, RADIO_OPT_IN_TEXT, RADIO_EXCLUDED_GENRES } from "@/lib/radio";
 // app/actions/tracks.ts, which is what actually enforces this server-side.
 const TRACK_PRICE_OPTIONS = ["3.00", "4.00", "5.00"];
 
+// Largest audio file Fyby accepts, in MB. Supabase's free plan caps every
+// upload at 50 MB; on a paid plan raise the project's global file size limit
+// in Supabase (Storage -> Settings) and set NEXT_PUBLIC_MAX_AUDIO_MB in Vercel
+// to match. Checked here so an artist gets a clear message instead of a
+// failed upload partway through a big WAV.
+const MAX_AUDIO_MB = Number(process.env.NEXT_PUBLIC_MAX_AUDIO_MB) || 50;
+
+function formatMb(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function tooBigMessage(file: File): string {
+  return `This file is ${formatMb(file.size)}. The limit is ${MAX_AUDIO_MB} MB. For a WAV, export it at 44.1 kHz / 16-bit, or upload a high-quality MP3 (320 kbps).`;
+}
+
 function extensionForMime(mime: string): string {
   if (mime.includes("png")) return "png";
   if (mime.includes("webp")) return "webp";
@@ -83,6 +98,11 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
     setAudioFile(file);
     setEmbeddedArtwork(null);
     if (!file) return;
+    if (file.size > MAX_AUDIO_MB * 1024 * 1024) {
+      setError(tooBigMessage(file));
+      return;
+    }
+    setError(null);
 
     setCheckingArtwork(true);
     try {
@@ -114,6 +134,10 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
 
     if (!audioFile) {
       setError("Please choose an audio file.");
+      return;
+    }
+    if (audioFile.size > MAX_AUDIO_MB * 1024 * 1024) {
+      setError(tooBigMessage(audioFile));
       return;
     }
 
@@ -491,7 +515,9 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
       </label>
 
       <div>
-        <label className="block font-mono text-xs text-paper/60 mb-1">Audio file (mp3, wav)</label>
+        <label className="block font-mono text-xs text-paper/60 mb-1">
+          Audio file (WAV, MP3, FLAC, AIFF or M4A · up to {MAX_AUDIO_MB} MB)
+        </label>
         <input
           type="file"
           accept="audio/*"
@@ -499,6 +525,15 @@ export default function UploadForm({ artistId, allGenres }: { artistId: string; 
           required
           className="w-full text-paper font-mono text-sm file:mr-3 file:px-4 file:py-2.5 file:rounded file:border-0 file:bg-gold file:text-ink file:font-mono file:text-sm file:font-medium file:cursor-pointer hover:file:opacity-90"
         />
+        {audioFile && (
+          <p
+            className={`font-mono text-xs mt-1 ${
+              audioFile.size > MAX_AUDIO_MB * 1024 * 1024 ? "text-rust" : "text-paper/50"
+            }`}
+          >
+            {audioFile.name} · {formatMb(audioFile.size)}
+          </p>
+        )}
         {checkingArtwork && (
           <p className="font-mono text-xs text-paper/50 mt-1">Checking file for embedded artwork...</p>
         )}
