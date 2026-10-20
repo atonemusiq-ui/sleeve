@@ -9,10 +9,16 @@ import { useT } from "./I18nProvider";
 
 // Pages that already show the logo in their own header, plus the embeddable
 // player (it runs inside other people's sites, so it stays unbranded here).
-const HIDDEN_ON = ["/", "/login", "/signup"];
+const HIDDEN_ON = ["/", "/login", "/signup", "/admin/login"];
 
 // The Fyby logo at the top of every page, linking back to the storefront.
-export default function SiteLogoBar({ features }: { features: Record<Feature, boolean> }) {
+export default function SiteLogoBar({
+  features,
+  showAdminLink = false,
+}: {
+  features: Record<Feature, boolean>;
+  showAdminLink?: boolean;
+}) {
   const pathname = usePathname() ?? "/";
   const t = useT();
   if (HIDDEN_ON.includes(pathname) || pathname.startsWith("/embed")) return null;
@@ -67,6 +73,17 @@ export default function SiteLogoBar({ features }: { features: Record<Feature, bo
         </svg>
         {t("nav.home")}
       </Link>
+      {showAdminLink && (
+      <Link
+        href="/admin"
+        className="inline-flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-full border border-gold/50 text-gold hover:bg-gold/10"
+      >
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5" aria-hidden>
+          <path d="M10 2.5 16 5v4.5c0 3.8-2.6 6.6-6 8-3.4-1.4-6-4.2-6-8V5l6-2.5Z" strokeLinejoin="round" />
+        </svg>
+        <span className="hidden sm:inline">Admin</span>
+      </Link>
+      )}
       <LanguageMenu />
       </nav>
     </div>

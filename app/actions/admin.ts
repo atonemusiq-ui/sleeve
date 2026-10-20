@@ -4,47 +4,55 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createNotification } from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
+import { adminForEmail, logAdminAction } from "@/lib/admin";
 
 // Same allowlist as app/admin/flagged/page.tsx — kept in one place would be
 // nicer, but co-locating the check with each server action means an action
 // can never run for a non-admin even if the page-level gate were ever
 // bypassed or a new admin route forgot to check. See that file for why this
 // is email-based rather than a `role` column.
-const ADMIN_EMAILS = ["atonemusiq@gmail.com"];
 
 async function requireAdmin() {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user?.email || !ADMIN_EMAILS.includes(user.email)) {
+  const me = await adminForEmail(user?.email);
+  if (!me) {
     throw new Error("Not authorized.");
   }
+  return me;
 }
 
 export async function dismissFlag(formData: FormData) {
-  await requireAdmin();
+  const me = await requireAdmin();
   const id = formData.get("id") as string;
   const admin = createServiceRoleClient();
   await admin.from("flagged_uploads").update({ status: "dismissed" }).eq("id", id);
+  await logAdminAction(me.email, "Dismissed flagged upload", id);
+  revalidatePath("/admin");
   revalidatePath("/admin/flagged");
 }
 
 export async function confirmDuplicateFlag(formData: FormData) {
-  await requireAdmin();
+  const me = await requireAdmin();
   const id = formData.get("id") as string;
   const admin = createServiceRoleClient();
   await admin.from("flagged_uploads").update({ status: "confirmed_duplicate" }).eq("id", id);
+  await logAdminAction(me.email, "Confirmed duplicate upload", id);
+  revalidatePath("/admin");
   revalidatePath("/admin/flagged");
 }
 
 // Same shape as the two above, for reported bio videos (see
 // app/actions/video.ts's reportVideo and app/admin/videos/page.tsx).
 export async function dismissVideoReport(formData: FormData) {
-  await requireAdmin();
+  const me = await requireAdmin();
   const id = formData.get("id") as string;
   const admin = createServiceRoleClient();
   await admin.from("reported_videos").update({ status: "dismissed" }).eq("id", id);
+  await logAdminAction(me.email, "Dismissed video report", id);
+  revalidatePath("/admin");
   revalidatePath("/admin/videos");
 }
 
@@ -52,7 +60,7 @@ export async function dismissVideoReport(formData: FormData) {
 // the feature, so a policy violation costs them the video, not the money)
 // and marks the report resolved.
 export async function removeReportedVideo(formData: FormData) {
-  await requireAdmin();
+  const me = await requireAdmin();
   const id = formData.get("id") as string;
   const artistId = formData.get("artistId") as string;
   const admin = createServiceRoleClient();
@@ -60,6 +68,8 @@ export async function removeReportedVideo(formData: FormData) {
   await admin.from("artists").update({ bio_video_url: null, bio_video_type: null }).eq("id", artistId);
   await admin.from("reported_videos").update({ status: "removed" }).eq("id", id);
 
+  await logAdminAction(me.email, "Removed reported video", id);
+  revalidatePath("/admin");
   revalidatePath("/admin/videos");
   revalidatePath(`/artists/${artistId}`);
 }
@@ -71,7 +81,7 @@ export async function removeReportedVideo(formData: FormData) {
 // immediately; the suggestion row itself just moves out of the pending
 // queue rather than being deleted, so there's a record of who asked for it.
 export async function approveGenreSuggestion(formData: FormData) {
-  await requireAdmin();
+  const me = await requireAdmin();
   const id = formData.get("id") as string;
   const name = (formData.get("name") as string)?.trim();
   const admin = createServiceRoleClient();
@@ -81,17 +91,21 @@ export async function approveGenreSuggestion(formData: FormData) {
   }
   await admin.from("genre_suggestions").update({ status: "approved" }).eq("id", id);
 
+  await logAdminAction(me.email, "Approved genre", name ?? id);
+  revalidatePath("/admin");
   revalidatePath("/admin/genres");
   revalidatePath("/dashboard");
   revalidatePath("/");
 }
 
 export async function rejectGenreSuggestion(formData: FormData) {
-  await requireAdmin();
+  const me = await requireAdmin();
   const id = formData.get("id") as string;
   const admin = createServiceRoleClient();
 
   await admin.from("genre_suggestions").update({ status: "rejected" }).eq("id", id);
+  await logAdminAction(me.email, "Rejected genre suggestion", id);
+  revalidatePath("/admin");
   revalidatePath("/admin/genres");
 }
 
@@ -101,7 +115,7 @@ export async function rejectGenreSuggestion(formData: FormData) {
 // or rejecting doesn't touch payment — the fee already covers the review
 // itself, not a guaranteed outcome (see that file's comment).
 export async function approveTrackVerification(formData: FormData) {
-  await requireAdmin();
+  const me = await requireAdmin();
   const id = formData.get("id") as string;
   const admin = createServiceRoleClient();
 
@@ -110,6 +124,8 @@ export async function approveTrackVerification(formData: FormData) {
     .update({ verification_status: "approved", verification_decided_at: new Date().toISOString() })
     .eq("id", id);
 
+  await logAdminAction(me.email, "Approved Verified Human+AI badge", id);
+  revalidatePath("/admin");
   revalidatePath("/admin/verifications");
   revalidatePath("/");
   revalidatePath("/ai-music");
@@ -117,7 +133,7 @@ export async function approveTrackVerification(formData: FormData) {
 }
 
 export async function rejectTrackVerification(formData: FormData) {
-  await requireAdmin();
+  const me = await requireAdmin();
   const id = formData.get("id") as string;
   const admin = createServiceRoleClient();
 
@@ -126,6 +142,8 @@ export async function rejectTrackVerification(formData: FormData) {
     .update({ verification_status: "rejected", verification_decided_at: new Date().toISOString() })
     .eq("id", id);
 
+  await logAdminAction(me.email, "Rejected Verified Human+AI badge", id);
+  revalidatePath("/admin");
   revalidatePath("/admin/verifications");
   revalidatePath("/dashboard/catalog");
 }
@@ -140,7 +158,7 @@ export async function rejectTrackVerification(formData: FormData) {
 // A reason is required — it's shown back to the artist both in their
 // catalog (app/dashboard/TrackList.tsx) and in the notification this sends.
 export async function freezeTrack(formData: FormData) {
-  await requireAdmin();
+  const me = await requireAdmin();
   const id = formData.get("id") as string;
   const reason = (formData.get("reason") as string)?.trim();
 
@@ -176,6 +194,8 @@ export async function freezeTrack(formData: FormData) {
     });
   }
 
+  await logAdminAction(me.email, "Flagged & froze song", `"${track.title}" — ${reason}`);
+  revalidatePath("/admin");
   revalidatePath("/admin/moderation");
   revalidatePath("/dashboard/catalog");
   revalidatePath("/");
@@ -184,7 +204,7 @@ export async function freezeTrack(formData: FormData) {
 }
 
 export async function unfreezeTrack(formData: FormData) {
-  await requireAdmin();
+  const me = await requireAdmin();
   const id = formData.get("id") as string;
   const admin = createServiceRoleClient();
 
@@ -213,6 +233,8 @@ export async function unfreezeTrack(formData: FormData) {
     });
   }
 
+  await logAdminAction(me.email, "Unfroze song", `"${track.title}"`);
+  revalidatePath("/admin");
   revalidatePath("/admin/moderation");
   revalidatePath("/dashboard/catalog");
   revalidatePath("/");

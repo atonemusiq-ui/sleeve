@@ -3,11 +3,11 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { approveTrackVerification, rejectTrackVerification } from "@/app/actions/admin";
+import { adminForEmail } from "@/lib/admin";
 
 // Same one-person allowlist as app/admin/flagged/page.tsx and
 // app/admin/genres/page.tsx — see the former for why this is email-based
 // rather than a `role` column.
-const ADMIN_EMAILS = ["atonemusiq@gmail.com"];
 
 // The "Verified Human+AI" review queue — tracks land here once an artist
 // pays the review fee (app/actions/verification.ts's
@@ -20,8 +20,8 @@ export default async function VerificationsQueuePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user?.email || !ADMIN_EMAILS.includes(user.email)) {
-    redirect("/");
+  if (!(await adminForEmail(user?.email))) {
+    redirect("/admin/login");
   }
 
   const admin = createServiceRoleClient();

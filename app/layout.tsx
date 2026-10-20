@@ -9,6 +9,8 @@ import { currentPhase, featureMap, isAdminRequest } from "@/lib/phaseServer";
 import { livePhase } from "@/lib/phases";
 import { getLang } from "@/lib/i18n/server";
 import { I18nProvider } from "./I18nProvider";
+import { cookies } from "next/headers";
+import { ADMIN_UI_COOKIE } from "@/lib/admin";
 
 export const metadata: Metadata = {
   title: "Fyby",
@@ -22,6 +24,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const live = livePhase();
   const features = featureMap();
   const admin = isAdminRequest();
+  // Shows the 🛡 Admin shortcut in the top bar. Only a convenience -- every
+  // back-office page re-checks the admin team list itself.
+  const showAdminLink = admin || cookies().has(ADMIN_UI_COOKIE);
   // Interface language (lib/i18n): the visitor's 🌐 pick, else their browser's.
   const lang = getLang();
 
@@ -42,7 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <I18nProvider lang={lang}>
           <RadioProvider phaseAllows={features.radio}>
             <FybyDayBanner />
-            <SiteLogoBar features={features} />
+            <SiteLogoBar features={features} showAdminLink={showAdminLink} />
             {children}
           </RadioProvider>
         </I18nProvider>

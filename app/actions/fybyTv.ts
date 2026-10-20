@@ -18,9 +18,9 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { siteOrigin } from "@/lib/siteUrl";
+import { adminForEmail } from "@/lib/admin";
 
 // Same one-person allowlist as the other admin pages (app/admin/*).
-const ADMIN_EMAILS = ["atonemusiq@gmail.com"];
 
 export type TvActionResult = { error?: string };
 
@@ -29,7 +29,7 @@ async function requireAdmin() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user?.email || !ADMIN_EMAILS.includes(user.email)) {
+  if (!(await adminForEmail(user?.email))) {
     throw new Error("Only Fyby admins can manage Fyby TV.");
   }
 }

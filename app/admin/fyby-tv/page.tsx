@@ -4,9 +4,9 @@ import { redirect } from "next/navigation";
 import { TV_CATEGORIES } from "@/lib/fybyTv";
 import TvAdminForm from "./TvAdminForm";
 import TvAdminRow from "./TvAdminRow";
+import { adminForEmail } from "@/lib/admin";
 
 // Same one-person allowlist as the other admin pages.
-const ADMIN_EMAILS = ["atonemusiq@gmail.com"];
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export default async function FybyTvAdminPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user?.email || !ADMIN_EMAILS.includes(user.email)) redirect("/");
+  if (!(await adminForEmail(user?.email))) redirect("/admin/login");
 
   const { data: rows } = await createServiceRoleClient()
     .from("fyby_tv_videos")

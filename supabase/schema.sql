@@ -1871,3 +1871,35 @@ drop trigger if exists block_deleting_sold_tracks on tracks;
 create trigger block_deleting_sold_tracks
   before delete on tracks
   for each row execute function block_deleting_sold_tracks();
+
+-- ============================================================================
+-- Back office team (app/admin, lib/admin.ts). Anyone listed here can sign in
+-- at /admin/login. 'owner' can also add/remove admins; 'moderator' can do
+-- everything else. Server-only: RLS on with no policies, so only the service
+-- role reads these. lib/admin.ts also hard-codes the founder's email as an
+-- owner so he can never lock himself out.
+-- ============================================================================
+create table if not exists admin_users (
+  email text primary key check (email = lower(email)),
+  role text not null default 'moderator' check (role in ('owner', 'moderator')),
+  added_by text,
+  created_at timestamptz not null default now()
+);
+alter table admin_users enable row level security;
+
+insert into admin_users (email, role, added_by)
+values ('atonemusiq@gmail.com', 'owner', 'setup')
+on conflict (email) do update set role = 'owner';
+
+-- Who did what in the back office (freezes, approvals, team changes).
+create table if not exists admin_log (
+  id bigint generated always as identity primary key,
+  actor_email text not null,
+  action text not null,
+  detail text,
+  created_at timestamptz not null default now()
+);
+alter table admin_log enable row level security;
+create index if not exists admin_log_created_at_idx on admin_log (created_at desc);
+
+revoke all on admin_users, admin_log from anon, authenticated;

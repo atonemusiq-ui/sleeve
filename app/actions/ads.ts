@@ -17,8 +17,8 @@ import {
 } from "@/lib/ads";
 import { revalidatePath } from "next/cache";
 import { siteOrigin } from "@/lib/siteUrl";
+import { adminForEmail } from "@/lib/admin";
 
-const ADMIN_EMAILS = ["atonemusiq@gmail.com"];
 
 function targetsFrom(formData: FormData) {
   return cleanTargets({
@@ -139,7 +139,7 @@ async function requireAdmin() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user?.email || !ADMIN_EMAILS.includes(user.email)) throw new Error("Not authorized.");
+  if (!(await adminForEmail(user?.email))) throw new Error("Not authorized.");
 }
 
 // /admin/ads: approve a paid campaign so it starts running.

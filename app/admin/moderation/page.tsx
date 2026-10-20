@@ -4,11 +4,11 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { freezeTrack, unfreezeTrack } from "@/app/actions/admin";
+import { adminForEmail } from "@/lib/admin";
 
 // Same one-person allowlist as the other admin/* pages — see
 // app/admin/flagged/page.tsx for why this is email-based rather than a
 // `role` column.
-const ADMIN_EMAILS = ["atonemusiq@gmail.com"];
 
 // The content-moderation back office: freeze a track that shouldn't be up
 // (explicit content posted without the disclosure box checked, a rights
@@ -23,8 +23,8 @@ export default async function ContentModerationPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user?.email || !ADMIN_EMAILS.includes(user.email)) {
-    redirect("/");
+  if (!(await adminForEmail(user?.email))) {
+    redirect("/admin/login");
   }
 
   const admin = createServiceRoleClient();

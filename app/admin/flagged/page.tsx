@@ -3,12 +3,12 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { dismissFlag, confirmDuplicateFlag } from "@/app/actions/admin";
+import { adminForEmail } from "@/lib/admin";
 
 // Restricted to your own account rather than a `role` column on profiles —
 // this is a one-person moderation queue for now, and an email allowlist is
 // one line to extend later (or swap for a real `is_admin` column) without
 // having to migrate anything if that ever changes.
-const ADMIN_EMAILS = ["atonemusiq@gmail.com"];
 
 export default async function FlaggedUploadsPage() {
   const supabase = createClient();
@@ -16,8 +16,8 @@ export default async function FlaggedUploadsPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user?.email || !ADMIN_EMAILS.includes(user.email)) {
-    redirect("/");
+  if (!(await adminForEmail(user?.email))) {
+    redirect("/admin/login");
   }
 
   const admin = createServiceRoleClient();
