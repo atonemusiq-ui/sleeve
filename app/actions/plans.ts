@@ -5,6 +5,7 @@ import { stripe } from "@/lib/stripe/server";
 import { PLANS, isPlan, isFoundingArtist, planPriceCents, type Plan } from "@/lib/plans";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { siteOrigin } from "@/lib/siteUrl";
 
 // Starts (or replaces) the artist's own paid plan subscription -- the
 // artist paying Fyby for a lower commission rate (lib/plans.ts), not to be
@@ -34,7 +35,7 @@ export async function startPlanCheckout(formData: FormData) {
     redirect(
       `/login?message=${encodeURIComponent(
         "Log in to your artist account to upgrade your plan."
-      )}&next=${encodeURIComponent("/dashboard")}`
+      )}&next=${encodeURIComponent("/dashboard/subscription")}`
     );
   }
 
@@ -69,7 +70,7 @@ export async function startPlanCheckout(formData: FormData) {
     }
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = siteOrigin();
   const rate = `${(PLANS[plan].rateBps / 100).toFixed(0)}% platform commission instead of Free's ${(
     PLANS.free.rateBps / 100
   ).toFixed(0)}%.`;

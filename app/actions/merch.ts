@@ -14,6 +14,7 @@ import {
 import { merchCheckoutEnabled, merchSplit, minimumPriceCents, formatCents } from "@/lib/merch";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { siteOrigin } from "@/lib/siteUrl";
 
 export type MerchActionResult = { error?: string; success?: boolean };
 
@@ -201,7 +202,7 @@ export async function startMerchCheckout(formData: FormData) {
   const artistName = artist?.profiles?.display_name ?? "Fyby artist";
   const variantLabel = `${product.color} / ${variant.size}`;
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = siteOrigin();
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",

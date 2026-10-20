@@ -7,6 +7,7 @@ import { VIDEO_TIER_OPTIONS, tierAllows, type VideoTier } from "@/lib/videoTiers
 import { parseVideoEmbedUrl } from "@/lib/videoEmbed";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { siteOrigin } from "@/lib/siteUrl";
 
 // A one-time Fyby platform fee, not an artist sale — this money stays in
 // Fyby's own Stripe balance (no transfer_data / connected-account split,
@@ -40,7 +41,7 @@ export async function startVideoUnlockCheckout(formData: FormData) {
     throw new Error("Could not find your artist profile.");
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = siteOrigin();
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",

@@ -7,6 +7,7 @@ import { trackNeedsCoverCredit } from "@/lib/coverCompliance";
 import { createTrackCheckoutSession } from "@/lib/checkoutSession";
 import { isUuid } from "@/lib/uuid";
 import { redirect } from "next/navigation";
+import { siteOrigin } from "@/lib/siteUrl";
 
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -161,7 +162,7 @@ export async function startAlbumCheckout(formData: FormData) {
   const platformFeeCents = commissionCents(amountCents, plan, { fybyDay });
   const artistPayoutCents = payoutCents(amountCents, plan, { fybyDay });
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = siteOrigin();
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",

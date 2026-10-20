@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/server";
 import { VERIFICATION_FEE_CENTS } from "@/lib/verification";
 import { redirect } from "next/navigation";
+import { siteOrigin } from "@/lib/siteUrl";
 
 // A one-time Fyby platform fee, same pattern as app/actions/video.ts's
 // startVideoUnlockCheckout — stays in Fyby's own Stripe balance, no
@@ -63,7 +64,7 @@ export async function startVerificationCheckout(formData: FormData) {
   // a size limit a longer note could hit).
   await supabase.from("tracks").update({ verification_note: note }).eq("id", trackId);
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = siteOrigin();
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",

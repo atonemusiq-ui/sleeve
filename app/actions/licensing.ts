@@ -18,6 +18,7 @@ import {
 import { isUuid } from "@/lib/uuid";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { siteOrigin } from "@/lib/siteUrl";
 
 export type LicenseSettingsResult = { error?: string; success?: boolean };
 
@@ -155,7 +156,7 @@ export async function startLicenseCheckout(formData: FormData) {
   const artistPayoutCents = payoutCents(amountCents, plan, { fybyDay });
   const artistName = artist.profiles?.display_name ?? "Unknown artist";
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = siteOrigin();
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",

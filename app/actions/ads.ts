@@ -16,6 +16,7 @@ import {
   safeClickUrl,
 } from "@/lib/ads";
 import { revalidatePath } from "next/cache";
+import { siteOrigin } from "@/lib/siteUrl";
 
 const ADMIN_EMAILS = ["atonemusiq@gmail.com"];
 
@@ -86,7 +87,7 @@ export async function startAdCampaign(formData: FormData): Promise<{ error: stri
     .single();
   if (error || !campaign) return { error: error?.message ?? "Could not save your ad." };
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = siteOrigin();
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     customer_email: user.email,

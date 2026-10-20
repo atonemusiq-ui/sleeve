@@ -2,6 +2,7 @@
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { stripe } from "@/lib/stripe/server";
+import { siteOrigin } from "@/lib/siteUrl";
 
 // Same v2 Core Accounts "recipient" configuration as app/actions/stripe-
 // connect.ts (artist payouts) — see that file's comments for why each field
@@ -71,7 +72,7 @@ export async function getContributorOnboardingUrl(token: string): Promise<string
   });
   const configurations = account.applied_configurations;
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const siteUrl = siteOrigin();
   if (!siteUrl || !siteUrl.startsWith("https://")) {
     throw new Error(
       "NEXT_PUBLIC_SITE_URL must be set to an HTTPS URL to create a Stripe onboarding link."

@@ -15,6 +15,7 @@ import { premiereWindow } from "@/lib/radioPremiere";
 import { formatReleaseDate, isPreorder } from "@/lib/preorder";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { siteOrigin } from "@/lib/siteUrl";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -103,7 +104,7 @@ export async function startRadioPremiere(formData: FormData) {
     redirect("/dashboard/catalog?premiereStarted=1");
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = siteOrigin();
   const tierInfo = PREMIERE_TIERS[tier];
 
   const session = await stripe.checkout.sessions.create({
