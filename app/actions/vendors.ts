@@ -28,7 +28,7 @@ async function ownVendor() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Please log in to your vendor account." } as const;
+  if (!user) return { ok: false as const, error: "Please log in to your vendor account." };
 
   const admin = createServiceRoleClient();
   const { data: vendor } = await admin
@@ -36,8 +36,8 @@ async function ownVendor() {
     .select("id, user_id, plan_status, plan_subscription_id, stripe_account_id, business_name")
     .eq("user_id", user.id)
     .maybeSingle();
-  if (!vendor) return { error: "No vendor account found for your login." } as const;
-  return { user, vendor, admin } as const;
+  if (!vendor) return { ok: false as const, error: "No vendor account found for your login." };
+  return { ok: true as const, user, vendor, admin };
 }
 
 function cleanUrl(raw: string): string | null {
@@ -78,7 +78,7 @@ function ownImageUrls(raw: string[], vendorId: string): string[] {
 
 export async function updateVendorProfile(formData: FormData): Promise<VendorActionResult> {
   const owned = await ownVendor();
-  if ("error" in owned) return { error: owned.error };
+  if (!owned.ok) return { error: owned.error };
   const { vendor, admin } = owned;
 
   const businessName = String(formData.get("businessName") ?? "").trim();
@@ -115,7 +115,7 @@ export async function updateVendorProfile(formData: FormData): Promise<VendorAct
 
 export async function saveVendorProduct(formData: FormData): Promise<VendorActionResult> {
   const owned = await ownVendor();
-  if ("error" in owned) return { error: owned.error };
+  if (!owned.ok) return { error: owned.error };
   const { vendor, admin } = owned;
 
   const productId = formData.get("productId");
@@ -160,7 +160,7 @@ export async function saveVendorProduct(formData: FormData): Promise<VendorActio
 
 export async function setVendorProductActive(formData: FormData): Promise<VendorActionResult> {
   const owned = await ownVendor();
-  if ("error" in owned) return { error: owned.error };
+  if (!owned.ok) return { error: owned.error };
   const productId = formData.get("productId");
   if (!isUuid(productId)) return { error: "Unknown product." };
   const { error } = await owned.admin
@@ -175,7 +175,7 @@ export async function setVendorProductActive(formData: FormData): Promise<Vendor
 
 export async function deleteVendorProduct(formData: FormData): Promise<VendorActionResult> {
   const owned = await ownVendor();
-  if ("error" in owned) return { error: owned.error };
+  if (!owned.ok) return { error: owned.error };
   const productId = formData.get("productId");
   if (!isUuid(productId)) return { error: "Unknown product." };
   const { error } = await owned.admin
@@ -190,7 +190,7 @@ export async function deleteVendorProduct(formData: FormData): Promise<VendorAct
 
 export async function markVendorOrderFulfilled(formData: FormData): Promise<VendorActionResult> {
   const owned = await ownVendor();
-  if ("error" in owned) return { error: owned.error };
+  if (!owned.ok) return { error: owned.error };
   const orderId = formData.get("orderId");
   if (!isUuid(orderId)) return { error: "Unknown order." };
   const { error } = await owned.admin
@@ -208,7 +208,7 @@ export async function markVendorOrderFulfilled(formData: FormData): Promise<Vend
 // the subscription (app/api/webhooks/stripe-subscriptions/route.ts).
 export async function startVendorPlanCheckout() {
   const owned = await ownVendor();
-  if ("error" in owned) {
+  if (!owned.ok) {
     redirect(`/login?next=${encodeURIComponent("/vendor")}&error=${encodeURIComponent(owned.error)}`);
   }
   const { vendor, user } = owned;
@@ -245,7 +245,7 @@ export async function startVendorPlanCheckout() {
 
 export async function cancelVendorPlan(): Promise<VendorActionResult> {
   const owned = await ownVendor();
-  if ("error" in owned) return { error: owned.error };
+  if (!owned.ok) return { error: owned.error };
   const subscriptionId = owned.vendor.plan_subscription_id;
   if (!subscriptionId) return { error: "You don't have an active plan." };
   try {
