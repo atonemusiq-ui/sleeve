@@ -8,7 +8,7 @@ import LanguageMenu from "@/app/LanguageMenu";
 export default function LoginPage({
   searchParams,
 }: {
-  searchParams: { error?: string; message?: string; next?: string };
+  searchParams: { error?: string; message?: string; next?: string; email?: string };
 }) {
   const t = getT();
   return (
@@ -44,6 +44,7 @@ export default function LoginPage({
             name="email"
             type="email"
             required
+            defaultValue={searchParams.email ?? ""}
             className="w-full bg-paper/5 border border-paper/20 rounded px-3 py-2 text-paper"
           />
         </div>

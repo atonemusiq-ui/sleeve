@@ -65,6 +65,17 @@ export default function VerifyEmailPage({
         </button>
       </form>
 
+      <p className="mt-6 font-mono text-xs text-paper/60 border border-paper/15 rounded px-3 py-2">
+        Tapped the link in the email instead? Then you&apos;re already verified —{" "}
+        <Link
+          href={`/login?email=${encodeURIComponent(email)}${searchParams.next ? `&next=${encodeURIComponent(searchParams.next)}` : ""}`}
+          className="text-gold hover:underline"
+        >
+          log in here
+        </Link>
+        .
+      </p>
+
       <form action={resendEmailCode} className="mt-6 font-mono text-xs text-paper/50">
         <input type="hidden" name="email" value={email} />
         {searchParams.next && <input type="hidden" name="next" value={searchParams.next} />}

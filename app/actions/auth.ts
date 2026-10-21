@@ -118,6 +118,33 @@ async function claimPastPurchases(userId: string, email: string) {
   }
 }
 
+// Whether this email's account is already verified. The admin API has no
+// lookup by email, so page through users (Fyby is small; this only runs when
+// a code fails or a resend is requested).
+async function emailAlreadyConfirmed(email: string): Promise<boolean> {
+  const target = email.trim().toLowerCase();
+  if (!target) return false;
+  const admin = createServiceRoleClient();
+  const perPage = 1000;
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error || !data) return false;
+    const match = data.users.find((u) => (u.email ?? "").toLowerCase() === target);
+    if (match) return Boolean(match.email_confirmed_at);
+    if (data.users.length < perPage) return false;
+  }
+  return false;
+}
+
+function alreadyVerifiedLoginUrl(email: string, next: string | null) {
+  const params = new URLSearchParams({
+    email,
+    message: "Good news — your email is already verified (the link in the email did it). Log in to continue.",
+  });
+  if (next) params.set("next", next);
+  return `/login?${params.toString()}`;
+}
+
 function verifyEmailUrl(email: string, next: string | null, extra?: { error?: string; message?: string }) {
   const params = new URLSearchParams({ email });
   if (next) params.set("next", next);
@@ -145,6 +172,13 @@ export async function verifyEmailCode(formData: FormData) {
   const { data, error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
 
   if (error || !data.session) {
+    // The confirmation email has both a code and a link. Tapping the link
+    // verifies the account and uses up the code, so typing the code after
+    // that always fails. If the account is already verified, say so and
+    // send them to log in instead of leaving them stuck on this screen.
+    if (await emailAlreadyConfirmed(email)) {
+      redirect(alreadyVerifiedLoginUrl(email, next));
+    }
     redirect(
       verifyEmailUrl(email, next, {
         error: "That code didn't work — it may have expired. Check the code or send a new one.",
@@ -163,6 +197,13 @@ export async function resendEmailCode(formData: FormData) {
 
   if (!email) {
     redirect("/signup");
+  }
+
+  // Supabase sends nothing for an account that's already verified (for
+  // example, after the link in the first email was tapped), so don't claim
+  // a new code went out -- send them to log in.
+  if (await emailAlreadyConfirmed(email)) {
+    redirect(alreadyVerifiedLoginUrl(email, next));
   }
 
   const supabase = createClient();
