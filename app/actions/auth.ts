@@ -11,7 +11,9 @@ export async function signup(formData: FormData) {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
   const displayName = formData.get("displayName") as string;
-  const role = formData.get("role") as "artist" | "fan";
+  const rawRole = formData.get("role");
+  const role: "artist" | "fan" | "vendor" =
+    rawRole === "artist" || rawRole === "vendor" ? rawRole : "fan";
   // Carried through from a "log in to buy this track" bounce (see
   // app/actions/checkout.ts) so someone who had to sign up mid-purchase
   // still ends up back where they were after confirming their email and
@@ -151,7 +153,7 @@ export async function verifyEmailCode(formData: FormData) {
   }
 
   const role = data.user?.user_metadata?.role;
-  const fallback = role === "artist" ? "/dashboard" : "/";
+  const fallback = role === "artist" ? "/dashboard" : role === "vendor" ? "/vendor" : "/";
   redirect(next && next.startsWith("/") ? next : fallback);
 }
 
@@ -181,7 +183,7 @@ export async function login(formData: FormData) {
 
   const supabase = createClient();
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data: signedIn, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
     // Signed up but never entered their code: send a fresh one and take
@@ -198,7 +200,9 @@ export async function login(formData: FormData) {
     return redirect(`/login?error=${encodeURIComponent(error.message)}${nextParam}`);
   }
 
-  redirect(next && next.startsWith("/") ? next : "/dashboard");
+  // Vendors have their own portal; everyone else lands where they always did.
+  const home = signedIn?.user?.user_metadata?.role === "vendor" ? "/vendor" : "/dashboard";
+  redirect(next && next.startsWith("/") ? next : home);
 }
 
 export async function logout() {

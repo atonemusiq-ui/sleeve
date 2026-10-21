@@ -4,14 +4,15 @@ import FybyLogo, { FybyWordmark } from "@/app/FybyLogo";
 import PasswordInput from "@/app/PasswordInput";
 import { isRadioEnabled } from "@/lib/radio";
 import { createClient } from "@/lib/supabase/server";
-import { FOUNDING, formatPlanPrice } from "@/lib/plans";
+import { FOUNDING, formatPlanPrice, VENDOR_PLAN } from "@/lib/plans";
+import { VENDOR_BUYER_NOTE, VENDOR_RATE_PERCENT } from "@/lib/vendors";
 import { getT } from "@/lib/i18n/server";
 import LanguageMenu from "@/app/LanguageMenu";
 
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: { error?: string; next?: string; email?: string };
+  searchParams: { error?: string; next?: string; email?: string; role?: string };
 }) {
   // Arriving here via a "log in to buy this track" bounce (see
   // app/actions/checkout.ts), or via the "create a free account" prompt on
@@ -19,6 +20,8 @@ export default async function SignupPage({
   // here to buy/claim a purchase, not to sell — default the role picker to
   // Fan in either case instead of Artist.
   const cameFromBuying = Boolean(searchParams.next) || Boolean(searchParams.email);
+  // ?role=vendor (the "Become a vendor" links) preselects Vendor.
+  const wantsVendor = searchParams.role === "vendor";
 
   // Founding Artist countdown (supabase/schema.sql, founding_spots_left).
   // Hidden if the lookup fails or the spots are gone.
@@ -100,16 +103,30 @@ export default async function SignupPage({
                 type="radio"
                 name="role"
                 value="artist"
-                defaultChecked={!cameFromBuying}
+                defaultChecked={!cameFromBuying && !wantsVendor}
               />
               {t("signup.artist")}
             </label>
             <label className="flex items-center gap-2 font-body">
-              <input type="radio" name="role" value="fan" defaultChecked={cameFromBuying} />
+              <input type="radio" name="role" value="fan" defaultChecked={cameFromBuying && !wantsVendor} />
               {t("signup.fan")}
+            </label>
+            <label className="flex items-center gap-2 font-body">
+              <input type="radio" name="role" value="vendor" defaultChecked={wantsVendor} />
+              Vendor
             </label>
           </div>
         </fieldset>
+
+        {/* Fyby Vendors: merchants selling products or services. */}
+        <div className="border border-flame/30 bg-flame/5 rounded-lg px-4 py-3 font-mono text-xs text-paper/70 flex flex-col gap-1.5">
+          <p className="text-flame">🛍️ Vendors: sell your products and services on Fyby</p>
+          <p>
+            Photographers, caterers, DJs, clothing brands, studios and more. {formatPlanPrice(VENDOR_PLAN.priceCents)}/month
+            Vendor Pro plan + {VENDOR_RATE_PERCENT}% per sale. No listing, storage or fulfillment fees.
+          </p>
+          <p className="text-paper">{VENDOR_BUYER_NOTE}</p>
+        </div>
 
         {/* Two-step signup (see verifyEmailCode in app/actions/auth.ts).
             Artists always get an emailed code since they handle payouts;

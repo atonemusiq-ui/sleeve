@@ -106,6 +106,19 @@ export async function POST(req: Request) {
     const subscription = event.data.object as Stripe.Subscription;
     const metadata = subscription.metadata ?? {};
 
+        // Fyby Vendors: the required Vendor Pro plan puts the vendor live.
+        if (metadata.type === "vendor_plan_subscription" && metadata.vendor_id) {
+          const { error } = await supabase
+            .from("vendors")
+            .update({ plan_status: "active", plan_subscription_id: subscription.id })
+            .eq("id", metadata.vendor_id);
+          if (error) {
+            console.error("Failed to activate vendor plan:", error.message);
+            return NextResponse.json({ error: "Database error" }, { status: 500 });
+          }
+          return NextResponse.json({ received: true });
+        }
+
         if (metadata.type === "artist_plan_subscription") {
                 const artistId = metadata.artist_id;
                 const plan = metadata.plan;
@@ -223,6 +236,19 @@ export async function POST(req: Request) {
   if (event.type === "customer.subscription.updated") {
     const subscription = event.data.object as Stripe.Subscription;
 
+        if ((subscription.metadata ?? {}).type === "vendor_plan_subscription") {
+          // Keep listings up through a renewal; mark past_due/unpaid so the
+          // vendor sees it in their portal, and back to active when paid.
+          const status =
+            subscription.status === "active" || subscription.status === "trialing"
+              ? "active"
+              : subscription.status === "canceled"
+              ? "canceled"
+              : "past_due";
+          await supabase.from("vendors").update({ plan_status: status }).eq("plan_subscription_id", subscription.id);
+          return NextResponse.json({ received: true });
+        }
+
         if ((subscription.metadata ?? {}).type === "artist_plan_subscription") {
                 // Held through past_due deliberately -- the plan only changes when
                 // Stripe actually ends the subscription (customer.subscription.deleted
@@ -251,6 +277,15 @@ export async function POST(req: Request) {
   // history of the relationship (when it started, how long it lasted).
   if (event.type === "customer.subscription.deleted") {
     const subscription = event.data.object as Stripe.Subscription;
+
+        if ((subscription.metadata ?? {}).type === "vendor_plan_subscription") {
+          // Plan ended: the vendor's page and products come off the site.
+          await supabase
+            .from("vendors")
+            .update({ plan_status: "canceled", plan_subscription_id: null })
+            .eq("plan_subscription_id", subscription.id);
+          return NextResponse.json({ received: true });
+        }
 
         if ((subscription.metadata ?? {}).type === "artist_plan_subscription") {
                 const { error } = await supabase

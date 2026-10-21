@@ -8,6 +8,7 @@ import { videoPremiereWindow } from "@/lib/fybyTvServer";
 import { premiereWindow } from "@/lib/radioPremiere";
 import { sendGiftClaimEmail } from "@/lib/email";
 import { LICENSE_TIERS, isLicenseTier } from "@/lib/licensing";
+import { handleVendorCheckout } from "@/lib/vendorOrders";
 import { handleMerchCheckout, reverseMerchOrders, setMerchDisputeStatus } from "@/lib/merchFulfillment";
 import { randomUUID } from "crypto";
 import { headers } from "next/headers";
@@ -413,6 +414,18 @@ export async function POST(req: Request) {
     if (session.metadata?.type === "merch") {
       const result = await handleMerchCheckout(session);
       return NextResponse.json(result.body, { status: result.status });
+    }
+
+    // Fyby Vendors order (app/actions/vendors.ts startVendorCheckout).
+    if (session.metadata?.type === "vendor_order") {
+      const result = await handleVendorCheckout(session);
+      return NextResponse.json(result.body, { status: result.status });
+    }
+
+    // The Vendor Pro plan checkout is a subscription; it's activated by the
+    // subscriptions webhook, not here.
+    if (session.metadata?.type === "vendor_plan_subscription") {
+      return NextResponse.json({ received: true });
     }
 
     // The bio video feature (app/actions/video.ts's startVideoUnlockCheckout)

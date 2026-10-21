@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { vendorCategoryLabel } from "@/lib/vendors";
 
 export const metadata: Metadata = {
   title: "Advertise with Fyby",
@@ -7,7 +9,21 @@ export const metadata: Metadata = {
 };
 
 // getfyby.com/advertise: the public pitch to brands, with launch pricing.
-export default function AdvertisePage() {
+export const dynamic = "force-dynamic";
+
+export default async function AdvertisePage() {
+  // Fyby Vendors' own links (lib/vendors.ts): every live vendor's website,
+  // part of what their Vendor Pro plan includes.
+  const supabase = createClient();
+  const { data: vendorLinks } = await supabase
+    .from("vendors")
+    .select("id, business_name, website_url, categories")
+    .eq("plan_status", "active")
+    .eq("is_active", true)
+    .not("website_url", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(60);
+
   return (
     <main className="max-w-5xl mx-auto px-6 lg:px-8 py-10 flex flex-col gap-12">
       <section className="flex flex-col gap-4">
@@ -91,6 +107,33 @@ export default function AdvertisePage() {
           <li>Audiences smaller than 100 people are never shown, so no one can be singled out.</li>
           <li>Every ad is labeled Sponsored, with a &quot;Why this ad?&quot; explanation.</li>
         </ul>
+      </section>
+      <section aria-labelledby="vendors-heading" className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 id="vendors-heading" className="font-display text-2xl">🛍️ Fyby Vendors</h2>
+            <p className="text-paper/70 text-sm mt-1">Businesses selling on Fyby. Tap through to their sites.</p>
+          </div>
+          <div className="flex gap-2 font-mono text-xs">
+            <Link href="/vendors" className="px-3 py-2 rounded-full border border-paper/25 hover:border-gold/60">All vendors</Link>
+            <Link href="/signup?role=vendor" className="px-3 py-2 rounded-full bg-flame text-ink font-semibold hover:bg-gold">Become a vendor</Link>
+          </div>
+        </div>
+        {(vendorLinks ?? []).length === 0 ? (
+          <p className="font-mono text-xs text-paper/50">Vendor links will appear here as businesses join.</p>
+        ) : (
+          <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {(vendorLinks ?? []).map((v) => (
+              <li key={v.id} className="border border-paper/15 rounded-lg px-4 py-3 bg-paper/5 flex flex-col gap-1">
+                <Link href={`/vendors/${v.id}`} className="font-display text-base hover:text-gold">{v.business_name}</Link>
+                {v.categories?.[0] && <span className="font-mono text-[11px] text-paper/50">{vendorCategoryLabel(v.categories[0])}</span>}
+                <a href={v.website_url!} target="_blank" rel="noopener noreferrer nofollow" className="font-mono text-xs text-gold hover:underline truncate">
+                  {v.website_url!.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </main>
   );

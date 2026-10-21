@@ -186,3 +186,14 @@ export function formatFybyDay(isoDate: string): string {
     timeZone: "UTC",
   });
 }
+
+// ---------------------------------------------------------------------------
+// Fyby Vendors (merchants selling products and services, lib/vendors.ts).
+// One plan, required to go live: priced under Amazon's Professional seller
+// plan ($39.99/mo + typically 8-15% referral fee, before fulfillment fees).
+// Vendors keep everything else, and the buyer pays shipping and sales tax.
+export const VENDOR_PLAN = {
+  label: "Vendor Pro",
+  priceCents: 2500,
+  rateBps: 1200,
+} as const;

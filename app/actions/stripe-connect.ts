@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { stripe } from "@/lib/stripe/server";
 import { redirect } from "next/navigation";
 import { siteOrigin } from "@/lib/siteUrl";
@@ -29,6 +30,16 @@ const RECIPIENT_CONFIGURATION = {
 } as const;
 
 export async function connectStripeAccount() {
+  return connectStripeAccountFor("artists", "/dashboard");
+}
+
+// Fyby Vendors (lib/vendors.ts) get paid exactly like artists: the same
+// Express connected account flow, stored on their own vendors row.
+export async function connectVendorStripeAccount() {
+  return connectStripeAccountFor("vendors", "/vendor");
+}
+
+async function connectStripeAccountFor(table: "artists" | "vendors", returnPath: string) {
   const supabase = createClient();
 
   const {
@@ -40,13 +51,13 @@ export async function connectStripeAccount() {
   }
 
   const { data: artist, error } = await supabase
-    .from("artists")
+    .from(table)
     .select("id, stripe_account_id")
     .eq("user_id", user.id)
     .single();
 
   if (error || !artist) {
-    throw new Error("Could not find your artist profile.");
+    throw new Error(table === "vendors" ? "Could not find your vendor profile." : "Could not find your artist profile.");
   }
 
   let accountId = artist.stripe_account_id;
@@ -92,8 +103,10 @@ export async function connectStripeAccount() {
 
     accountId = account.id;
 
-    await supabase
-      .from("artists")
+    // Vendors rows are written server-side only (no RLS update policy).
+    const writer = table === "vendors" ? createServiceRoleClient() : supabase;
+    await writer
+      .from(table)
       .update({ stripe_account_id: accountId })
       .eq("id", artist.id);
   } else {
@@ -154,8 +167,8 @@ export async function connectStripeAccount() {
       type: "account_onboarding",
       account_onboarding: {
         configurations,
-        refresh_url: `${siteUrl}/dashboard`,
-        return_url: `${siteUrl}/dashboard`,
+        refresh_url: `${siteUrl}${returnPath}`,
+        return_url: `${siteUrl}${returnPath}`,
       },
     },
   });

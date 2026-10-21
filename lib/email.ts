@@ -263,3 +263,45 @@ export async function sendNewReleaseEmails({
   }
   return { sent, failed };
 }
+
+// Fyby Vendors: tells the vendor they made a sale (lib/vendorOrders.ts).
+export async function sendVendorOrderEmail({
+  to,
+  productTitle,
+  quantity,
+  payoutCents,
+  isService,
+  buyerEmail,
+  portalUrl,
+}: {
+  to: string;
+  productTitle: string;
+  quantity: number;
+  payoutCents: number;
+  isService: boolean;
+  buyerEmail: string | null;
+  portalUrl: string;
+}): Promise<SendResult> {
+  const html = `
+    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; color: #16121a;">
+      <h1 style="font-size: 20px; margin-bottom: 8px;">You have a new ${isService ? "booking" : "order"} 🎉</h1>
+      <p style="font-size: 15px; line-height: 1.5;">
+        ${quantity > 1 ? `${quantity} × ` : ""}<strong>${escapeHtml(productTitle)}</strong> was just purchased on Fyby.
+        You earn <strong>$${(payoutCents / 100).toFixed(2)}</strong>, paid to your connected Stripe account.
+      </p>
+      <p style="font-size: 15px; line-height: 1.5;">
+        ${
+          isService
+            ? `Reach out to your customer${buyerEmail ? ` at ${escapeHtml(buyerEmail)}` : ""} to schedule.`
+            : "The shipping address is in your Vendor portal. Mark it fulfilled once it ships."
+        }
+      </p>
+      <p style="margin: 28px 0;">
+        <a href="${portalUrl}" style="display: inline-block; background: #C9A227; color: #16121a; padding: 12px 20px; border-radius: 6px; text-decoration: none; font-weight: 600;">
+          Open your Vendor portal
+        </a>
+      </p>
+    </div>
+  `;
+  return send(to, `New Fyby ${isService ? "booking" : "order"}: ${productTitle}`, html);
+}
