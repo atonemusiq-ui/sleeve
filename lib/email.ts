@@ -305,3 +305,62 @@ export async function sendVendorOrderEmail({
   `;
   return send(to, `New Fyby ${isService ? "booking" : "order"}: ${productTitle}`, html);
 }
+
+// Fyby Vendors: sent once the Vendor Pro plan is paid and the vendor goes
+// live (app/api/webhooks/stripe-subscriptions/route.ts). Confirms the
+// account is set up and lists anything still left to do.
+export async function sendVendorLiveEmail({
+  to,
+  businessName,
+  portalUrl,
+  pageUrl,
+  stripeConnected,
+  profileDone,
+  hasListings,
+}: {
+  to: string;
+  businessName: string;
+  portalUrl: string;
+  pageUrl: string;
+  stripeConnected: boolean;
+  profileDone: boolean;
+  hasListings: boolean;
+}): Promise<SendResult> {
+  const item = (done: boolean, text: string) =>
+    `<li style="margin: 6px 0;">${done ? "✅" : "⬜"} ${text}</li>`;
+  const allDone = stripeConnected && profileDone && hasListings;
+  const html = `
+    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; color: #16121a;">
+      <h1 style="font-size: 20px; margin-bottom: 8px;">Your Fyby vendor account is set up 🎉</h1>
+      <p style="font-size: 15px; line-height: 1.5;">
+        Welcome, <strong>${escapeHtml(businessName || "vendor")}</strong>! Your Vendor Pro plan is active, so your page
+        is live on Fyby Vendors and on the Fyby advertising page.
+      </p>
+      <p style="font-size: 15px; line-height: 1.5; margin-bottom: 4px;"><strong>Your checklist</strong></p>
+      <ul style="font-size: 15px; line-height: 1.4; padding-left: 4px; list-style: none; margin-top: 0;">
+        ${item(true, "Vendor Pro plan active")}
+        ${item(stripeConnected, "Connect Stripe so you get paid")}
+        ${item(profileDone, "Fill in your profile: what you do, your city and your website link")}
+        ${item(hasListings, "Add your first product or service with photos")}
+      </ul>
+      <p style="font-size: 15px; line-height: 1.5;">
+        ${
+          allDone
+            ? "You're all set. Customers can find you and buy from you now."
+            : "Finish the unchecked steps in your Vendor portal so customers can buy from you."
+        }
+        Sales tax and shipping are charged to the customer at checkout.
+      </p>
+      <p style="margin: 28px 0;">
+        <a href="${portalUrl}" style="display: inline-block; background: #C9A227; color: #16121a; padding: 12px 20px; border-radius: 6px; text-decoration: none; font-weight: 600;">
+          Open your Vendor portal
+        </a>
+      </p>
+      <p style="font-size: 13px; color: #555;">
+        Log in at getfyby.com with the email and password you signed up with; you'll land in your Vendor portal.
+        Your public page: <a href="${pageUrl}" style="color: #555;">${pageUrl}</a>
+      </p>
+    </div>
+  `;
+  return send(to, "Your Fyby vendor account is set up", html);
+}

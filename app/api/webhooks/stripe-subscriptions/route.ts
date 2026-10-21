@@ -3,6 +3,8 @@ import { transferArtistPayout } from "@/lib/stripe/payouts";
 import { commissionCents, payoutCents, planOf } from "@/lib/plans";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createNotification } from "@/lib/notifications";
+import { sendVendorLiveEmail } from "@/lib/email";
+import { siteOrigin } from "@/lib/siteUrl";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
@@ -115,6 +117,44 @@ export async function POST(req: Request) {
           if (error) {
             console.error("Failed to activate vendor plan:", error.message);
             return NextResponse.json({ error: "Database error" }, { status: 500 });
+          }
+
+          // Confirm the vendor account is set up: a bell notification and an
+          // email with what's left to do. Best-effort; never fails the webhook.
+          try {
+            const { data: vendor } = await supabase
+              .from("vendors")
+              .select("id, user_id, business_name, stripe_account_id, categories")
+              .eq("id", metadata.vendor_id)
+              .maybeSingle();
+            if (vendor) {
+              const { count } = await supabase
+                .from("vendor_products")
+                .select("id", { count: "exact", head: true })
+                .eq("vendor_id", vendor.id);
+              const site = siteOrigin();
+              await createNotification(supabase, {
+                userId: vendor.user_id,
+                type: "vendor_live",
+                title: "Your vendor account is set up",
+                body: "Vendor Pro is active and your page is live. Finish any remaining steps in your Vendor portal.",
+                link: "/vendor",
+              });
+              const { data: owner } = await supabase.auth.admin.getUserById(vendor.user_id);
+              if (owner?.user?.email) {
+                await sendVendorLiveEmail({
+                  to: owner.user.email,
+                  businessName: vendor.business_name ?? "",
+                  portalUrl: `${site}/vendor`,
+                  pageUrl: `${site}/vendors/${vendor.id}`,
+                  stripeConnected: Boolean(vendor.stripe_account_id),
+                  profileDone: (vendor.categories ?? []).length > 0,
+                  hasListings: (count ?? 0) > 0,
+                });
+              }
+            }
+          } catch (notifyErr: any) {
+            console.error("Vendor setup confirmation failed:", notifyErr?.message);
           }
           return NextResponse.json({ received: true });
         }
