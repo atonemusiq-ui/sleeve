@@ -22,12 +22,13 @@ export default async function VendorsPage({ searchParams }: { searchParams: { c?
     .from("vendors")
     .select("id, business_name, tagline, city, logo_url, categories, plan_status, is_active")
     .eq("plan_status", "active")
-    .eq("is_active", true)
-    .order("created_at", { ascending: false })
-    .limit(200);
+    .eq("is_active", true);
   if (category) query = query.contains("categories", [category]);
-  if (q) query = query.or(`business_name.ilike.%${q.replace(/[%,()]/g, "")}%,tagline.ilike.%${q.replace(/[%,()]/g, "")}%`);
-  const { data: vendors } = await query;
+  if (q) {
+    const term = q.replace(/[%,()*]/g, "");
+    query = query.or(`business_name.ilike.%${term}%,tagline.ilike.%${term}%`);
+  }
+  const { data: vendors } = await query.order("created_at", { ascending: false }).limit(200);
 
   const ids = (vendors ?? []).map((v) => v.id);
   const { data: covers } = ids.length

@@ -103,12 +103,12 @@ async function connectStripeAccountFor(table: "artists" | "vendors", returnPath:
 
     accountId = account.id;
 
-    // Vendors rows are written server-side only (no RLS update policy).
-    const writer = table === "vendors" ? createServiceRoleClient() : supabase;
-    await writer
-      .from(table)
-      .update({ stripe_account_id: accountId })
-      .eq("id", artist.id);
+    if (table === "vendors") {
+      // Vendors rows are written server-side only (no RLS update policy).
+      await createServiceRoleClient().from("vendors").update({ stripe_account_id: accountId }).eq("id", artist.id);
+    } else {
+      await supabase.from("artists").update({ stripe_account_id: accountId }).eq("id", artist.id);
+    }
   } else {
     // This artist already has a stored account ID — possibly from before
     // this file used the v2 Accounts API (e.g. a legacy Express account),
