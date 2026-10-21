@@ -167,6 +167,9 @@ export default async function StorefrontPage() {
                   🤝 {t("nav.connect")}
                 </Link>
               )}
+              <Link href="/vendors" className="hover:text-gold" title="Fyby Vendors">
+                🛍️ Vendors
+              </Link>
               {features.ads && (
                 <Link href="/advertise" className="hover:text-gold" title="Advertise with Fyby">
                   {t("nav.advertise")}
@@ -184,6 +187,11 @@ export default async function StorefrontPage() {
               {role === "artist" && (
                 <Link href="/dashboard" className="hover:text-gold">
                   {t("nav.dashboard")}
+                </Link>
+              )}
+              {role === "vendor" && (
+                <Link href="/vendor" className="hover:text-gold">
+                  Vendor portal
                 </Link>
               )}
             </div>
@@ -212,6 +220,9 @@ export default async function StorefrontPage() {
                   🤝 {t("nav.connect")}
                 </Link>
               )}
+              <Link href="/vendors" className="hover:text-gold" title="Fyby Vendors">
+                🛍️ Vendors
+              </Link>
               {features.ads && (
                 <Link href="/advertise" className="hover:text-gold" title="Advertise with Fyby">
                   {t("nav.advertise")}
