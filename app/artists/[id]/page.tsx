@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import TrackAudio, { UnlessOwned } from "@/app/TrackAudio";
+import { UnlessOwned } from "@/app/TrackAudio";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { tracksNeedingCoverCredit } from "@/lib/coverCompliance";
 import { aiDisclosureBadge } from "@/lib/aiDisclosure";
@@ -15,6 +15,8 @@ import SuperFanSection from "@/app/SuperFanSection";
 import LyricsCreditsDialog from "@/app/LyricsCreditsDialog";
 import MailingListForm from "./MailingListForm";
 import BuyTrackForm from "./BuyTrackForm";
+import CompactPlayButton from "./CompactPlayButton";
+import MiniPlayer from "./MiniPlayer";
 import { formatReleaseDate, isPreorder } from "@/lib/preorder";
 import { offeredTiers } from "@/lib/licensing";
 import { COVERS_GENRE } from "@/lib/genres";
@@ -216,7 +218,7 @@ export default async function ArtistPage({
   const connectRoles: string[] = connectProfile?.available ? (connectProfile.roles ?? []) : [];
 
   return (
-    <main className="max-w-5xl mx-auto px-6 py-12">
+    <main className="max-w-5xl mx-auto px-6 pt-12 pb-28">
       <div className="flex items-center justify-between mb-6">
         <Link href="/" className="font-mono text-xs text-paper/50 hover:text-gold">
           {t("artist.back")}
@@ -291,15 +293,15 @@ export default async function ArtistPage({
         </div>
       )}
 
-      <header className="mt-6 mb-10 flex items-start justify-between gap-5">
-        <div className="flex items-start gap-5">
+      <header className="mt-6 mb-10 rounded-2xl border border-paper/10 bg-gradient-to-br from-[#3A2A1E] via-[#221A24] to-ink p-6 sm:p-10 flex flex-col sm:flex-row sm:items-end justify-between gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-6">
           {circlePhoto && (
             <div className="relative flex-shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={circlePhoto}
                 alt={artistName}
-                className="w-20 h-20 rounded-full object-cover border border-paper/15"
+                className="w-28 h-28 sm:w-36 sm:h-36 rounded-full object-cover border-2 border-paper/20 shadow-2xl"
               />
               {isOwner && (
                 <Link
@@ -313,7 +315,7 @@ export default async function ArtistPage({
             </div>
           )}
           <div>
-            <h1 className="font-display text-3xl text-gold flex items-center gap-2">
+            <h1 className="font-display text-4xl sm:text-6xl leading-none text-paper flex items-center gap-3">
               {artistName}
               {isOwner && (
                 <Link
@@ -325,7 +327,7 @@ export default async function ArtistPage({
                 </Link>
               )}
             </h1>
-            {artist.bio && <p className="text-paper/70 mt-3 max-w-xl">{artist.bio}</p>}
+            {artist.bio && <p className="text-paper/75 mt-4 max-w-xl text-sm sm:text-base leading-relaxed">{artist.bio}</p>}
           </div>
         </div>
 
@@ -415,24 +417,31 @@ export default async function ArtistPage({
       )}
 
       {tracks && tracks.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+        <div className="flex flex-col divide-y divide-paper/10 border-y border-paper/10">
           {tracks.map((track) => (
             <div
               key={track.id}
-              className="border border-paper/15 rounded-lg p-5 bg-paper/5 flex flex-col justify-between"
+              className="group py-4 px-2 sm:px-3 hover:bg-paper/5 transition-colors flex flex-col"
             >
               <div>
-                <div className="w-full aspect-square rounded bg-paper/10 overflow-hidden mb-4">
+                <div className="relative float-left w-14 h-14 sm:w-16 sm:h-16 mr-4 rounded-md bg-paper/10 overflow-hidden">
                   {track.cover_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-paper/30 text-3xl">
+                    <div className="w-full h-full flex items-center justify-center text-paper/30 text-lg">
                       ♪
                     </div>
                   )}
-                </div>
-                <h2 className="font-display text-xl">{track.title}</h2>
+                <CompactPlayButton
+trackId={track.id}
+previewUrl={track.preview_url}
+releaseAt={(track as any).release_at ?? null}
+title={track.title}
+artistName={artistName}
+/>
+</div>
+                <h2 className="font-display text-lg leading-tight pt-1">{track.title}</h2>
                 {isPreorder((track as any).release_at) && (
                   <p className="font-mono text-xs text-flame mt-1">
                     {t("store.preorderOut", { date: formatReleaseDate((track as any).release_at, dateLocale(lang)) })}
@@ -465,7 +474,7 @@ export default async function ArtistPage({
                     )}
                   </div>
                 )}
-              <TrackAudio trackId={track.id} previewUrl={track.preview_url} releaseAt={(track as any).release_at ?? null} />
+              <div className="clear-both" />
               <LyricsCreditsDialog
                 trackTitle={track.title}
                 lyrics={(track as any).lyrics ?? null}
@@ -477,7 +486,7 @@ export default async function ArtistPage({
                 </div>
               )}
               </div>
-              <div className="flex items-center justify-between mt-6">
+              <div className="flex items-center justify-between gap-3 mt-3">
                 {blockedTrackIds.has(track.id) ? (
                   <p className="font-mono text-xs text-rust">
                     {t("artist.coverPending")}
@@ -487,7 +496,7 @@ export default async function ArtistPage({
                 ) : (
                   <>
                     <UnlessOwned trackId={track.id} releaseAt={(track as any).release_at ?? null}>
-                      <span className="font-mono text-forest text-lg">
+                      <span className="font-mono text-forest text-base">
                       ${(track.price_cents / 100).toFixed(2)}
                     </span>
                     <BuyTrackForm
@@ -599,6 +608,7 @@ export default async function ArtistPage({
       >
         <BookingForm artistId={artist.id} />
       </CollapsibleSection>
-    </main>
+    <MiniPlayer />
+</main>
   );
 }
