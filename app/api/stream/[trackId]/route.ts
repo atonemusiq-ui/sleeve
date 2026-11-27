@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { NextResponse } from "next/server";
 import { formatReleaseDate, isPreorder } from "@/lib/preorder";
+import { adminForEmail } from "@/lib/admin";
 
 // Short-lived — this route is what a purchaser's player actually points at
 // (see app/library/page.tsx), so a fresh signed URL gets minted on every
@@ -65,14 +66,19 @@ export async function GET(req: Request, { params }: { params: { trackId: string 
     : (track as any).artists;
   const isOwnSong = trackArtist?.user_id === user.id;
 
-  if (!purchase && !license && !isOwnSong) {
+  // Fyby admins (lib/admin.ts) can play every song in full so they can
+  // review new uploads from their library without buying them.
+  const isAdmin =
+    !purchase && !license && !isOwnSong ? Boolean(await adminForEmail(user.email)) : false;
+
+  if (!purchase && !license && !isOwnSong && !isAdmin) {
     return NextResponse.json({ error: "You haven't purchased this track." }, { status: 403 });
   }
 
   // A pre-order (lib/preorder.ts) is paid for but stays locked until its
   // release date -- this route is the only way to the full audio, so this one
   // check is what enforces it everywhere (library player and download).
-  if (!isOwnSong && isPreorder((track as any).release_at)) {
+  if (!isOwnSong && !isAdmin && isPreorder((track as any).release_at)) {
     return NextResponse.json(
       { error: `Pre-ordered — this song unlocks on ${formatReleaseDate((track as any).release_at)}.` },
       { status: 403 }
