@@ -62,6 +62,20 @@ export default function SiteLogoBar({
         <span aria-hidden>🤝</span> <span>{t("nav.connect")}</span>
       </Link>
       )}
+      {/* Finder: search for artists and creatives (see app/search/page.tsx). */}
+      {pathname !== "/search" && (
+        <Link
+          href="/search"
+          aria-label="Search artists and people"
+          className="inline-flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1.5 font-mono text-[10px] leading-tight sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl sm:rounded-full border border-paper/20 text-paper/70 hover:border-gold/60 hover:text-gold"
+        >
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5" aria-hidden>
+            <circle cx="8.5" cy="8.5" r="5.5" />
+            <path d="m17 17-4.6-4.6" strokeLinecap="round" />
+          </svg>
+          <span>Search</span>
+        </Link>
+      )}
       {/* Fyby Vendors: products and services from merchants on Fyby. */}
       <Link
         href="/vendors"
