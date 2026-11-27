@@ -5,6 +5,8 @@ import { formatReleaseDate, isPreorder } from "@/lib/preorder";
 import { licenseTierLabel } from "@/lib/licensing";
 import WaitForPurchase from "./WaitForPurchase";
 import ShareSnippetButton from "./ShareSnippetButton";
+import { getAdmin } from "@/lib/admin";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export default async function LibraryPage({
   searchParams,
@@ -49,6 +51,21 @@ export default async function LibraryPage({
       track: purchase.tracks as any,
     }));
 
+  // Fyby admins (lib/admin.ts) get every newly uploaded song here to review,
+  // without buying it. Read with the service-role client so frozen and
+  // inactive-artist tracks show too; /api/stream lets admins play them.
+  const isAdmin = Boolean(await getAdmin());
+  let reviewTracks: any[] = [];
+  if (isAdmin) {
+    const service = createServiceRoleClient();
+    const { data } = await service
+      .from("tracks")
+      .select("id, title, cover_url, created_at, frozen, artists ( id, profiles ( display_name ) )")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    reviewTracks = data ?? [];
+  }
+
   // Just came from checkout: which songs were bought, and are they saved yet?
   let justBoughtIds: string[] = [];
   if (searchParams?.bought) {
@@ -83,6 +100,43 @@ export default async function LibraryPage({
 
       <div className="ticket-divider mb-10" />
 
+      {/* Admins: every newly uploaded song, playable in full, to review. */}
+      {reviewTracks.length > 0 && (
+        <section className="mb-12">
+          <h2 className="font-display text-xl mb-1">Review new uploads</h2>
+          <p className="font-mono text-xs text-paper/50 mb-4">
+            Admin only. The newest songs uploaded to Fyby, so you can check them. Use the Admin moderation page to flag or freeze one.
+          </p>
+          <div className="flex flex-col gap-3">
+            {reviewTracks.map((t: any) => {
+              const artist = Array.isArray(t.artists) ? t.artists[0] : t.artists;
+              const profile = Array.isArray(artist?.profiles) ? artist.profiles[0] : artist?.profiles;
+              return (
+                <div key={t.id} className="rounded-lg px-5 py-4 flex flex-col gap-3 border border-gold/25 bg-gold/5">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded bg-paper/10 flex-shrink-0 overflow-hidden">
+                      {t.cover_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-paper/30 text-xs">♪</div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <span className="font-display text-lg block">{t.title}</span>
+                      <span className="font-mono text-xs text-paper/60">
+                        {profile?.display_name ?? "Unknown artist"} · uploaded {new Date(t.created_at).toLocaleDateString("en-US")}
+                        {t.frozen && <span className="text-rust"> · frozen</span>}
+                      </span>
+                    </div>
+                  </div>
+                  <audio controls preload="none" src={`/api/stream/${t.id}`} className="w-full h-10" />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
       {justBoughtIds.length > 0 &&
         (justBoughtSaved ? (
           <div
