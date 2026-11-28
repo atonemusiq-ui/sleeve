@@ -9,6 +9,7 @@ import HowItWorks from "./HowItWorks";
 import TrustFooter from "./TrustFooter";
 import FounderStory from "./FounderStory";
 import FeaturedTracks from "./FeaturedTracks";
+import RowScrollArrows from "./RowScrollArrows";
 import RadioHero from "./RadioHero";
 import FybyTV from "./FybyTV";
 import { fetchFybyTvVideos } from "@/lib/fybyTvServer";
@@ -314,6 +315,7 @@ export default async function StorefrontPage() {
           <TrustFooter />
         </>
       )}
+      <RowScrollArrows />
     </main>
   );
 }
