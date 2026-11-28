@@ -17,6 +17,7 @@ import MailingListForm from "./MailingListForm";
 import BuyTrackForm from "./BuyTrackForm";
 import CompactPlayButton from "./CompactPlayButton";
 import MiniPlayer from "./MiniPlayer";
+import { PlayPreviewsButton, ShareArtistButton } from "./ArtistHeroActions";
 import { formatReleaseDate, isPreorder } from "@/lib/preorder";
 import { offeredTiers } from "@/lib/licensing";
 import { COVERS_GENRE } from "@/lib/genres";
@@ -217,8 +218,20 @@ export default async function ArtistPage({
     .maybeSingle();
   const connectRoles: string[] = connectProfile?.available ? (connectProfile.roles ?? []) : [];
 
+  // Small label above the name in the hero ("Gospel · Artist on Fyby"):
+  // the genre this artist releases most often.
+  const genreCounts = new Map<string, number>();
+  for (const tr of tracks ?? []) {
+    if (tr.genre && tr.genre !== COVERS_GENRE) genreCounts.set(tr.genre, (genreCounts.get(tr.genre) ?? 0) + 1);
+  }
+  const topGenre = Array.from(genreCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const hasTracks = Boolean(tracks && tracks.length > 0);
+  const customLinks = ((artist as any).custom_links as { label: string; url: string }[]) ?? [];
+  const tourDates = (artist as any).tour_dates as string | null;
+  const mailingListEnabled = (artist as any).mailing_list_enabled !== false;
+
   return (
-    <main className="max-w-5xl mx-auto px-6 pt-12 pb-28">
+    <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-10 pb-28">
       <div className="flex items-center justify-between mb-6">
         <Link href="/" className="font-mono text-xs text-paper/50 hover:text-gold">
           {t("artist.back")}
@@ -254,17 +267,13 @@ export default async function ArtistPage({
           confirm the payment rather than reading back the new row. */}
       {searchParams.superfan === "success" && (
         <div className="mb-8 border border-forest/40 rounded-lg p-4 bg-forest/10">
-          <p className="font-mono text-sm text-forest">
-            {t("artist.superfanThanks", { name: artistName })}
-          </p>
+          <p className="font-mono text-sm text-forest">{t("artist.superfanThanks", { name: artistName })}</p>
         </div>
       )}
 
       {searchParams.gift === "success" && (
         <div className="mb-8 border border-forest/40 rounded-lg p-4 bg-forest/10">
-          <p className="font-mono text-sm text-forest">
-            {t("artist.giftThanks", { name: artistName })}
-          </p>
+          <p className="font-mono text-sm text-forest">{t("artist.giftThanks", { name: artistName })}</p>
         </div>
       )}
 
@@ -272,343 +281,330 @@ export default async function ArtistPage({
       {isOwner && (
         <div className="mb-6 flex flex-wrap items-center gap-2 border border-gold/30 bg-gold/5 rounded-lg px-4 py-3">
           <span className="font-mono text-xs text-paper/60 mr-1">{t("artist.yourPage")}</span>
-          <Link
-            href="/dashboard?edit=photos#photos"
-            className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
-          >
+          <Link href="/dashboard?edit=photos#photos" className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10">
             {t("artist.editPhotos")}
           </Link>
-          <Link
-            href="/dashboard/catalog"
-            className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10"
-          >
+          <Link href="/dashboard/catalog" className="font-mono text-xs px-3 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10">
             {t("artist.manageSongs")}
           </Link>
-          <Link
-            href="/dashboard?edit=photos#photos"
-            className="font-mono text-xs px-3 py-1.5 rounded border border-paper/20 text-paper/70 hover:bg-paper/10"
-          >
+          <Link href="/dashboard?edit=photos#photos" className="font-mono text-xs px-3 py-1.5 rounded border border-paper/20 text-paper/70 hover:bg-paper/10">
             {t("artist.editBio")}
           </Link>
         </div>
       )}
 
-      <header className="mt-6 mb-10 rounded-2xl border border-paper/10 bg-gradient-to-br from-[#3A2A1E] via-[#221A24] to-ink p-6 sm:p-10 flex flex-col sm:flex-row sm:items-end justify-between gap-6">
-        <div className="flex flex-col sm:flex-row sm:items-end gap-6">
-          {circlePhoto && (
-            <div className="relative flex-shrink-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={circlePhoto}
-                alt={artistName}
-                className="w-28 h-28 sm:w-36 sm:h-36 rounded-full object-cover border-2 border-paper/20 shadow-2xl"
-              />
-              {isOwner && (
-                <Link
-                  href="/dashboard?edit=photos#photos"
-                  title={t("artist.editPhotoTitle")}
-                  className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-ink border border-gold/50 flex items-center justify-center text-xs hover:bg-gold/20"
-                >
-                  ✏️
-                </Link>
+      {/* Hero: big gradient banner, round photo on the right, name + bio +
+          actions bottom-left. */}
+      <header className="relative overflow-hidden rounded-[20px] min-h-[300px] sm:min-h-[340px] bg-[linear-gradient(160deg,#3A2A1E_0%,#221A24_55%,#16121A_100%)] flex flex-col-reverse sm:flex-row sm:items-end">
+        <div className="relative z-10 p-6 sm:p-12 flex flex-col gap-3.5 max-w-2xl">
+          <span className="font-mono text-xs tracking-[0.12em] uppercase text-gold">
+            {topGenre ? `${topGenre} · ` : ""}Artist on Fyby
+          </span>
+          <h1 className="m-0 font-display font-bold text-5xl sm:text-[64px] leading-none text-paper flex items-center gap-3">
+            {artistName}
+            {isOwner && (
+              <Link
+                href="/dashboard?edit=photos#photos"
+                title={t("artist.editNameTitle")}
+                className="font-mono text-xs px-2 py-1 rounded border border-gold/40 text-gold hover:bg-gold/10"
+              >
+                ✏️
+              </Link>
+            )}
+          </h1>
+          {artist.bio && (
+            <p className="m-0 text-[15px] leading-relaxed text-paper/80 line-clamp-3">{artist.bio}</p>
+          )}
+          <div className="flex flex-wrap items-center gap-3 mt-1.5">
+            {hasTracks && <PlayPreviewsButton label="Play previews" />}
+            {!isOwner && (artist as any).is_active && user && (
+              <FollowButton artistId={artist.id} isFollowing={isFollowing} />
+            )}
+            <ShareArtistButton artistName={artistName} />
+          </div>
+        </div>
+
+        <div className="relative sm:absolute sm:right-12 sm:top-10 pt-6 px-6 sm:p-0 flex-shrink-0">
+          {circlePhoto ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={circlePhoto}
+              alt={artistName}
+              className="w-32 h-32 sm:w-[230px] sm:h-[230px] rounded-full object-cover border border-paper/15 shadow-2xl"
+            />
+          ) : (
+            <div className="w-32 h-32 sm:w-[230px] sm:h-[230px] rounded-full bg-[#2B2230] border border-paper/15 flex items-center justify-center font-display text-5xl sm:text-7xl text-paper/40">
+              {artistName.charAt(0).toUpperCase()}
+            </div>
+          )}
+          {isOwner && (
+            <Link
+              href="/dashboard?edit=photos#photos"
+              title={t("artist.editPhotoTitle")}
+              className="absolute bottom-1 right-7 sm:-bottom-1 sm:right-1 w-8 h-8 rounded-full bg-ink border border-gold/50 flex items-center justify-center text-xs hover:bg-gold/20"
+            >
+              ✏️
+            </Link>
+          )}
+        </div>
+      </header>
+
+      <div className="mt-9 flex flex-wrap gap-10">
+        {/* ---------- Left column: songs, photos, video, merch ---------- */}
+        <section className="flex-[999_1_560px] min-w-0">
+          <div className="flex items-baseline justify-between mb-2.5">
+            <h2 className="m-0 font-display font-semibold text-[26px]">Songs</h2>
+            {hasTracks && (
+              <span className="font-mono text-xs text-paper/60">Tap a song to hear 15 seconds</span>
+            )}
+          </div>
+
+          {!hasTracks && <p className="text-paper/50 font-mono text-sm py-6">{t("artist.noTracks")}</p>}
+
+          {hasTracks && (
+            <div className="flex flex-col">
+              {tracks!.map((track, i) => {
+                const preorder = isPreorder((track as any).release_at);
+                const tiers = offeredTiers(track as any);
+                const showLicense =
+                  (artist as any).is_active && track.genre !== COVERS_GENRE && !preorder && tiers.length > 0;
+                const showVinyl = featureOn("vinyl") && (artist as any).is_active && (track as any).vinyl_url;
+                return (
+                  <div
+                    key={track.id}
+                    {...(i === 0 ? { "data-first-track": "" } : {})}
+                    className="group rounded-[10px] px-2 sm:px-3 py-2.5 border-b border-paper/[0.08] hover:bg-paper/[0.06] transition-colors"
+                  >
+                    <div className="flex items-center gap-3 sm:gap-3.5">
+                      <div className="relative w-11 h-11 flex-shrink-0 rounded-md bg-[#2B2230] overflow-hidden">
+                        {track.cover_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-paper/30">♪</div>
+                        )}
+                        <CompactPlayButton
+                          trackId={track.id}
+                          previewUrl={track.preview_url}
+                          releaseAt={(track as any).release_at ?? null}
+                          title={track.title}
+                          artistName={artistName}
+                        />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-[15px] text-paper truncate">{track.title}</div>
+                        <div className="text-[13px] text-paper/60 truncate">
+                          {artistName}
+                          {track.genre ? ` · ${track.genre}` : ""}
+                          {preorder
+                            ? ` · ${t("store.preorderOut", { date: formatReleaseDate((track as any).release_at, dateLocale(lang)) })}`
+                            : ""}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        {blockedTrackIds.has(track.id) ? (
+                          <span className="font-mono text-[11px] text-rust max-w-[9rem] text-right">{t("artist.coverPending")}</span>
+                        ) : !(artist as any).is_active ? (
+                          <span className="font-mono text-[11px] text-rust">{t("artist.buyingOff")}</span>
+                        ) : (
+                          <UnlessOwned trackId={track.id} releaseAt={(track as any).release_at ?? null}>
+                            <span className="font-mono text-[13px] text-paper/75 hidden sm:inline">
+                              ${(track.price_cents / 100).toFixed(2)}
+                            </span>
+                            <BuyTrackForm
+                              trackId={track.id}
+                              isLoggedIn={Boolean(user)}
+                              referredByFanId={referredByFanId}
+                              isPreorder={preorder}
+                            />
+                          </UnlessOwned>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Small extras under the row: badges, lyrics, licensing, vinyl. */}
+                    <div className="pl-[56px] sm:pl-[58px] flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-1">
+                      {track.custom_tag && (
+                        <span className="font-mono text-[11px] px-2 py-0.5 rounded-full border border-paper/20 text-paper/50">
+                          #{track.custom_tag}
+                        </span>
+                      )}
+                      {aiDisclosureBadge(track.ai_disclosure) && (
+                        <span className="font-mono text-[11px] px-2 py-0.5 rounded-full border border-gold/40 text-gold">
+                          {t(`badges.${track.ai_disclosure}`)}
+                        </span>
+                      )}
+                      {(track as any).explicit && (
+                        <span className="font-mono text-[11px] px-2 py-0.5 rounded-full border border-rust/50 text-rust">
+                          {t("badges.explicit")}
+                        </span>
+                      )}
+                      <LyricsCreditsDialog
+                        trackTitle={track.title}
+                        lyrics={(track as any).lyrics ?? null}
+                        credits={creditsByTrack[track.id] ?? []}
+                      />
+                      {showLicense && (
+                        <Link href={`/license/${track.id}`} className="font-mono text-[11px] text-gold hover:underline">
+                          {t("artist.license", {
+                            price: (Math.min(...tiers.map((o) => o.priceCents)) / 100).toFixed(0),
+                          })}
+                        </Link>
+                      )}
+                      {showVinyl && (
+                        <a
+                          href={(track as any).vinyl_url}
+                          target="_blank"
+                          rel="noopener noreferrer nofollow"
+                          className="font-mono text-[11px] text-flame hover:underline"
+                        >
+                          {t("artist.vinyl")}
+                        </a>
+                      )}
+                      {isOwner && <RemoveTrackButton trackId={track.id} title={track.title} compact />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {galleryUrls.length > 0 && (
+            <>
+              <h2 className="mt-10 mb-3.5 font-display font-semibold text-[26px]">Photos</h2>
+              <div className="flex gap-4 overflow-x-auto pb-1.5">
+                {galleryUrls.map((url, i) => (
+                  <div key={i} className="relative flex-[0_0_180px] w-[180px] h-[180px] rounded-[10px] overflow-hidden bg-[#2B2230]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={t("artist.photoAlt", { name: artistName, n: i + 1 })} className="w-full h-full object-cover" />
+                    {isOwner && (
+                      <Link
+                        href="/dashboard?edit=photos#gallery"
+                        title={t("artist.editPhotoTitle")}
+                        className="absolute top-2 right-2 font-mono text-[11px] px-2 py-1 rounded bg-ink/80 border border-gold/50 text-gold hover:bg-ink"
+                      >
+                        {t("artist.edit")}
+                      </Link>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {(artist as any).bio_video_url && (artist as any).bio_video_type && (
+            <div className="mt-10">
+              <VideoEmbed type={(artist as any).bio_video_type} url={(artist as any).bio_video_url} />
+              <ReportVideoButton artistId={artist.id} videoUrl={(artist as any).bio_video_url} />
+            </div>
+          )}
+
+          {featureOn("merch") && (artist as any).is_active && merchProducts.length > 0 && (
+            <section aria-labelledby="artist-merch-heading" className="mt-10">
+              <h2 id="artist-merch-heading" className="font-display font-semibold text-[26px] mb-3.5">
+                {t("artist.merch")}
+              </h2>
+              <ul className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {merchProducts.map((p) => (
+                  <MerchProductCard key={p.id} product={p} />
+                ))}
+              </ul>
+            </section>
+          )}
+        </section>
+
+        {/* ---------- Right column: about, super fan, mailing list ---------- */}
+        <aside className="flex-[1_1_280px] min-w-0 flex flex-col gap-4">
+          {(artist.bio || customLinks.length > 0 || tourDates) && (
+            <div className="border border-paper/[0.12] rounded-[14px] p-5">
+              <h3 className="m-0 mb-2 font-display text-lg">About</h3>
+              {artist.bio && (
+                <p className="m-0 text-sm leading-relaxed text-paper/75 whitespace-pre-wrap">{artist.bio}</p>
+              )}
+              {customLinks.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {customLinks.map((link, i) => (
+                    <a
+                      key={i}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-xs px-3 py-1.5 rounded-full border border-paper/20 text-paper/70 hover:border-gold hover:text-gold"
+                    >
+                      {link.label}
+                    </a>
+                  ))}
+                </div>
+              )}
+              {tourDates && (
+                <div className="mt-4">
+                  <p className="font-mono text-xs text-paper/40 uppercase mb-2">{t("artist.tourDates")}</p>
+                  <p className="font-body text-sm text-paper/80 whitespace-pre-wrap">{tourDates}</p>
+                </div>
               )}
             </div>
           )}
-          <div>
-            <h1 className="font-display text-4xl sm:text-6xl leading-none text-paper flex items-center gap-3">
-              {artistName}
-              {isOwner && (
-                <Link
-                  href="/dashboard?edit=photos#photos"
-                  title={t("artist.editNameTitle")}
-                  className="font-mono text-xs px-2 py-1 rounded border border-gold/40 text-gold hover:bg-gold/10"
-                >
-                  ✏️
-                </Link>
-              )}
-            </h1>
-            {artist.bio && <p className="text-paper/75 mt-4 max-w-xl text-sm sm:text-base leading-relaxed">{artist.bio}</p>}
-          </div>
-        </div>
 
-        {!isOwner && (artist as any).is_active && user && (
-          <FollowButton artistId={artist.id} isFollowing={isFollowing} />
-        )}
-      </header>
+          {!isOwner && (artist as any).is_active && (
+            <SuperFanSection
+              artistId={artist.id}
+              artistName={artistName}
+              isLoggedIn={Boolean(user)}
+              isSuperFan={isSuperFan}
+              referralFanId={referralFanId}
+            />
+          )}
 
-      {galleryUrls.length > 0 && (
-        <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
-            {galleryUrls.map((url, i) => (
-              <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-paper/10">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt={t("artist.photoAlt", { name: artistName, n: i + 1 })} className="w-full h-full object-cover" />
-                {isOwner && (
-                  <Link
-                    href="/dashboard?edit=photos#gallery"
-                    title={t("artist.editPhotoTitle")}
-                    className="absolute top-2 right-2 font-mono text-[11px] px-2 py-1 rounded bg-ink/80 border border-gold/50 text-gold hover:bg-ink"
-                  >
-                    {t("artist.edit")}
-                  </Link>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+          {mailingListEnabled && (
+            <div className="border border-paper/[0.12] rounded-[14px] p-5">
+              <h3 className="m-0 mb-3 font-display text-lg">{t("artist.mailingList")}</h3>
+              <MailingListForm artistId={artist.id} artistName={artistName} />
+            </div>
+          )}
 
-      {(artist as any).bio_video_url && (artist as any).bio_video_type && (
-        <div className="mb-10">
-          <VideoEmbed type={(artist as any).bio_video_type} url={(artist as any).bio_video_url} />
-          <ReportVideoButton artistId={artist.id} videoUrl={(artist as any).bio_video_url} />
-        </div>
-      )}
+          {!isOwner && (artist as any).is_active && user && (
+            <FanReferralLink artistId={artist.id} fanId={user.id} />
+          )}
 
-      {/* Custom links, tour dates, and mailing-list signup (Phase 7 --
-          app/dashboard/ArtistHubManager.tsx is where the artist manages
-          these). Skipped entirely when the artist hasn't set any of the
-          three, so a page with none of this doesn't show an empty block. */}
-      {(() => {
-        const customLinks = ((artist as any).custom_links as { label: string; url: string }[]) ?? [];
-        const tourDates = (artist as any).tour_dates as string | null;
-        const mailingListEnabled = (artist as any).mailing_list_enabled !== false;
-        if (customLinks.length === 0 && !tourDates && !mailingListEnabled) return null;
-
-        return (
-          <div className="mb-10 flex flex-col gap-6">
-            {customLinks.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {customLinks.map((link, i) => (
-                  <a
-                    key={i}
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-xs px-3 py-1.5 rounded-full border border-paper/20 text-paper/70 hover:border-gold hover:text-gold"
-                  >
-                    {link.label}
-                  </a>
+          {featureOn("connect") && (artist as any).is_active && connectRoles.length > 0 && (
+            <section aria-labelledby="artist-connect-heading" className="rounded-[14px] border border-paper/[0.12] p-5">
+              <h2 id="artist-connect-heading" className="font-display text-lg mb-3">
+                {t("artist.availableFor")}
+              </h2>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {connectRoles.map((r) => (
+                  <span key={r} className="font-mono text-xs px-3 py-1.5 rounded-full border border-flame/50 text-flame">
+                    {connectRoleLabel(r)}
+                  </span>
                 ))}
               </div>
-            )}
+              <Link href={`/connect/${(artist as any).user_id}`} className="font-mono text-xs text-gold hover:underline">
+                {t("artist.workWith", { name: artistName })}
+              </Link>
+            </section>
+          )}
 
-            {tourDates && (
-              <div>
-                <p className="font-mono text-xs text-paper/40 uppercase mb-2">{t("artist.tourDates")}</p>
-                <p className="font-body text-sm text-paper/80 whitespace-pre-wrap">{tourDates}</p>
-              </div>
-            )}
+          {/* Fyby Engine sponsored card: matched to this page's genres; 30% of
+              what the view costs goes to this artist (lib/ads.ts). Not shown to
+              the artist on their own page. */}
+          {!isOwner && (artist as any).is_active && (
+            <SponsoredCard
+              placement="artist"
+              artistId={artist.id}
+              pageGenres={Array.from(new Set((tracks ?? []).map((t: any) => t.genre).filter(Boolean))) as string[]}
+            />
+          )}
+        </aside>
+      </div>
 
-            {mailingListEnabled && (
-              <div>
-                <p className="font-mono text-xs text-paper/40 uppercase mb-2">{t("artist.mailingList")}</p>
-                <MailingListForm artistId={artist.id} artistName={artistName} />
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
-      <div className="ticket-divider mb-10" />
-
-      {(!tracks || tracks.length === 0) && (
-        <p className="text-paper/50 font-mono text-sm">{t("artist.noTracks")}</p>
-      )}
-
-      {tracks && tracks.length > 0 && (
-        <div className="flex flex-col divide-y divide-paper/10 border-y border-paper/10">
-          {tracks.map((track) => (
-            <div
-              key={track.id}
-              className="group py-4 px-2 sm:px-3 hover:bg-paper/5 transition-colors flex flex-col"
-            >
-              <div>
-                <div className="relative float-left w-14 h-14 sm:w-16 sm:h-16 mr-4 rounded-md bg-paper/10 overflow-hidden">
-                  {track.cover_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-paper/30 text-lg">
-                      ♪
-                    </div>
-                  )}
-                <CompactPlayButton
-trackId={track.id}
-previewUrl={track.preview_url}
-releaseAt={(track as any).release_at ?? null}
-title={track.title}
-artistName={artistName}
-/>
-</div>
-                <h2 className="font-display text-lg leading-tight pt-1">{track.title}</h2>
-                {isPreorder((track as any).release_at) && (
-                  <p className="font-mono text-xs text-flame mt-1">
-                    {t("store.preorderOut", { date: formatReleaseDate((track as any).release_at, dateLocale(lang)) })}
-                  </p>
-                )}
-                {(track.genre ||
-                  track.custom_tag ||
-                  aiDisclosureBadge(track.ai_disclosure) ||
-                  (track as any).explicit) && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {track.genre && (
-                      <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-paper/20 text-paper/50">
-                        {track.genre}
-                      </span>
-                    )}
-                    {track.custom_tag && (
-                      <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-paper/20 text-paper/50">
-                        #{track.custom_tag}
-                      </span>
-                    )}
-                    {aiDisclosureBadge(track.ai_disclosure) && (
-                      <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-gold/40 text-gold">
-                        {t(`badges.${track.ai_disclosure}`)}
-                      </span>
-                    )}
-                    {(track as any).explicit && (
-                      <span className="font-mono text-xs px-2 py-0.5 rounded-full border border-rust/50 text-rust">
-                        {t("badges.explicit")}
-                      </span>
-                    )}
-                  </div>
-                )}
-              <div className="clear-both" />
-              <LyricsCreditsDialog
-                trackTitle={track.title}
-                lyrics={(track as any).lyrics ?? null}
-                credits={creditsByTrack[track.id] ?? []}
-              />
-              {isOwner && (
-                <div className="mt-3">
-                  <RemoveTrackButton trackId={track.id} title={track.title} compact />
-                </div>
-              )}
-              </div>
-              <div className="flex items-center justify-between gap-3 mt-3">
-                {blockedTrackIds.has(track.id) ? (
-                  <p className="font-mono text-xs text-rust">
-                    {t("artist.coverPending")}
-                  </p>
-                ) : !(artist as any).is_active ? (
-                  <p className="font-mono text-xs text-rust">{t("artist.buyingOff")}</p>
-                ) : (
-                  <>
-                    <UnlessOwned trackId={track.id} releaseAt={(track as any).release_at ?? null}>
-                      <span className="font-mono text-forest text-base">
-                      ${(track.price_cents / 100).toFixed(2)}
-                    </span>
-                    <BuyTrackForm
-                      trackId={track.id}
-                      isLoggedIn={Boolean(user)}
-                      referredByFanId={referredByFanId}
-                      isPreorder={isPreorder((track as any).release_at)}
-                    />
-                    </UnlessOwned>
-                  </>
-                )}
-              </div>
-              {/* Beat & sync licensing (lib/licensing.ts): shown only when the
-                  artist offers at least one tier and the song is out. */}
-              {(artist as any).is_active &&
-                track.genre !== COVERS_GENRE &&
-                !isPreorder((track as any).release_at) &&
-                offeredTiers(track as any).length > 0 && (
-                  <Link
-                    href={`/license/${track.id}`}
-                    className="mt-3 font-mono text-xs text-gold hover:underline self-end"
-                  >
-                    {t("artist.license", {
-                      price: (Math.min(...offeredTiers(track as any).map((o) => o.priceCents)) / 100).toFixed(0),
-                    })}
-                  </Link>
-                )}
-              {/* Get it on Vinyl (lib/vinyl.ts): a link-out to the artist's
-                  on-demand pressing. Fyby doesn't sell or ship the record. */}
-              {featureOn("vinyl") && (artist as any).is_active && (track as any).vinyl_url && (
-                <a
-                  href={(track as any).vinyl_url}
-                  target="_blank"
-                  rel="noopener noreferrer nofollow"
-                  className="mt-2 font-mono text-xs text-flame hover:underline self-end"
-                >
-                  {t("artist.vinyl")}
-                </a>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="ticket-divider my-10" />
-
-      {/* Fyby Engine sponsored card: matched to this page's genres; 30% of
-          what the view costs goes to this artist (lib/ads.ts). Not shown to
-          the artist on their own page. */}
-      {!isOwner && (artist as any).is_active && (
-        <SponsoredCard
-          placement="artist"
-          artistId={artist.id}
-          pageGenres={Array.from(new Set((tracks ?? []).map((t: any) => t.genre).filter(Boolean))) as string[]}
-          className="mb-10"
-        />
-      )}
-
-      {!isOwner && (artist as any).is_active && (
-              <SuperFanSection
-                          artistId={artist.id}
-                          artistName={artistName}
-                          isLoggedIn={Boolean(user)}
-                          isSuperFan={isSuperFan}
-                          referralFanId={referralFanId}
-                        />
-            )}
-
-      {!isOwner && (artist as any).is_active && user && (
-        <FanReferralLink artistId={artist.id} fanId={user.id} />
-      )}
-
-      {!isOwner && (artist as any).is_active && <div className="ticket-divider my-10" />}
-
-      {featureOn("merch") && (artist as any).is_active && merchProducts.length > 0 && (
-        <section aria-labelledby="artist-merch-heading" className="mb-10">
-          <h2 id="artist-merch-heading" className="font-display text-2xl mb-4">
-            {t("artist.merch")}
-          </h2>
-          <ul className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {merchProducts.map((p) => (
-              <MerchProductCard key={p.id} product={p} />
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {featureOn("connect") && (artist as any).is_active && connectRoles.length > 0 && (
-        <section aria-labelledby="artist-connect-heading" className="mb-10 rounded-lg border border-paper/15 p-5">
-          <h2 id="artist-connect-heading" className="font-display text-xl mb-3">
-            {t("artist.availableFor")}
-          </h2>
-          <div className="flex flex-wrap gap-2 mb-3">
-            {connectRoles.map((r) => (
-              <span key={r} className="font-mono text-xs px-3 py-1.5 rounded-full border border-flame/50 text-flame">
-                {connectRoleLabel(r)}
-              </span>
-            ))}
-          </div>
-          <Link href={`/connect/${(artist as any).user_id}`} className="font-mono text-xs text-gold hover:underline">
-            {t("artist.workWith", { name: artistName })}
-          </Link>
-        </section>
-      )}
-
-      <CollapsibleSection
-        title={t("artist.bookTitle")}
-        description={t("artist.bookDescription")}
-      >
-        <BookingForm artistId={artist.id} />
-      </CollapsibleSection>
-    <MiniPlayer />
-</main>
+      <div className="mt-10">
+        <CollapsibleSection title={t("artist.bookTitle")} description={t("artist.bookDescription")}>
+          <BookingForm artistId={artist.id} />
+        </CollapsibleSection>
+      </div>
+      <MiniPlayer />
+    </main>
   );
 }
