@@ -312,9 +312,6 @@ export default async function ArtistPage({
               </Link>
             )}
           </h1>
-          {artist.bio && (
-            <p className="m-0 text-[15px] leading-relaxed text-paper/80 line-clamp-3">{artist.bio}</p>
-          )}
           <div className="flex flex-wrap items-center gap-3 mt-1.5">
             {hasTracks && <PlayPreviewsButton label="Play previews" />}
             {!isOwner && (artist as any).is_active && user && (
@@ -349,7 +346,57 @@ export default async function ArtistPage({
         </div>
       </header>
 
-      <div className="mt-9 flex flex-wrap gap-10">
+      {/* About: the artist's bio, links and tour dates, folded closed so the
+          songs stay near the top. Tap to open. */}
+      {(artist.bio || customLinks.length > 0 || tourDates) && (
+        <details className="group mt-4 rounded-[14px] border border-paper/[0.12] bg-paper/[0.02]">
+          <summary className="flex items-center justify-between gap-4 cursor-pointer list-none px-5 py-4 [&::-webkit-details-marker]:hidden">
+            <span className="font-display text-lg">About {artistName}</span>
+            <svg
+              className="flex-shrink-0 text-paper/60 transition-transform group-open:rotate-180"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </summary>
+          <div className="px-5 pb-5">
+            {artist.bio && (
+              <p className="m-0 text-[15px] leading-relaxed text-paper/80 whitespace-pre-wrap">{artist.bio}</p>
+            )}
+            {customLinks.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-4">
+                {customLinks.map((link, i) => (
+                  <a
+                    key={i}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-xs px-3 py-1.5 rounded-full border border-paper/20 text-paper/70 hover:border-gold hover:text-gold"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+            )}
+            {tourDates && (
+              <div className="mt-4">
+                <p className="font-mono text-xs text-paper/40 uppercase mb-2">{t("artist.tourDates")}</p>
+                <p className="font-body text-sm text-paper/80 whitespace-pre-wrap">{tourDates}</p>
+              </div>
+            )}
+          </div>
+        </details>
+      )}
+
+      <div className="mt-8 flex flex-wrap gap-10">
         {/* ---------- Left column: songs, photos, video, merch ---------- */}
         <section className="flex-[999_1_560px] min-w-0">
           <div className="flex items-baseline justify-between mb-2.5">
@@ -517,36 +564,6 @@ export default async function ArtistPage({
 
         {/* ---------- Right column: about, super fan, mailing list ---------- */}
         <aside className="flex-[1_1_280px] min-w-0 flex flex-col gap-4">
-          {(artist.bio || customLinks.length > 0 || tourDates) && (
-            <div className="border border-paper/[0.12] rounded-[14px] p-5">
-              <h3 className="m-0 mb-2 font-display text-lg">About</h3>
-              {artist.bio && (
-                <p className="m-0 text-sm leading-relaxed text-paper/75 whitespace-pre-wrap">{artist.bio}</p>
-              )}
-              {customLinks.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-4">
-                  {customLinks.map((link, i) => (
-                    <a
-                      key={i}
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-mono text-xs px-3 py-1.5 rounded-full border border-paper/20 text-paper/70 hover:border-gold hover:text-gold"
-                    >
-                      {link.label}
-                    </a>
-                  ))}
-                </div>
-              )}
-              {tourDates && (
-                <div className="mt-4">
-                  <p className="font-mono text-xs text-paper/40 uppercase mb-2">{t("artist.tourDates")}</p>
-                  <p className="font-body text-sm text-paper/80 whitespace-pre-wrap">{tourDates}</p>
-                </div>
-              )}
-            </div>
-          )}
-
           {!isOwner && (artist as any).is_active && (
             <SuperFanSection
               artistId={artist.id}
